@@ -34,6 +34,7 @@ create table public.communities (
   id uuid references auth.users on delete cascade primary key,
   name text not null,
   leader_name text not null,
+  email text,
   phone text not null,
   community_code text not null unique,
   provinsi text,
@@ -42,6 +43,8 @@ create table public.communities (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+create unique index communities_phone_unique_idx on public.communities(phone);
 
 -- 2. Registrations Table (Collective registration groups)
 create table public.registrations (
@@ -80,10 +83,13 @@ create table public.participants (
   bib_name text not null,
   email text not null,
   phone text not null,
+  date_of_birth date,
   gender text check (gender in ('male', 'female')) not null,
   tshirt_size text check (tshirt_size in ('XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL')) not null,
   blood_type text check (blood_type in ('A', 'B', 'AB', 'O')) not null,
   medical_condition text,
+  emergency_contact_name text,
+  emergency_contact_phone text,
   provinsi text,
   kota text,
   kecamatan text,
@@ -92,6 +98,10 @@ create table public.participants (
   payment_status text default 'pending'::text check (payment_status in ('pending', 'paid', 'failed')) not null,
   checked_in boolean default false not null,
   checked_in_at timestamp with time zone,
+  racepack_email_sent_at timestamp with time zone,
+  racepack_email_error text,
+  racepack_whatsapp_sent_at timestamp with time zone,
+  racepack_whatsapp_error text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -118,9 +128,6 @@ create policy "Allow communities to view their own registrations" on public.regi
 create policy "Allow communities to create their own registrations" on public.registrations
   for insert with check (auth.uid() = community_id);
 
-create policy "Allow communities to update their own registrations" on public.registrations
-  for update using (auth.uid() = community_id);
-
 -- Payments
 create policy "Allow communities to view their own payments" on public.payments
   for select using (exists (
@@ -131,15 +138,6 @@ create policy "Allow communities to view their own payments" on public.payments
 create policy "Allow communities to create their own payments" on public.payments
   for insert with check (exists (
     select 1 from public.registrations r 
-    where r.id = payments.registration_id and r.community_id = auth.uid()
-  ));
-
-create policy "Allow communities to update their own payments" on public.payments
-  for update using (exists (
-    select 1 from public.registrations r
-    where r.id = payments.registration_id and r.community_id = auth.uid()
-  )) with check (exists (
-    select 1 from public.registrations r
     where r.id = payments.registration_id and r.community_id = auth.uid()
   ));
 
@@ -172,6 +170,38 @@ create trigger update_registrations_timestamp before update on public.registrati
 create trigger update_payments_timestamp before update on public.payments
   for each row execute function public.update_updated_at_column();
 
+-- 1b. Prevent client-side updates to payment/racepack protected participant fields.
+create or replace function public.prevent_participant_protected_updates()
+returns trigger as $$
+begin
+  if auth.role() = 'service_role' then
+    return new;
+  end if;
+
+  if old.payment_status <> 'pending' then
+    raise exception 'Paid or failed participants cannot be edited by client users.';
+  end if;
+
+  if new.community_id is distinct from old.community_id
+    or new.registration_id is distinct from old.registration_id
+    or new.payment_status is distinct from old.payment_status
+    or new.participant_code is distinct from old.participant_code
+    or new.qr_code_data is distinct from old.qr_code_data
+    or new.checked_in is distinct from old.checked_in
+    or new.checked_in_at is distinct from old.checked_in_at
+    or new.created_at is distinct from old.created_at
+  then
+    raise exception 'Protected participant fields can only be updated by the server.';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger prevent_participant_protected_updates
+  before update on public.participants
+  for each row execute function public.prevent_participant_protected_updates();
+
 
 -- 2. Auto-create community on Auth Sign Up (Using generated unique community code)
 create or replace function public.handle_new_user()
@@ -179,6 +209,7 @@ returns trigger as $$
 declare
   comm_name text;
   lead_name text;
+  email_val text;
   phone_num text;
   comm_code text;
   provinsi_val text;
@@ -187,14 +218,15 @@ declare
 begin
   comm_name := coalesce(new.raw_user_meta_data->>'name', 'Komunitas Topsell');
   lead_name := coalesce(new.raw_user_meta_data->>'leader_name', 'Ketua Komunitas');
+  email_val := coalesce(new.raw_user_meta_data->>'contact_email', null);
   phone_num := coalesce(new.raw_user_meta_data->>'phone', '');
   provinsi_val := coalesce(new.raw_user_meta_data->>'provinsi', null);
   kota_val := coalesce(new.raw_user_meta_data->>'kota', null);
   kecamatan_val := coalesce(new.raw_user_meta_data->>'kecamatan', null);
   comm_code := public.generate_community_code();
 
-  insert into public.communities (id, name, leader_name, phone, community_code, provinsi, kota, kecamatan)
-  values (new.id, comm_name, lead_name, phone_num, comm_code, provinsi_val, kota_val, kecamatan_val);
+  insert into public.communities (id, name, leader_name, email, phone, community_code, provinsi, kota, kecamatan)
+  values (new.id, comm_name, lead_name, email_val, phone_num, comm_code, provinsi_val, kota_val, kecamatan_val);
   return new;
 end;
 $$ language plpgsql security definer;

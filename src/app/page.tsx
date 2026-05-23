@@ -1,14 +1,13 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Water_Brush } from 'next/font/google'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  Activity, Users, Trophy, CheckCircle, Calendar, MapPin,
-  Timer, ArrowRight, Lock, Shield, UserPlus, Phone, Mail, Plus, Trash2,
+  Users, Trophy, CheckCircle, Calendar, MapPin,
+  Timer, ArrowRight, UserPlus, Plus, Trash2,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { registerSchema, RegisterFormValues } from '@/lib/validations/auth'
@@ -17,30 +16,39 @@ import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-
-const waterBrush = Water_Brush({
-  subsets: ['latin'],
-  weight: '400',
-})
+import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
 
 const defaultParticipant = {
   full_name: '',
   bib_name: '',
   email: '',
   phone: '',
+  date_of_birth: '',
   gender: 'male' as const,
   tshirt_size: 'M' as const,
   blood_type: 'A' as const,
   medical_condition: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
 }
 
 // ——— Interactive Countdown Component ———
 function EventCountdown() {
   const [mounted, setMounted] = useState(false)
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const eventDate = new Date('2026-10-18T06:00:00+07:00')
+    const now = new Date()
+    const diff = eventDate.getTime() - now.getTime()
+    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 }
+    return {
+      days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+      hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+      minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+      seconds: Math.floor((diff % (1000 * 60)) / 1000),
+    }
+  })
 
   useEffect(() => {
-    setMounted(true)
     const eventDate = new Date('2026-10-18T06:00:00+07:00')
 
     const calculateTime = () => {
@@ -55,12 +63,15 @@ function EventCountdown() {
       }
     }
 
-    setTimeLeft(calculateTime())
+    const mountTimer = window.setTimeout(() => setMounted(true), 0)
     const timer = setInterval(() => {
       setTimeLeft(calculateTime())
     }, 1000)
 
-    return () => clearInterval(timer)
+    return () => {
+      window.clearTimeout(mountTimer)
+      clearInterval(timer)
+    }
   }, [])
 
   if (!mounted) {
@@ -111,9 +122,9 @@ function EventCountdown() {
 }
 
 export default function LandingPage() {
-  const router = useRouter()
-  const [isSuccess, setIsSuccess] = useState(false)
+  const isSuccess = false
   const [authError, setAuthError] = useState<string | null>(null)
+  const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
   
   // Location states
   const [provinsiList, setProvinsiList] = useState<Array<{ value: string; label: string }>>([])
@@ -123,7 +134,7 @@ export default function LandingPage() {
   const [loadingKota, setLoadingKota] = useState(false)
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
 
-  const { register, handleSubmit, reset, control, watch, setValue, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
+  const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       name: '',
@@ -147,6 +158,13 @@ export default function LandingPage() {
 
   // Load provinces on mount
   useEffect(() => {
+    fetch('/api/settings/registration-form')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((settings) => {
+        if (settings) setFormSettings(settings)
+      })
+      .catch(() => undefined)
+
     const loadProvinsi = async () => {
       setLoadingProvinsi(true)
       try {
@@ -230,7 +248,6 @@ export default function LandingPage() {
         origin: { y: 0.6 },
         colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
       })
-      // Use window.location to force a reload and pick up the new server cookies immediately
       window.location.href = '/dashboard'
     }
   }
@@ -255,13 +272,15 @@ export default function LandingPage() {
       {/* ——— NAV ——— */}
       <nav className="sports-glass sticky top-0 z-50 w-full border-b border-card-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 select-none">
-            <div className="p-1.5 bg-gradient-to-br from-sport-purple via-sport-red to-sport-orange rounded-md">
-              <Activity className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-black uppercase tracking-wider">
-              TOPSELL <span className="bg-gradient-to-r from-sport-red to-sport-orange bg-clip-text text-transparent">RUN</span>
-            </span>
+          <Link href="/" className="flex items-center select-none">
+            <Image
+              src="/images/header.png"
+              alt="TOPSELL RUN"
+              width={190}
+              height={54}
+              className="h-10 w-auto object-contain"
+              priority
+            />
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-xs font-bold text-brand-muted hover:text-foreground border border-card-border px-3 py-1.5 rounded-lg transition-colors">Masuk</Link>
@@ -288,13 +307,18 @@ export default function LandingPage() {
 
           {/* Main title */}
           <div className="flex flex-col items-center gap-4 sm:gap-5">
-            <h1 className="flex flex-col items-center gap-4 sm:gap-5 text-5xl sm:text-7xl font-black uppercase tracking-tight leading-none">
-              <span className="text-slate-900">TOPSELL x Samsung</span>
-              <span className={`${waterBrush.className} block px-3 py-4 sm:py-5 bg-gradient-to-r from-sport-purple via-sport-red to-sport-orange bg-clip-text text-transparent normal-case font-normal tracking-normal text-6xl sm:text-8xl leading-[1.15]`}>
-                <span className="block">Run For Changes</span>
-                <span className="block -mt-3 sm:-mt-5">2026</span>
-              </span>
-            </h1>
+            <h1 className="sr-only">TOPSELL x Samsung Run For Changes 2026</h1>
+            <p className="text-4xl sm:text-6xl font-black uppercase tracking-tight leading-none text-slate-900">
+              TOPSELL x Samsung
+            </p>
+            <Image
+              src="/images/hero.png"
+              alt="Run For Changes 2026"
+              width={820}
+              height={360}
+              className="w-full max-w-[760px] h-auto object-contain"
+              priority
+            />
           </div>
 
           {/* Meta info */}
@@ -338,7 +362,7 @@ export default function LandingPage() {
               <p className="text-[10px] font-black uppercase tracking-widest text-sport-orange mb-1">Registrasi Berhasil!</p>
               <h2 className="text-xl font-black uppercase text-slate-900">Komunitas Terdaftar</h2>
               <p className="text-xs text-brand-muted mt-2 leading-relaxed">
-                Akun komunitas Anda telah berhasil dibuat. Silakan login ke dashboard menggunakan email dan password untuk mulai mendaftarkan peserta Anda.
+                Akun komunitas Anda telah berhasil dibuat. Silakan lanjut ke dashboard untuk melakukan pembayaran kolektif.
               </p>
             </div>
             <Link href="/login" className="w-full">
@@ -378,8 +402,8 @@ export default function LandingPage() {
 
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 <Input
-                  label="Nama Komunitas Lari"
-                  placeholder="Contoh: Topsell Runners, Malang Striders"
+                  label={formSettings.community.name.label}
+                  placeholder={formSettings.community.name.placeholder}
                   error={errors.name?.message}
                   disabled={isSubmitting}
                   {...register('name')}
@@ -387,15 +411,15 @@ export default function LandingPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
-                    label="Nama Ketua / PIC"
-                    placeholder="Nama lengkap perwakilan"
+                    label={formSettings.community.leader_name.label}
+                    placeholder={formSettings.community.leader_name.placeholder}
                     error={errors.leader_name?.message}
                     disabled={isSubmitting}
                     {...register('leader_name')}
                   />
                   <Input
-                    label="No. WhatsApp Ketua"
-                    placeholder="08xxxxxxxxxx"
+                    label={formSettings.community.phone.label}
+                    placeholder={formSettings.community.phone.placeholder}
                     error={errors.phone?.message}
                     disabled={isSubmitting}
                     {...register('phone')}
@@ -403,9 +427,9 @@ export default function LandingPage() {
                 </div>
 
                 <Input
-                  label="Email Komunitas"
+                  label={formSettings.community.email.label}
                   type="email"
-                  placeholder="email@komunitas.com"
+                  placeholder={formSettings.community.email.placeholder}
                   error={errors.email?.message}
                   disabled={isSubmitting}
                   {...register('email')}
@@ -414,8 +438,8 @@ export default function LandingPage() {
                 {/* Address Section */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Select
-                    label="Provinsi"
-                    placeholder={loadingProvinsi ? 'Memuat provinsi...' : 'Pilih provinsi komunitas'}
+                    label={formSettings.community.provinsi.label}
+                    placeholder={loadingProvinsi ? 'Memuat provinsi...' : formSettings.community.provinsi.placeholder}
                     error={errors.provinsi?.message}
                     disabled={isSubmitting || loadingProvinsi}
                     options={provinsiList}
@@ -423,8 +447,8 @@ export default function LandingPage() {
                   />
 
                   <Select
-                    label="Kota / Kabupaten"
-                    placeholder={selectedProvinsi ? (loadingKota ? 'Memuat kota...' : 'Pilih kota/kabupaten') : 'Pilih provinsi dulu'}
+                    label={formSettings.community.kota.label}
+                    placeholder={selectedProvinsi ? (loadingKota ? 'Memuat kota...' : formSettings.community.kota.placeholder) : 'Pilih provinsi dulu'}
                     error={errors.kota?.message}
                     disabled={isSubmitting || loadingKota || !selectedProvinsi}
                     options={kotaList}
@@ -432,8 +456,8 @@ export default function LandingPage() {
                   />
 
                   <Select
-                    label="Kecamatan"
-                    placeholder={selectedKota ? (loadingKecamatan ? 'Memuat kecamatan...' : 'Pilih kecamatan') : 'Pilih kota dulu'}
+                    label={formSettings.community.kecamatan.label}
+                    placeholder={selectedKota ? (loadingKecamatan ? 'Memuat kecamatan...' : formSettings.community.kecamatan.placeholder) : 'Pilih kota dulu'}
                     error={errors.kecamatan?.message}
                     disabled={isSubmitting || loadingKecamatan || !selectedKota}
                     options={kecamatanList}
@@ -443,17 +467,17 @@ export default function LandingPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
-                    label="Password"
+                    label={formSettings.community.password.label}
                     type="password"
-                    placeholder="Min. 6 karakter"
+                    placeholder={formSettings.community.password.placeholder}
                     error={errors.password?.message}
                     disabled={isSubmitting}
                     {...register('password')}
                   />
                   <Input
-                    label="Konfirmasi Password"
+                    label={formSettings.community.confirmPassword.label}
                     type="password"
-                    placeholder="Ulangi password"
+                    placeholder={formSettings.community.confirmPassword.placeholder}
                     error={errors.confirmPassword?.message}
                     disabled={isSubmitting}
                     {...register('confirmPassword')}
@@ -499,89 +523,99 @@ export default function LandingPage() {
                       </div>
 
                       {/* Inputs */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <Input
-                          label="Nama Lengkap"
-                          placeholder="Nama lengkap peserta"
+                          label={formSettings.participants.full_name.label}
+                          placeholder={formSettings.participants.full_name.placeholder}
                           error={errors.participants?.[index]?.full_name?.message}
                           disabled={isSubmitting}
                           {...register(`participants.${index}.full_name` as const)}
                         />
                         <Input
-                          label="Nama BIB"
-                          placeholder="Nama di BIB"
+                          label={formSettings.participants.bib_name.label}
+                          placeholder={formSettings.participants.bib_name.placeholder}
                           error={errors.participants?.[index]?.bib_name?.message}
                           disabled={isSubmitting}
                           {...register(`participants.${index}.bib_name` as const)}
                         />
                         <Input
-                          label="Email"
+                          label={formSettings.participants.email.label}
                           type="email"
-                          placeholder="email@peserta.com"
+                          placeholder={formSettings.participants.email.placeholder}
                           error={errors.participants?.[index]?.email?.message}
                           disabled={isSubmitting}
                           {...register(`participants.${index}.email` as const)}
                         />
                         <Input
-                          label="No. WhatsApp"
-                          placeholder="08xxxxxxxxxx"
+                          label={formSettings.participants.phone.label}
+                          placeholder={formSettings.participants.phone.placeholder}
                           error={errors.participants?.[index]?.phone?.message}
                           disabled={isSubmitting}
                           {...register(`participants.${index}.phone` as const)}
+                        />
+                        <Input
+                          label={formSettings.participants.date_of_birth.label}
+                          type="date"
+                          placeholder={formSettings.participants.date_of_birth.placeholder}
+                          error={errors.participants?.[index]?.date_of_birth?.message}
+                          disabled={isSubmitting}
+                          {...register(`participants.${index}.date_of_birth` as const)}
                         />
                       </div>
 
                       {/* Gender & Jersey Selection */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <Select
-                          label="Jenis Kelamin"
+                          label={formSettings.participants.gender.label}
+                          placeholder={formSettings.participants.gender.placeholder}
                           error={errors.participants?.[index]?.gender?.message}
                           disabled={isSubmitting}
-                          options={[
-                            { value: 'male', label: 'Laki-laki ♂' },
-                            { value: 'female', label: 'Perempuan ♀' }
-                          ]}
+                          options={formSettings.participants.gender.options}
                           {...register(`participants.${index}.gender` as const)}
                         />
 
                         <Select
-                          label="Ukuran Jersey"
+                          label={formSettings.participants.tshirt_size.label}
+                          placeholder={formSettings.participants.tshirt_size.placeholder}
                           error={errors.participants?.[index]?.tshirt_size?.message}
                           disabled={isSubmitting}
-                          options={[
-                            { value: 'XS', label: 'XS' },
-                            { value: 'S', label: 'S' },
-                            { value: 'M', label: 'M' },
-                            { value: 'L', label: 'L' },
-                            { value: 'XL', label: 'XL' },
-                            { value: 'XXL', label: 'XXL' },
-                            { value: '3XL', label: '3XL' },
-                            { value: '4XL', label: '4XL' },
-                            { value: '5XL', label: '5XL' }
-                          ]}
+                          options={formSettings.participants.tshirt_size.options}
                           {...register(`participants.${index}.tshirt_size` as const)}
                         />
                         <Select
-                          label="Gol. Darah"
+                          label={formSettings.participants.blood_type.label}
+                          placeholder={formSettings.participants.blood_type.placeholder}
                           error={errors.participants?.[index]?.blood_type?.message}
                           disabled={isSubmitting}
-                          options={[
-                            { value: 'A', label: 'A' },
-                            { value: 'B', label: 'B' },
-                            { value: 'AB', label: 'AB' },
-                            { value: 'O', label: 'O' }
-                          ]}
+                          options={formSettings.participants.blood_type.options}
                           {...register(`participants.${index}.blood_type` as const)}
                         />
                       </div>
 
                       <Input
-                        label="Penyakit Bawaan"
-                        placeholder="Isi jika ada, contoh: asma"
+                        label={formSettings.participants.medical_condition.label}
+                        placeholder={formSettings.participants.medical_condition.placeholder}
                         error={errors.participants?.[index]?.medical_condition?.message}
                         disabled={isSubmitting}
                         {...register(`participants.${index}.medical_condition` as const)}
                       />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          label={formSettings.participants.emergency_contact_name.label}
+                          placeholder={formSettings.participants.emergency_contact_name.placeholder}
+                          error={errors.participants?.[index]?.emergency_contact_name?.message}
+                          disabled={isSubmitting}
+                          {...register(`participants.${index}.emergency_contact_name` as const)}
+                        />
+                        <Input
+                          label={formSettings.participants.emergency_contact_phone.label}
+                          placeholder={formSettings.participants.emergency_contact_phone.placeholder}
+                          error={errors.participants?.[index]?.emergency_contact_phone?.message}
+                          disabled={isSubmitting}
+                          {...register(`participants.${index}.emergency_contact_phone` as const)}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -676,13 +710,14 @@ export default function LandingPage() {
       {/* ——— FOOTER ——— */}
       <footer className="border-t border-card-border px-4 py-8 z-10 relative bg-white mt-12">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-gradient-to-br from-sport-purple via-sport-red to-sport-orange rounded-md">
-              <Activity className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-xs font-black uppercase tracking-wider">
-              TOPSELL <span className="text-sport-purple">RUN 2026</span>
-            </span>
+          <div className="flex items-center">
+            <Image
+              src="/images/header.png"
+              alt="TOPSELL RUN 2026"
+              width={170}
+              height={48}
+              className="h-9 w-auto object-contain"
+            />
           </div>
           <p className="text-[10px] text-brand-muted font-bold text-center uppercase tracking-wider">
             © 2026 TOPSELL x SAMSUNG RUN FOR CHANGES. All rights reserved. • Mojokerto, Jawa Timur

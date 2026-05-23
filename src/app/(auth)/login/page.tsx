@@ -17,7 +17,7 @@ export default function LoginPage() {
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { phone: '', password: '' },
   })
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -64,7 +64,7 @@ export default function LoginPage() {
             </div>
           )}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            <Input label="Email Komunitas" type="email" placeholder="email@komunitas.com" error={errors.email?.message} disabled={isSubmitting} {...register('email')} />
+            <Input label="Nomor WhatsApp Komunitas" inputMode="numeric" placeholder="08xxxxxxxxxx" error={errors.phone?.message} disabled={isSubmitting} {...register('phone')} />
             <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} disabled={isSubmitting} {...register('password')} />
             <Button type="submit" variant="primary" className="w-full py-4 mt-1 text-xs font-black" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }} isLoading={isSubmitting}>
               <Lock className="w-4 h-4 mr-2" />Masuk ke Dashboard

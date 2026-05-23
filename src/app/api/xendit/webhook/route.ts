@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
+import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
+import { extractXenditPaymentMethod, extractXenditPaymentRequestId } from '@/lib/utils/xendit'
 
 type XenditWebhookPayload = {
   event?: string
@@ -17,6 +20,7 @@ type XenditWebhookPayload = {
     reference_id?: string
     referenceId?: string
     reference?: string
+    payment_request_id?: string
     status?: string
     payment_method?: {
       type?: string
@@ -53,16 +57,6 @@ function isPaidEvent(payload: XenditWebhookPayload) {
     status === 'PAID' ||
     status === 'SETTLED' ||
     status === 'SUCCESS'
-  )
-}
-
-function getPaymentMethod(payload: XenditWebhookPayload) {
-  const method = payload.data?.payment_method
-  return (
-    method?.virtual_account?.channel_code ||
-    method?.qr_code?.channel_code ||
-    method?.type ||
-    'xendit'
   )
 }
 
@@ -106,15 +100,49 @@ function extractSessionCandidates(payload: XenditWebhookPayload) {
   return Array.from(new Set(candidates))
 }
 
+async function resolvePaymentMethod(payload: XenditWebhookPayload) {
+  const payloadMethod = extractXenditPaymentMethod(payload)
+  if (payloadMethod) return payloadMethod
+
+  const paymentRequestId = extractXenditPaymentRequestId(payload)
+  const xenditSecretKey = process.env.XENDIT_SECRET_KEY || ''
+  if (!paymentRequestId || !xenditSecretKey) return 'xendit'
+
+  const authHeader = 'Basic ' + Buffer.from(`${xenditSecretKey}:`).toString('base64')
+  const res = await fetch(`https://api.xendit.co/payment_requests/${encodeURIComponent(paymentRequestId)}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', Authorization: authHeader },
+  })
+
+  if (!res.ok) return 'xendit'
+
+  return extractXenditPaymentMethod(await res.json()) || 'xendit'
+}
+
 export async function POST(request: Request) {
   const callbackToken = process.env.XENDIT_CALLBACK_TOKEN
   const incomingToken = request.headers.get('x-callback-token')
+
+  if (!callbackToken && process.env.NODE_ENV === 'production') {
+    console.error('XENDIT_CALLBACK_TOKEN is required in production.')
+    return NextResponse.json({ error: 'Webhook is not configured' }, { status: 500 })
+  }
 
   if (callbackToken && incomingToken !== callbackToken) {
     return NextResponse.json({ error: 'Invalid callback token' }, { status: 401 })
   }
 
-  const payload = (await request.json()) as XenditWebhookPayload
+  const rawPayload = await request.text()
+  if (rawPayload.length > 64 * 1024) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+  }
+
+  let payload: XenditWebhookPayload
+  try {
+    payload = JSON.parse(rawPayload) as XenditWebhookPayload
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
+  }
 
   if (!isPaidEvent(payload)) {
     return NextResponse.json({ received: true, ignored: true })
@@ -131,7 +159,7 @@ export async function POST(request: Request) {
   const update = {
     status: 'paid',
     paid_at: new Date().toISOString(),
-    payment_method: getPaymentMethod(payload),
+    payment_method: await resolvePaymentMethod(payload),
   }
 
   for (const sessionId of sessionCandidates) {
@@ -139,10 +167,16 @@ export async function POST(request: Request) {
       .from('payments')
       .update(update)
       .eq('xendit_session_id', sessionId)
-      .select('id')
+      .select('id, registration_id')
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (data && data.length > 0) return NextResponse.json({ received: true })
+    if (data && data.length > 0) {
+      await Promise.all(data.flatMap((payment) => [
+        sendRacepackEmailsForRegistration(payment.registration_id),
+        sendRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      return NextResponse.json({ received: true })
+    }
   }
 
   for (const referenceId of referenceCandidates) {
@@ -150,14 +184,20 @@ export async function POST(request: Request) {
       .from('payments')
       .update(update)
       .eq('payment_reference', referenceId)
-      .select('id')
+      .select('id, registration_id')
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (data && data.length > 0) return NextResponse.json({ received: true })
+    if (data && data.length > 0) {
+      await Promise.all(data.flatMap((payment) => [
+        sendRacepackEmailsForRegistration(payment.registration_id),
+        sendRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      return NextResponse.json({ received: true })
+    }
   }
 
   return NextResponse.json(
-    { error: 'Payment not found', referenceCandidates, sessionCandidates },
+    { error: 'Payment not found' },
     { status: 404 }
   )
 }

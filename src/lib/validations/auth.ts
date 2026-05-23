@@ -2,28 +2,47 @@ import { z } from 'zod'
 
 const phoneRegex = /^08[1-9][0-9]{8,11}$/
 const emailDomainRegex = /@(gmail\.com|yahoo\.com|yahoo\.co\.id|icloud\.com|hotmail\.com|outlook\.com)$/i
+const emailSchema = z
+  .string()
+  .min(1, 'Email wajib diisi')
+  .email('Format email tidak valid')
+  .refine((val) => emailDomainRegex.test(val), 'Email harus menggunakan domain resmi (Gmail, Yahoo, iCloud, Hotmail, atau Outlook)')
+const dateOfBirthSchema = z
+  .string()
+  .min(1, 'Tanggal lahir wajib diisi')
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid')
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00`)
+    const today = new Date()
+    return !Number.isNaN(date.getTime()) && date < today
+  }, 'Tanggal lahir tidak valid')
 
 export const loginSchema = z.object({
-  email: z.string().min(1, 'Email wajib diisi').email('Format email tidak valid'),
+  phone: z
+    .string()
+    .min(1, 'Nomor HP wajib diisi')
+    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
   password: z.string().min(6, 'Password minimal 6 karakter'),
 })
 
 export const participantItemSchema = z.object({
   full_name: z.string().min(3, 'Nama lengkap minimal 3 karakter').max(50, 'Nama lengkap maksimal 50 karakter'),
   bib_name: z.string().min(2, 'Nama BIB minimal 2 karakter').max(20, 'Nama BIB maksimal 20 karakter'),
-  email: z
-    .string()
-    .min(1, 'Email wajib diisi')
-    .email('Format email tidak valid')
-    .refine((val) => emailDomainRegex.test(val), 'Email harus menggunakan domain resmi (Gmail, Yahoo, iCloud, Hotmail, atau Outlook)'),
+  email: emailSchema,
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')
     .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+  date_of_birth: dateOfBirthSchema,
   gender: z.enum(['male', 'female'], { message: 'Jenis kelamin wajib dipilih' }),
   tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'], { message: 'Ukuran jersey wajib dipilih' }),
   blood_type: z.enum(['A', 'B', 'AB', 'O'], { message: 'Golongan darah wajib dipilih' }),
   medical_condition: z.string().max(120, 'Penyakit bawaan maksimal 120 karakter').optional().or(z.literal('')),
+  emergency_contact_name: z.string().min(3, 'Nama kontak darurat minimal 3 karakter').max(50, 'Nama kontak darurat maksimal 50 karakter'),
+  emergency_contact_phone: z
+    .string()
+    .min(1, 'Nomor kontak darurat wajib diisi')
+    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
 })
 
 export const registerSchema = z
@@ -34,11 +53,7 @@ export const registerSchema = z
       .string()
       .min(1, 'Nomor HP wajib diisi')
       .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
-    email: z
-      .string()
-      .min(1, 'Email wajib diisi')
-      .email('Format email tidak valid')
-      .refine((val) => emailDomainRegex.test(val), 'Email harus menggunakan domain resmi (Gmail, Yahoo, iCloud, Hotmail, atau Outlook)'),
+    email: emailSchema,
     provinsi: z
       .string()
       .min(1, 'Provinsi wajib dipilih'),

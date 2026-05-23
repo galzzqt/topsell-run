@@ -2,6 +2,8 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
+import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
+import { phoneToAuthEmail } from '@/lib/utils/phone-auth'
 
 export async function signUpCommunity(values: RegisterFormValues) {
   const validated = registerSchema.safeParse(values)
@@ -10,22 +12,31 @@ export async function signUpCommunity(values: RegisterFormValues) {
     return { error: errorMsg }
   }
 
-  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const authEmail = phoneToAuthEmail(values.phone)
 
-  // Sign up in Supabase Auth
-  // We pass metadata that our PostgreSQL trigger 'on_auth_user_created' will read
-  const { data, error } = await supabase.auth.signUp({
-    email: values.email,
+  const existingCommunity = await adminClient
+    .from('communities')
+    .select('id')
+    .eq('phone', values.phone)
+    .maybeSingle()
+
+  if (existingCommunity.data) {
+    return { error: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' }
+  }
+
+  const { data, error } = await adminClient.auth.admin.createUser({
+    email: authEmail,
     password: values.password,
-    options: {
-      data: {
-        name: values.name,
-        leader_name: values.leader_name,
-        phone: values.phone,
-        provinsi: values.provinsi,
-        kota: values.kota,
-        kecamatan: values.kecamatan,
-      },
+    email_confirm: true,
+    user_metadata: {
+      name: values.name,
+      leader_name: values.leader_name,
+      phone: values.phone,
+      contact_email: values.email,
+      provinsi: values.provinsi,
+      kota: values.kota,
+      kecamatan: values.kecamatan,
     },
   })
 
@@ -37,18 +48,32 @@ export async function signUpCommunity(values: RegisterFormValues) {
     return { error: 'Gagal membuat user' }
   }
 
-  // Insert initial participants using admin client to bypass initial RLS (since user may not be signed in yet/email confirmation pending)
-  const adminClient = createAdminClient()
+  const { error: communityEmailError } = await adminClient
+    .from('communities')
+    .update({ email: values.email })
+    .eq('id', data.user.id)
+
+  if (communityEmailError) {
+    await adminClient.auth.admin.deleteUser(data.user.id)
+    return { error: `Gagal menyimpan email komunitas: ${communityEmailError.message}` }
+  }
+
   const participantsData = values.participants.map((p) => ({
     community_id: data.user!.id,
     full_name: p.full_name,
     bib_name: p.bib_name,
     email: p.email,
     phone: p.phone,
+    date_of_birth: p.date_of_birth,
     gender: p.gender,
     tshirt_size: p.tshirt_size,
     blood_type: p.blood_type,
     medical_condition: p.medical_condition || null,
+    emergency_contact_name: p.emergency_contact_name,
+    emergency_contact_phone: p.emergency_contact_phone,
+    provinsi: values.provinsi,
+    kota: values.kota,
+    kecamatan: values.kecamatan,
     payment_status: 'pending',
   }))
 
@@ -57,35 +82,48 @@ export async function signUpCommunity(values: RegisterFormValues) {
     .insert(participantsData)
 
   if (insertError) {
-    // Rollback auth user creation if participants fail to insert
     await adminClient.auth.admin.deleteUser(data.user.id)
     return { error: `Gagal menyimpan data peserta: ${insertError.message}` }
   }
 
-  // Automatically sign in the user to establish the cookies/session
-  await supabase.auth.signInWithPassword({
-    email: values.email,
+  try {
+    await sendRegistrationConfirmationWebhook({
+      phone: values.phone,
+      communityName: values.name,
+      leaderName: values.leader_name,
+      participantCount: values.participants.length,
+    })
+  } catch (sendError) {
+    console.error('Failed to send registration confirmation WhatsApp:', sendError)
+  }
+
+  const supabase = await createClient()
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: authEmail,
     password: values.password,
   })
 
-  return { success: true, user: data.user }
+  if (signInError) {
+    return { error: 'Pendaftaran berhasil, tetapi gagal masuk otomatis. Silakan login dengan nomor HP dan password.' }
+  }
+
+  return { success: true, phone: values.phone }
 }
 
 export async function signInCommunity(values: LoginFormValues) {
   const validated = loginSchema.safeParse(values)
   if (!validated.success) {
-    return { error: 'Email atau password tidak valid' }
+    return { error: 'Nomor HP atau password tidak valid' }
   }
 
   const supabase = await createClient()
-
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: values.email,
+    email: phoneToAuthEmail(values.phone),
     password: values.password,
   })
 
   if (error) {
-    return { error: 'Email atau password salah' }
+    return { error: 'Nomor HP atau password salah' }
   }
 
   return { success: true, user: data.user }

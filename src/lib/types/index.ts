@@ -6,6 +6,7 @@ export interface Community {
   id: string
   name: string
   leader_name: string
+  email: string | null
   phone: string
   community_code: string
   provinsi: string | null
@@ -23,10 +24,13 @@ export interface Participant {
   bib_name: string
   email: string
   phone: string
+  date_of_birth: string | null
   gender: 'male' | 'female'
   tshirt_size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL' | '4XL' | '5XL'
   blood_type: 'A' | 'B' | 'AB' | 'O' | null
   medical_condition: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
@@ -35,6 +39,10 @@ export interface Participant {
   payment_status: 'pending' | 'paid' | 'failed'
   checked_in: boolean
   checked_in_at: string | null
+  racepack_email_sent_at: string | null
+  racepack_email_error: string | null
+  racepack_whatsapp_sent_at: string | null
+  racepack_whatsapp_error: string | null
   created_at: string
   updated_at: string
 }

@@ -3,10 +3,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { generateRandomReference } from '@/lib/utils/format'
+import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
+import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
+import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 
 const XENDIT_SESSION_URL = 'https://api.xendit.co/sessions'
+const XENDIT_PAYMENT_REQUEST_URL = 'https://api.xendit.co/payment_requests'
 const DEFAULT_XENDIT_CHANNELS = [
   'BCA_VIRTUAL_ACCOUNT',
   'BNI_VIRTUAL_ACCOUNT',
@@ -28,7 +32,7 @@ function canUseReturnUrl(appUrl: string | undefined) {
 
   try {
     const url = new URL(appUrl)
-    return url.protocol === 'https:' || url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+    return url.protocol === 'https:'
   } catch {
     return false
   }
@@ -68,6 +72,40 @@ async function deleteRegistrationAsAdmin(registrationId: string) {
   return admin.from('registrations').delete().eq('id', registrationId)
 }
 
+function isDemoSession(payment: { payment_method: string | null; xendit_session_id: string | null }) {
+  return payment.payment_method === 'xendit_demo' || Boolean(payment.xendit_session_id?.startsWith('demo-xendit-session-'))
+}
+
+async function fetchXenditJson(url: string, authHeader: string) {
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json', Authorization: authHeader },
+  })
+
+  if (!res.ok) {
+    const errorText = await res.text()
+    return { error: errorText }
+  }
+
+  return { data: await res.json() }
+}
+
+async function resolveXenditPaymentMethod(sessionData: unknown, authHeader: string) {
+  const sessionMethod = extractXenditPaymentMethod(sessionData)
+  if (sessionMethod) return sessionMethod
+
+  const paymentRequestId = extractXenditPaymentRequestId(sessionData)
+  if (!paymentRequestId) return null
+
+  const paymentRequest = await fetchXenditJson(
+    `${XENDIT_PAYMENT_REQUEST_URL}/${encodeURIComponent(paymentRequestId)}`,
+    authHeader
+  )
+  if (paymentRequest.error) return null
+
+  return extractXenditPaymentMethod(paymentRequest.data)
+}
+
 // Create one collective payment for all pending participants under the logged-in community
 export async function createCommunityPayment() {
   const supabase = await createClient()
@@ -82,16 +120,52 @@ export async function createCommunityPayment() {
     .eq('id', user.id)
     .single()
 
-  // Fetch every pending participant under this community.
+  const { data: pendingRegistrations } = await supabase
+    .from('registrations')
+    .select('id, total_participants')
+    .eq('community_id', user.id)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+
+  if (pendingRegistrations && pendingRegistrations.length > 0) {
+    const pendingRegistrationIds = pendingRegistrations.map((registration) => registration.id)
+    const { data: existingPayment } = await supabase
+      .from('payments')
+      .select('id, registration_id, amount, payment_method, payment_reference, xendit_session_id, checkout_url, status')
+      .in('registration_id', pendingRegistrationIds)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingPayment) {
+      const existingRegistration = pendingRegistrations.find((registration) => registration.id === existingPayment.registration_id)
+      return {
+        success: true,
+        paymentId: existingPayment.id,
+        registrationId: existingPayment.registration_id,
+        checkoutUrl: existingPayment.checkout_url,
+        xenditSessionId: existingPayment.xendit_session_id,
+        isDemoMode: isDemoSession(existingPayment),
+        amount: existingPayment.amount,
+        reference: existingPayment.payment_reference,
+        participantCount: existingRegistration?.total_participants || 0,
+        reusedPendingPayment: true,
+      }
+    }
+  }
+
+  // Fetch pending participants that are not already attached to an active checkout.
   const { data: participants, error: partError } = await supabase
     .from('participants')
     .select('*')
     .eq('community_id', user.id)
     .eq('payment_status', 'pending')
+    .is('registration_id', null)
     .order('created_at', { ascending: true })
 
   if (partError || !participants || participants.length === 0) {
-    return { error: 'Tidak ada peserta yang perlu dibayar.' }
+    return { error: 'Tidak ada peserta baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
   }
 
   const participantIds = participants.map((participant) => participant.id)
@@ -182,7 +256,7 @@ export async function createCommunityPayment() {
             individual_detail: {
               given_names: toXenditName(community?.leader_name || community?.name),
             },
-            email: user.email || undefined,
+            email: community?.email || user.email || undefined,
           },
           items: participants.map((p) => ({
             reference_id: p.id,
@@ -216,7 +290,7 @@ export async function createCommunityPayment() {
 
   // Save Xendit session data to payment record
   const { error: metadataError } = await updatePaymentAsAdmin(payment.id, {
-    payment_method: isDemoMode ? 'xendit_demo' : 'xendit',
+    payment_method: isDemoMode ? 'xendit_demo' : null,
     snap_token: checkoutUrl,
     provider: 'xendit',
     xendit_session_id: xenditSessionId,
@@ -272,6 +346,11 @@ export async function simulatePaymentSuccess(paymentId: string) {
 
   if (error) return { error: error.message }
 
+  await Promise.all([
+    sendRacepackEmailsForRegistration(payment.registration_id),
+    sendRacepackWhatsappsForRegistration(payment.registration_id),
+  ])
+
   revalidatePath('/dashboard')
   return { success: true }
 }
@@ -295,7 +374,9 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
 
   if (paymentError || !payment) return { error: 'Invoice tidak ditemukan.' }
   if (payment.registration?.community_id !== user.id) return { error: 'Tidak memiliki akses.' }
-  if (payment.status === 'paid') return { success: true, status: 'paid' as const }
+  if (payment.status === 'paid' && hasSpecificPaymentMethod(payment.payment_method)) {
+    return { success: true, status: 'paid' as const, paymentMethod: payment.payment_method }
+  }
 
   const sessionId = payment.xendit_session_id
   if (!sessionId) return { error: 'Session Xendit belum tersimpan.' }
@@ -306,29 +387,28 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
   }
 
   const authHeader = 'Basic ' + Buffer.from(`${xenditSecretKey}:`).toString('base64')
-  const res = await fetch(`${XENDIT_SESSION_URL}/${encodeURIComponent(sessionId)}`, {
-    method: 'GET',
-    headers: { Accept: 'application/json', Authorization: authHeader },
-  })
+  const sessionResult = await fetchXenditJson(`${XENDIT_SESSION_URL}/${encodeURIComponent(sessionId)}`, authHeader)
+  if (sessionResult.error) return { error: `Gagal cek status Xendit: ${sessionResult.error}` }
 
-  if (!res.ok) {
-    const errorText = await res.text()
-    return { error: `Gagal cek status Xendit: ${errorText}` }
-  }
-
-  const xenditData = await res.json()
+  const xenditData = sessionResult.data
   if (!isXenditPaidStatus(xenditData?.status)) {
     return { success: true, status: xenditData?.status || 'UNKNOWN' }
   }
 
+  const paymentMethod = await resolveXenditPaymentMethod(xenditData, authHeader) || payment.payment_method || 'xendit'
   const { error: updateError } = await updatePaymentAsAdmin(payment.id, {
     status: 'paid',
     paid_at: new Date().toISOString(),
-    payment_method: 'xendit',
+    payment_method: paymentMethod,
   })
 
   if (updateError) return { error: updateError.message }
 
+  await Promise.all([
+    sendRacepackEmailsForRegistration(payment.registration_id),
+    sendRacepackWhatsappsForRegistration(payment.registration_id),
+  ])
+
   revalidatePath('/dashboard')
-  return { success: true, status: 'paid' as const }
+  return { success: true, status: 'paid' as const, paymentMethod }
 }

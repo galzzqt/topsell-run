@@ -1,0 +1,163 @@
+import 'server-only'
+
+import { promises as fs } from 'fs'
+import path from 'path'
+import {
+  DEFAULT_ADMIN_SETTINGS,
+  EDITABLE_ENV_FIELDS,
+  type AdminEnvSnapshot,
+  type AdminSettings,
+  type RegistrationFormSettings,
+} from './settings-schema'
+
+const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
+const ENV_PATH = path.join(process.cwd(), '.env.local')
+
+function mergeInput<T extends { label: string; placeholder: string }>(base: T, value: Partial<T> | undefined): T {
+  return {
+    ...base,
+    ...value,
+    label: typeof value?.label === 'string' ? value.label : base.label,
+    placeholder: typeof value?.placeholder === 'string' ? value.placeholder : base.placeholder,
+  }
+}
+
+export function normalizeRegistrationFormSettings(value: Partial<RegistrationFormSettings> | undefined): RegistrationFormSettings {
+  const base = DEFAULT_ADMIN_SETTINGS.registrationForm
+  return {
+    community: {
+      name: mergeInput(base.community.name, value?.community?.name),
+      leader_name: mergeInput(base.community.leader_name, value?.community?.leader_name),
+      phone: mergeInput(base.community.phone, value?.community?.phone),
+      email: mergeInput(base.community.email, value?.community?.email),
+      provinsi: mergeInput(base.community.provinsi, value?.community?.provinsi),
+      kota: mergeInput(base.community.kota, value?.community?.kota),
+      kecamatan: mergeInput(base.community.kecamatan, value?.community?.kecamatan),
+      password: mergeInput(base.community.password, value?.community?.password),
+      confirmPassword: mergeInput(base.community.confirmPassword, value?.community?.confirmPassword),
+    },
+    participants: {
+      full_name: mergeInput(base.participants.full_name, value?.participants?.full_name),
+      bib_name: mergeInput(base.participants.bib_name, value?.participants?.bib_name),
+      email: mergeInput(base.participants.email, value?.participants?.email),
+      phone: mergeInput(base.participants.phone, value?.participants?.phone),
+      date_of_birth: mergeInput(base.participants.date_of_birth, value?.participants?.date_of_birth),
+      gender: {
+        ...mergeInput(base.participants.gender, value?.participants?.gender),
+        options: base.participants.gender.options.map((option) => ({
+          ...option,
+          label: value?.participants?.gender?.options?.find((item) => item.value === option.value)?.label || option.label,
+        })),
+      },
+      tshirt_size: {
+        ...mergeInput(base.participants.tshirt_size, value?.participants?.tshirt_size),
+        options: base.participants.tshirt_size.options.map((option) => ({
+          ...option,
+          label: value?.participants?.tshirt_size?.options?.find((item) => item.value === option.value)?.label || option.label,
+        })),
+      },
+      blood_type: {
+        ...mergeInput(base.participants.blood_type, value?.participants?.blood_type),
+        options: base.participants.blood_type.options.map((option) => ({
+          ...option,
+          label: value?.participants?.blood_type?.options?.find((item) => item.value === option.value)?.label || option.label,
+        })),
+      },
+      medical_condition: mergeInput(base.participants.medical_condition, value?.participants?.medical_condition),
+      emergency_contact_name: mergeInput(base.participants.emergency_contact_name, value?.participants?.emergency_contact_name),
+      emergency_contact_phone: mergeInput(base.participants.emergency_contact_phone, value?.participants?.emergency_contact_phone),
+    },
+  }
+}
+
+export async function readAdminSettings(): Promise<AdminSettings> {
+  try {
+    const raw = await fs.readFile(SETTINGS_PATH, 'utf8')
+    const parsed = JSON.parse(raw) as Partial<AdminSettings>
+    return {
+      registrationForm: normalizeRegistrationFormSettings(parsed.registrationForm),
+    }
+  } catch {
+    return DEFAULT_ADMIN_SETTINGS
+  }
+}
+
+export async function writeAdminSettings(settings: AdminSettings) {
+  await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true })
+  await fs.writeFile(
+    SETTINGS_PATH,
+    `${JSON.stringify({ registrationForm: normalizeRegistrationFormSettings(settings.registrationForm) }, null, 2)}\n`,
+    'utf8'
+  )
+}
+
+function parseEnv(raw: string) {
+  const values = new Map<string, string>()
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$/)
+    if (!match) continue
+    let value = match[2] || ''
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    values.set(match[1], value)
+  }
+  return values
+}
+
+export async function readEditableEnvSnapshot(): Promise<AdminEnvSnapshot[]> {
+  let raw = ''
+  try {
+    raw = await fs.readFile(ENV_PATH, 'utf8')
+  } catch {
+    raw = ''
+  }
+
+  const values = parseEnv(raw)
+  return EDITABLE_ENV_FIELDS.map((field) => {
+    const currentValue = values.get(field.key) || ''
+    return {
+      ...field,
+      hasValue: currentValue.length > 0,
+      currentValue: field.sensitive ? '' : currentValue,
+    }
+  })
+}
+
+function serializeEnvValue(value: string) {
+  const normalized = value.replace(/\r?\n/g, '').trim()
+  if (!normalized) return ''
+  if (/[\s#"'`]/.test(normalized)) {
+    return JSON.stringify(normalized)
+  }
+  return normalized
+}
+
+export async function updateEditableEnvValues(values: Record<string, string>) {
+  const allowedKeys = new Set(EDITABLE_ENV_FIELDS.map((field) => field.key))
+  const updates = Object.entries(values)
+    .filter(([key, value]) => allowedKeys.has(key) && value.trim().length > 0)
+    .map(([key, value]) => [key, serializeEnvValue(value)] as const)
+
+  if (updates.length === 0) return
+
+  let raw = ''
+  try {
+    raw = await fs.readFile(ENV_PATH, 'utf8')
+  } catch {
+    raw = ''
+  }
+
+  const lines = raw.split(/\r?\n/)
+  for (const [key, value] of updates) {
+    const index = lines.findIndex((line) => new RegExp(`^\\s*${key}=`).test(line))
+    const nextLine = `${key}=${value}`
+    if (index >= 0) {
+      lines[index] = nextLine
+    } else {
+      lines.push(nextLine)
+    }
+  }
+
+  await fs.writeFile(ENV_PATH, `${lines.join('\n').replace(/\n*$/, '')}\n`, 'utf8')
+}

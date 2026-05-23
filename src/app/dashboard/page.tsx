@@ -1,11 +1,11 @@
 'use client'
 
-import React, { Suspense, useEffect, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity, LogOut, Users, CreditCard, QrCode,
   Trophy, Clock, CheckCircle, AlertCircle,
-  TrendingUp, Pencil, Copy, Check, ExternalLink, Settings,
+  TrendingUp, Copy, Check, ExternalLink, Settings,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useAppStore } from '@/lib/store/useAppStore'
@@ -16,7 +16,6 @@ import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus
 import { Participant, TOPSELL_RUN_EVENT } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ParticipantFormModal } from '@/components/dashboard/ParticipantFormModal'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
 import { Dialog } from '@/components/ui/dialog'
 import { CommunityProfileModal } from '@/components/dashboard/CommunityProfileModal'
@@ -39,12 +38,13 @@ function DashboardContent() {
 
   const { user, community, participants, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useAppStore()
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [editParticipant, setEditParticipant] = useState<Participant | null>(null)
   const [qrParticipant, setQrParticipant] = useState<Participant | null>(null)
   const [checkoutPayload, setCheckoutPayload] = useState<CheckoutPayload | null>(null)
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
   const [paymentSimLoading, setPaymentSimLoading] = useState(false)
+  const [paymentSyncLoading, setPaymentSyncLoading] = useState(false)
+  const [paymentSyncMessage, setPaymentSyncMessage] = useState('')
+  const [hasOpenedCheckout, setHasOpenedCheckout] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid'>('all')
   const [hasCelebratedPayment, setHasCelebratedPayment] = useState(false)
@@ -156,6 +156,8 @@ function DashboardContent() {
     try {
       const res = await createCommunityPayment()
       if (!res.success) return alert(res.error)
+      setPaymentSyncMessage('')
+      setHasOpenedCheckout(false)
       setCheckoutPayload(res)
     } finally {
       setIsCheckoutLoading(false)
@@ -171,13 +173,73 @@ function DashboardContent() {
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
       if (user?.id) await fetchCommunityData(supabase, user.id)
       setCheckoutPayload(null)
+      setHasOpenedCheckout(false)
+      setPaymentSyncMessage('')
     } finally {
       setPaymentSimLoading(false)
     }
   }
 
+  const refreshPaymentStatus = useCallback(async (silent = false) => {
+    if (!checkoutPayload || checkoutPayload.isDemoMode || !user?.id) return false
+
+    if (!silent) {
+      setPaymentSyncLoading(true)
+      setPaymentSyncMessage('')
+    }
+
+    try {
+      const res = await syncXenditPaymentStatus(checkoutPayload.reference)
+      if (res.error) {
+        if (!silent) setPaymentSyncMessage(res.error)
+        return false
+      }
+
+      await fetchCommunityData(supabase, user.id)
+      const { payments } = useAppStore.getState()
+      const hasPaid = payments.some(
+        (payment) => payment.payment_reference === checkoutPayload.reference && payment.status === 'paid'
+      )
+
+      if (hasPaid) {
+        if (!hasCelebratedPayment) {
+          confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+          setHasCelebratedPayment(true)
+        }
+        setCheckoutPayload(null)
+        setHasOpenedCheckout(false)
+        setPaymentSyncMessage('')
+        return true
+      }
+
+      if (!silent) {
+        setPaymentSyncMessage(`Status Xendit: ${res.status || 'belum terbayar'}. Coba cek lagi setelah pembayaran selesai.`)
+      }
+      return false
+    } finally {
+      if (!silent) setPaymentSyncLoading(false)
+    }
+  }, [checkoutPayload, fetchCommunityData, hasCelebratedPayment, supabase, user?.id])
+
+  useEffect(() => {
+    if (!checkoutPayload || checkoutPayload.isDemoMode || !hasOpenedCheckout) return
+
+    let cancelled = false
+    const intervalId = setInterval(async () => {
+      if (cancelled) return
+      await refreshPaymentStatus(true)
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [checkoutPayload, hasOpenedCheckout, refreshPaymentStatus])
+
   const handleOpenXenditCheckout = () => {
     if (!checkoutPayload?.checkoutUrl) return
+    setHasOpenedCheckout(true)
+    setPaymentSyncMessage('Menunggu pembayaran selesai. Status akan dicek otomatis setiap beberapa detik.')
     window.open(checkoutPayload.checkoutUrl, '_blank', 'noopener,noreferrer')
   }
 
@@ -383,18 +445,16 @@ function DashboardContent() {
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted hidden lg:table-cell">Medis</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Status</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">BIB / Pass</th>
-                    <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center w-20">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredParticipants.map((p, i) => {
-                    const isPending = p.payment_status === 'pending'
-                    return (
+                  {filteredParticipants.map((p, i) => (
                       <tr key={p.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
                         <td className="px-4 py-3.5 text-[10px] font-bold text-brand-muted">{i + 1}</td>
                         <td className="px-4 py-3.5">
                           <p className="text-sm font-bold text-foreground">{p.full_name}</p>
                           <p className="text-[10px] text-brand-muted">{p.email}</p>
+                          <p className="text-[10px] text-brand-muted">Lahir: {p.date_of_birth || '-'}</p>
                           <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {p.bib_name}</p>
                         </td>
                         <td className="px-4 py-3.5 hidden md:table-cell">
@@ -406,6 +466,9 @@ function DashboardContent() {
                         <td className="px-4 py-3.5 hidden lg:table-cell">
                           <p className="text-[10px] font-black text-foreground">Gol. {p.blood_type || '-'}</p>
                           <p className="text-[10px] text-brand-muted max-w-40 truncate">{p.medical_condition || 'Tidak ada'}</p>
+                          <p className="text-[10px] text-brand-muted max-w-40 truncate">
+                            Darurat: {p.emergency_contact_name || '-'} {p.emergency_contact_phone ? `(${p.emergency_contact_phone})` : ''}
+                          </p>
                         </td>
                         <td className="px-4 py-3.5 text-center">
                           <Badge variant={p.payment_status === 'paid' ? 'success' : 'warning'}>
@@ -424,18 +487,8 @@ function DashboardContent() {
                             <span className="text-[9px] text-brand-muted font-bold uppercase">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {isPending && (
-                              <button onClick={() => { setEditParticipant(p); setIsAddModalOpen(true) }} className="p-1.5 text-brand-muted hover:text-foreground rounded transition-colors cursor-pointer">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
                       </tr>
-                    )
-                  })}
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -444,12 +497,6 @@ function DashboardContent() {
       </main>
 
       {/* MODALS */}
-      <ParticipantFormModal
-        isOpen={isAddModalOpen}
-        onClose={() => { setIsAddModalOpen(false); setEditParticipant(null) }}
-        editParticipant={editParticipant}
-      />
-
       <QRCodeModal
         participant={qrParticipant}
         isOpen={!!qrParticipant}
@@ -464,7 +511,11 @@ function DashboardContent() {
       {/* PAYMENT DIALOG */}
       <Dialog
         isOpen={!!checkoutPayload}
-        onClose={() => setCheckoutPayload(null)}
+        onClose={() => {
+          setCheckoutPayload(null)
+          setHasOpenedCheckout(false)
+          setPaymentSyncMessage('')
+        }}
         title="Pembayaran Kolektif"
         className="max-w-md"
       >
@@ -479,7 +530,7 @@ function DashboardContent() {
                 <p className="text-[10px] text-brand-muted mt-1 leading-relaxed">
                   {checkoutPayload.isDemoMode
                     ? 'XENDIT_SECRET_KEY belum diisi. Gunakan simulasi di bawah untuk menguji alur pembayaran.'
-                    : 'Lanjutkan ke halaman Xendit untuk membayar menggunakan Virtual Account atau QRIS.'}
+                    : 'Lanjutkan ke halaman Xendit untuk membayar menggunakan Virtual Account atau QRIS. Setelah pembayaran selesai, status akan disinkronkan dari Xendit.'}
                 </p>
               </div>
             </div>
@@ -509,11 +560,35 @@ function DashboardContent() {
                   <CheckCircle className="w-4 h-4 mr-2" />Simulasikan Pembayaran Lunas
                 </Button>
               ) : (
-                <Button variant="primary" className="w-full py-4 font-black text-xs" onClick={handleOpenXenditCheckout} disabled={!checkoutPayload.checkoutUrl}>
-                  <ExternalLink className="w-4 h-4 mr-2" />Bayar VA / QRIS via Xendit
-                </Button>
+                <>
+                  <Button variant="primary" className="w-full py-4 font-black text-xs" onClick={handleOpenXenditCheckout} disabled={!checkoutPayload.checkoutUrl}>
+                    <ExternalLink className="w-4 h-4 mr-2" />Bayar VA / QRIS via Xendit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs"
+                    isLoading={paymentSyncLoading}
+                    onClick={() => refreshPaymentStatus(false)}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />Cek Status Pembayaran
+                  </Button>
+                  {paymentSyncMessage && (
+                    <p className="text-[10px] text-brand-muted leading-relaxed text-center">
+                      {paymentSyncMessage}
+                    </p>
+                  )}
+                </>
               )}
-              <Button variant="ghost" className="w-full text-xs" onClick={() => setCheckoutPayload(null)} disabled={paymentSimLoading}>
+              <Button
+                variant="ghost"
+                className="w-full text-xs"
+                onClick={() => {
+                  setCheckoutPayload(null)
+                  setHasOpenedCheckout(false)
+                  setPaymentSyncMessage('')
+                }}
+                disabled={paymentSimLoading || paymentSyncLoading}
+              >
                 Batal
               </Button>
             </div>

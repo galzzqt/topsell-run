@@ -86,6 +86,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (paymentsData) {
           set({ payments: paymentsData })
         }
+      } else {
+        set({ payments: [] })
       }
     } catch (error) {
       console.error('Error fetching community data:', error)

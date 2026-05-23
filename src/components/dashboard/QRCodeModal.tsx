@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
-import { Download, Printer, X, Shield, QrCode } from 'lucide-react'
+import { Download, Printer, Shield, QrCode } from 'lucide-react'
 import { Participant } from '@/lib/types'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -106,8 +106,17 @@ export function QRCodeModal({ participant, isOpen, onClose }: QRCodeModalProps) 
                 <p className="text-xs font-bold text-white capitalize">{participant.gender === 'male' ? 'Laki-laki' : 'Perempuan'}</p>
               </div>
               <div>
+                <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Tanggal Lahir</p>
+                <p className="text-xs font-bold text-white">{participant.date_of_birth || '-'}</p>
+              </div>
+              <div>
                 <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Gol. Darah</p>
                 <p className="text-xs font-bold text-white">{participant.blood_type || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Kontak Darurat</p>
+                <p className="text-xs font-bold text-white truncate">{participant.emergency_contact_name || '-'}</p>
+                <p className="text-[10px] font-bold text-brand-muted truncate">{participant.emergency_contact_phone || '-'}</p>
               </div>
             </div>
           </div>
