@@ -225,6 +225,28 @@ export function AdminDashboardClient({
     })
   }, [participants, query])
 
+  const filteredPayments = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    if (!keyword) return payments
+
+    return payments.filter((payment) => {
+      const community = getPaymentCommunity(payment)
+      return [
+        payment.payment_reference,
+        payment.payment_method || '',
+        payment.status,
+        String(payment.amount),
+        formatCurrency(payment.amount),
+        formatDateTime(payment.paid_at || payment.created_at),
+        community?.name || '',
+        community?.leader_name || '',
+        community?.email || '',
+        community?.phone || '',
+        community?.community_code || '',
+      ].some((value) => value.toLowerCase().includes(keyword))
+    })
+  }, [payments, query])
+
   const groupedParticipants = useMemo(() => {
     const groups = new Map<string, { key: string; name: string; code: string; participants: AdminParticipant[] }>()
 
@@ -697,7 +719,7 @@ export function AdminDashboardClient({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Cari peserta, komunitas, BIB, email..."
+              placeholder={activeTab === 'payments' ? 'Cari pembayaran, referensi, komunitas...' : 'Cari peserta, komunitas, BIB, email...'}
               className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-xs text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
             />
           </label>
@@ -931,7 +953,7 @@ export function AdminDashboardClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((payment) => {
+                  {filteredPayments.map((payment) => {
                     const community = getPaymentCommunity(payment)
                     return (
                       <tr key={payment.id} className="border-b border-card-border hover:bg-brand-gray/20">
@@ -949,6 +971,13 @@ export function AdminDashboardClient({
                       </tr>
                     )
                   })}
+                  {filteredPayments.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
+                        Tidak ada pembayaran yang cocok dengan pencarian.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
