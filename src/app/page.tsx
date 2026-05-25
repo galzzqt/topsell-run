@@ -276,9 +276,9 @@ export default function LandingPage() {
             <Image
               src="/images/header.png"
               alt="TOPSELL RUN"
-              width={190}
-              height={54}
-              className="h-10 w-auto object-contain"
+              width={152}
+              height={43}
+              className="h-8 w-auto object-contain"
               priority
             />
           </Link>
@@ -314,9 +314,9 @@ export default function LandingPage() {
             <Image
               src="/images/hero.png"
               alt="Run For Changes 2026"
-              width={820}
-              height={360}
-              className="w-full max-w-[760px] h-auto object-contain"
+              width={492}
+              height={216}
+              className="w-full max-w-[456px] h-auto object-contain"
               priority
             />
           </div>
@@ -714,9 +714,9 @@ export default function LandingPage() {
             <Image
               src="/images/header.png"
               alt="TOPSELL RUN 2026"
-              width={170}
-              height={48}
-              className="h-9 w-auto object-contain"
+              width={136}
+              height={38}
+              className="h-[29px] w-auto object-contain"
             />
           </div>
           <p className="text-[10px] text-brand-muted font-bold text-center uppercase tracking-wider">

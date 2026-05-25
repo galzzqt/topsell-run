@@ -213,7 +213,12 @@ export async function saveRegistrationFormSettings(settings: AdminSettings) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
-  await writeAdminSettings(settings)
+  try {
+    await writeAdminSettings(settings)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan pengaturan form.' }
+  }
+
   revalidatePath('/admin')
   revalidatePath('/')
   return { success: true }
@@ -224,7 +229,12 @@ export async function saveEditableEnvValues(values: Record<string, string>) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
-  await updateEditableEnvValues(values)
+  try {
+    await updateEditableEnvValues(values)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan konfigurasi env.' }
+  }
+
   revalidatePath('/admin')
   return {
     success: true,

@@ -112,6 +112,16 @@ alter table public.registrations enable row level security;
 alter table public.payments enable row level security;
 alter table public.participants enable row level security;
 
+-- 4b. App Settings Table (Admin-managed UI settings)
+create table if not exists public.app_settings (
+  key text primary key,
+  value jsonb not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.app_settings enable row level security;
+
 -- RLS POLICIES
 
 -- Communities
@@ -154,6 +164,10 @@ create policy "Allow communities to update their own participants" on public.par
 create policy "Allow communities to delete their own participants" on public.participants
   for delete using (auth.uid() = community_id);
 
+-- App Settings
+create policy "Deny public access to app settings" on public.app_settings
+  for all using (false) with check (false);
+
 
 -- TRIGGERS
 
@@ -168,6 +182,9 @@ create trigger update_registrations_timestamp before update on public.registrati
   for each row execute function public.update_updated_at_column();
 
 create trigger update_payments_timestamp before update on public.payments
+  for each row execute function public.update_updated_at_column();
+
+create trigger update_app_settings_timestamp before update on public.app_settings
   for each row execute function public.update_updated_at_column();
 
 -- 1b. Prevent client-side updates to payment/racepack protected participant fields.

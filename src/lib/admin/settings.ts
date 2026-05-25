@@ -2,6 +2,7 @@ import 'server-only'
 
 import { promises as fs } from 'fs'
 import path from 'path'
+import { createAdminClient } from '@/lib/supabase/server'
 import {
   DEFAULT_ADMIN_SETTINGS,
   EDITABLE_ENV_FIELDS,
@@ -12,6 +13,7 @@ import {
 
 const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
 const ENV_PATH = path.join(process.cwd(), '.env.local')
+const FORM_SETTINGS_KEY = 'registration_form'
 
 function mergeInput<T extends { label: string; placeholder: string }>(base: T, value: Partial<T> | undefined): T {
   return {
@@ -72,6 +74,24 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
 
 export async function readAdminSettings(): Promise<AdminSettings> {
   try {
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', FORM_SETTINGS_KEY)
+      .maybeSingle()
+
+    if (!error && data?.value) {
+      const parsed = data.value as Partial<AdminSettings>
+      return {
+        registrationForm: normalizeRegistrationFormSettings(parsed.registrationForm),
+      }
+    }
+  } catch {
+    // Fall back to local JSON for development or before the migration is applied.
+  }
+
+  try {
     const raw = await fs.readFile(SETTINGS_PATH, 'utf8')
     const parsed = JSON.parse(raw) as Partial<AdminSettings>
     return {
@@ -83,10 +103,32 @@ export async function readAdminSettings(): Promise<AdminSettings> {
 }
 
 export async function writeAdminSettings(settings: AdminSettings) {
+  const normalizedSettings = {
+    registrationForm: normalizeRegistrationFormSettings(settings.registrationForm),
+  }
+
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert(
+      {
+        key: FORM_SETTINGS_KEY,
+        value: normalizedSettings,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' }
+    )
+
+  if (!error) return
+
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    throw new Error(`Gagal menyimpan pengaturan form ke database: ${error.message}. Pastikan migration app_settings sudah dijalankan.`)
+  }
+
   await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true })
   await fs.writeFile(
     SETTINGS_PATH,
-    `${JSON.stringify({ registrationForm: normalizeRegistrationFormSettings(settings.registrationForm) }, null, 2)}\n`,
+    `${JSON.stringify(normalizedSettings, null, 2)}\n`,
     'utf8'
   )
 }
@@ -115,7 +157,7 @@ export async function readEditableEnvSnapshot(): Promise<AdminEnvSnapshot[]> {
 
   const values = parseEnv(raw)
   return EDITABLE_ENV_FIELDS.map((field) => {
-    const currentValue = values.get(field.key) || ''
+    const currentValue = values.get(field.key) || process.env[field.key] || ''
     return {
       ...field,
       hasValue: currentValue.length > 0,
@@ -134,6 +176,10 @@ function serializeEnvValue(value: string) {
 }
 
 export async function updateEditableEnvValues(values: Record<string, string>) {
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    throw new Error('Environment di Vercel tidak bisa disimpan dari runtime aplikasi. Ubah env dari Vercel Dashboard lalu redeploy.')
+  }
+
   const allowedKeys = new Set(EDITABLE_ENV_FIELDS.map((field) => field.key))
   const updates = Object.entries(values)
     .filter(([key, value]) => allowedKeys.has(key) && value.trim().length > 0)
