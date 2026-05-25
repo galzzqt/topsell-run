@@ -338,7 +338,7 @@ function DashboardContent() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Event Aktif</p>
               <p className="text-sm font-black uppercase text-foreground">{TOPSELL_RUN_EVENT.name}</p>
               <p className="text-[10px] text-brand-muted font-medium">
-                {TOPSELL_RUN_EVENT.location} • 17 Agustus 2026 • Kategori {TOPSELL_RUN_EVENT.category}
+                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Kategori {TOPSELL_RUN_EVENT.category}
               </p>
             </div>
           </div>

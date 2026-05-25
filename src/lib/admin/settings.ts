@@ -7,6 +7,7 @@ import {
   DEFAULT_ADMIN_SETTINGS,
   EDITABLE_ENV_FIELDS,
   type AdminEnvSnapshot,
+  type AdminEditableEnvField,
   type AdminSettings,
   type RegistrationFormSettings,
 } from './settings-schema'
@@ -15,13 +16,32 @@ const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
 const ENV_PATH = path.join(process.cwd(), '.env.local')
 const FORM_SETTINGS_KEY = 'registration_form'
 
-function mergeInput<T extends { label: string; placeholder: string }>(base: T, value: Partial<T> | undefined): T {
+function mergeInput<T extends { label: string; placeholder: string; visible: boolean }>(base: T, value: Partial<T> | undefined): T {
   return {
     ...base,
     ...value,
     label: typeof value?.label === 'string' ? value.label : base.label,
     placeholder: typeof value?.placeholder === 'string' ? value.placeholder : base.placeholder,
+    visible: typeof value?.visible === 'boolean' ? value.visible : base.visible,
   }
+}
+
+function normalizeEnvFields(value: AdminEditableEnvField[] | undefined): AdminEditableEnvField[] {
+  if (!Array.isArray(value)) return []
+  const builtInKeys = new Set(EDITABLE_ENV_FIELDS.map((field) => field.key))
+
+  return value
+    .map((field) => {
+      const key = typeof field.key === 'string' ? field.key.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_') : ''
+      const label = typeof field.label === 'string' ? field.label.trim() : ''
+      return {
+        key,
+        label: label || key,
+        description: typeof field.description === 'string' ? field.description.trim() : '',
+        sensitive: Boolean(field.sensitive),
+      }
+    })
+    .filter((field, index, fields) => field.key && !builtInKeys.has(field.key) && fields.findIndex((item) => item.key === field.key) === index)
 }
 
 export function normalizeRegistrationFormSettings(value: Partial<RegistrationFormSettings> | undefined): RegistrationFormSettings {
@@ -32,6 +52,10 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
       leader_name: mergeInput(base.community.leader_name, value?.community?.leader_name),
       phone: mergeInput(base.community.phone, value?.community?.phone),
       email: mergeInput(base.community.email, value?.community?.email),
+      category: {
+        ...mergeInput(base.community.category, value?.community?.category),
+        options: base.community.category.options,
+      },
       provinsi: mergeInput(base.community.provinsi, value?.community?.provinsi),
       kota: mergeInput(base.community.kota, value?.community?.kota),
       kecamatan: mergeInput(base.community.kecamatan, value?.community?.kecamatan),
@@ -72,6 +96,13 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
   }
 }
 
+function normalizeAdminSettings(value: Partial<AdminSettings> | undefined): AdminSettings {
+  return {
+    registrationForm: normalizeRegistrationFormSettings(value?.registrationForm),
+    envFields: normalizeEnvFields(value?.envFields),
+  }
+}
+
 export async function readAdminSettings(): Promise<AdminSettings> {
   try {
     const supabase = createAdminClient()
@@ -83,9 +114,7 @@ export async function readAdminSettings(): Promise<AdminSettings> {
 
     if (!error && data?.value) {
       const parsed = data.value as Partial<AdminSettings>
-      return {
-        registrationForm: normalizeRegistrationFormSettings(parsed.registrationForm),
-      }
+      return normalizeAdminSettings(parsed)
     }
   } catch {
     // Fall back to local JSON for development or before the migration is applied.
@@ -94,18 +123,14 @@ export async function readAdminSettings(): Promise<AdminSettings> {
   try {
     const raw = await fs.readFile(SETTINGS_PATH, 'utf8')
     const parsed = JSON.parse(raw) as Partial<AdminSettings>
-    return {
-      registrationForm: normalizeRegistrationFormSettings(parsed.registrationForm),
-    }
+    return normalizeAdminSettings(parsed)
   } catch {
     return DEFAULT_ADMIN_SETTINGS
   }
 }
 
 export async function writeAdminSettings(settings: AdminSettings) {
-  const normalizedSettings = {
-    registrationForm: normalizeRegistrationFormSettings(settings.registrationForm),
-  }
+  const normalizedSettings = normalizeAdminSettings(settings)
 
   const supabase = createAdminClient()
   const { error } = await supabase
@@ -156,7 +181,10 @@ export async function readEditableEnvSnapshot(): Promise<AdminEnvSnapshot[]> {
   }
 
   const values = parseEnv(raw)
-  return EDITABLE_ENV_FIELDS.map((field) => {
+  const settings = await readAdminSettings()
+  const envFields = [...EDITABLE_ENV_FIELDS, ...settings.envFields]
+
+  return envFields.map((field) => {
     const currentValue = values.get(field.key) || process.env[field.key] || ''
     return {
       ...field,
@@ -180,7 +208,8 @@ export async function updateEditableEnvValues(values: Record<string, string>) {
     throw new Error('Environment di Vercel tidak bisa disimpan dari runtime aplikasi. Ubah env dari Vercel Dashboard lalu redeploy.')
   }
 
-  const allowedKeys = new Set(EDITABLE_ENV_FIELDS.map((field) => field.key))
+  const settings = await readAdminSettings()
+  const allowedKeys = new Set([...EDITABLE_ENV_FIELDS, ...settings.envFields].map((field) => field.key))
   const updates = Object.entries(values)
     .filter(([key, value]) => allowedKeys.has(key) && value.trim().length > 0)
     .map(([key, value]) => [key, serializeEnvValue(value)] as const)

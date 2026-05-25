@@ -41,6 +41,7 @@ async function createCommunityAuthUser(
       leader_name: values.leader_name,
       phone: values.phone,
       contact_email: values.email,
+      category: values.category,
       provinsi: values.provinsi,
       kota: values.kota,
       kecamatan: values.kecamatan,
@@ -115,7 +116,7 @@ export async function signUpCommunity(values: RegisterFormValues) {
 
   const { data: community, error: communityEmailError } = await adminClient
     .from('communities')
-    .update({ email: values.email })
+    .update({ email: values.email, category: values.category })
     .eq('id', data.user.id)
     .select('id')
     .maybeSingle()

@@ -54,6 +54,7 @@ export const registerSchema = z
       .min(1, 'Nomor HP wajib diisi')
       .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
     email: emailSchema,
+    category: z.literal('6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', { message: 'Kategori wajib dipilih' }),
     provinsi: z
       .string()
       .min(1, 'Provinsi wajib dipilih'),

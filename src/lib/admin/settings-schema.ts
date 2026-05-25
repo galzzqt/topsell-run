@@ -1,6 +1,7 @@
 export type FormInputConfig = {
   label: string
   placeholder: string
+  visible: boolean
 }
 
 export type FormSelectOptionConfig = {
@@ -18,6 +19,7 @@ export type RegistrationFormSettings = {
     leader_name: FormInputConfig
     phone: FormInputConfig
     email: FormInputConfig
+    category: FormSelectConfig
     provinsi: FormInputConfig
     kota: FormInputConfig
     kecamatan: FormInputConfig
@@ -53,29 +55,39 @@ export type AdminEnvSnapshot = AdminEditableEnvField & {
 
 export type AdminSettings = {
   registrationForm: RegistrationFormSettings
+  envFields: AdminEditableEnvField[]
 }
 
 export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
   community: {
-    name: { label: 'Nama Komunitas Lari', placeholder: 'Contoh: Topsell Runners, Malang Striders' },
-    leader_name: { label: 'Nama Ketua / PIC', placeholder: 'Nama lengkap perwakilan' },
-    phone: { label: 'No. WhatsApp Ketua', placeholder: '08xxxxxxxxxx' },
-    email: { label: 'Email Komunitas', placeholder: 'email@komunitas.com' },
-    provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi komunitas' },
-    kota: { label: 'Kota / Kabupaten', placeholder: 'Pilih kota/kabupaten' },
-    kecamatan: { label: 'Kecamatan', placeholder: 'Pilih kecamatan' },
-    password: { label: 'Password', placeholder: 'Min. 6 karakter' },
-    confirmPassword: { label: 'Konfirmasi Password', placeholder: 'Ulangi password' },
+    name: { label: 'Nama Komunitas Lari', placeholder: 'Contoh: Topsell Runners, Malang Striders', visible: true },
+    leader_name: { label: 'Nama Ketua / PIC', placeholder: 'Nama lengkap perwakilan', visible: true },
+    phone: { label: 'No. WhatsApp Ketua', placeholder: '08xxxxxxxxxx', visible: true },
+    email: { label: 'Email Komunitas', placeholder: 'email@komunitas.com', visible: true },
+    category: {
+      label: 'Kategori',
+      placeholder: 'Pilih kategori',
+      visible: true,
+      options: [
+        { value: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', label: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000' },
+      ],
+    },
+    provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi komunitas', visible: true },
+    kota: { label: 'Kota / Kabupaten', placeholder: 'Pilih kota/kabupaten', visible: true },
+    kecamatan: { label: 'Kecamatan', placeholder: 'Pilih kecamatan', visible: true },
+    password: { label: 'Password', placeholder: 'Min. 6 karakter', visible: true },
+    confirmPassword: { label: 'Konfirmasi Password', placeholder: 'Ulangi password', visible: true },
   },
   participants: {
-    full_name: { label: 'Nama Lengkap', placeholder: 'Nama lengkap peserta' },
-    bib_name: { label: 'Nama BIB', placeholder: 'Nama di BIB' },
-    email: { label: 'Email', placeholder: 'email@peserta.com' },
-    phone: { label: 'No. WhatsApp', placeholder: '08xxxxxxxxxx' },
-    date_of_birth: { label: 'Tanggal Lahir', placeholder: 'Pilih tanggal lahir' },
+    full_name: { label: 'Nama Lengkap', placeholder: 'Nama lengkap peserta', visible: true },
+    bib_name: { label: 'Nama BIB', placeholder: 'Nama di BIB', visible: true },
+    email: { label: 'Email', placeholder: 'email@peserta.com', visible: true },
+    phone: { label: 'No. WhatsApp', placeholder: '08xxxxxxxxxx', visible: true },
+    date_of_birth: { label: 'Tanggal Lahir', placeholder: 'Pilih tanggal lahir', visible: true },
     gender: {
       label: 'Jenis Kelamin',
       placeholder: '',
+      visible: true,
       options: [
         { value: 'male', label: 'Laki-laki' },
         { value: 'female', label: 'Perempuan' },
@@ -84,21 +96,24 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
     tshirt_size: {
       label: 'Ukuran Jersey',
       placeholder: '',
+      visible: true,
       options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'].map((size) => ({ value: size, label: size })),
     },
     blood_type: {
       label: 'Gol. Darah',
       placeholder: '',
+      visible: true,
       options: ['A', 'B', 'AB', 'O'].map((type) => ({ value: type, label: type })),
     },
-    medical_condition: { label: 'Penyakit Bawaan', placeholder: 'Isi jika ada, contoh: asma' },
-    emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Nama keluarga/kerabat yang bisa dihubungi' },
-    emergency_contact_phone: { label: 'No. Kontak Darurat', placeholder: '08xxxxxxxxxx' },
+    medical_condition: { label: 'Penyakit Bawaan', placeholder: 'Isi jika ada, contoh: asma', visible: true },
+    emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Nama keluarga/kerabat yang bisa dihubungi', visible: true },
+    emergency_contact_phone: { label: 'No. Kontak Darurat', placeholder: '08xxxxxxxxxx', visible: true },
   },
 }
 
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   registrationForm: DEFAULT_REGISTRATION_FORM_SETTINGS,
+  envFields: [],
 }
 
 export const EDITABLE_ENV_FIELDS: AdminEditableEnvField[] = [

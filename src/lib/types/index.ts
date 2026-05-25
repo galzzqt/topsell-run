@@ -8,6 +8,7 @@ export interface Community {
   leader_name: string
   email: string | null
   phone: string
+  category: string
   community_code: string
   provinsi: string | null
   kota: string | null

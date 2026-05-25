@@ -141,6 +141,7 @@ export default function LandingPage() {
       leader_name: '',
       phone: '',
       email: '',
+      category: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000',
       provinsi: '',
       kota: '',
       kecamatan: '',
@@ -155,6 +156,31 @@ export default function LandingPage() {
 
   const selectedProvinsi = watch('provinsi')
   const selectedKota = watch('kota')
+  const communityFallbacks = {
+    name: 'Komunitas Topsell',
+    leader_name: 'PIC Komunitas',
+    phone: '081234567890',
+    email: 'presentasi@topsell-run.com',
+    category: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000',
+    provinsi: '-',
+    kota: '-',
+    kecamatan: '-',
+    password: 'topsell123',
+    confirmPassword: 'topsell123',
+  } as const
+  const participantFallbacks = (index: number) => ({
+    full_name: `Peserta ${index + 1}`,
+    bib_name: `PESERTA${index + 1}`,
+    email: `peserta${index + 1}@gmail.com`,
+    phone: `08123456${String(1000 + index).slice(-4)}`,
+    date_of_birth: '2000-01-01',
+    gender: 'male',
+    tshirt_size: 'M',
+    blood_type: 'A',
+    medical_condition: '',
+    emergency_contact_name: 'Kontak Darurat',
+    emergency_contact_phone: `08198765${String(1000 + index).slice(-4)}`,
+  }) as const
 
   // Load provinces on mount
   useEffect(() => {
@@ -401,87 +427,136 @@ export default function LandingPage() {
               )}
 
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-                <Input
-                  label={formSettings.community.name.label}
-                  placeholder={formSettings.community.name.placeholder}
-                  error={errors.name?.message}
-                  disabled={isSubmitting}
-                  {...register('name')}
-                />
+                {formSettings.community.name.visible ? (
+                  <Input
+                    label={formSettings.community.name.label}
+                    placeholder={formSettings.community.name.placeholder}
+                    error={errors.name?.message}
+                    disabled={isSubmitting}
+                    {...register('name')}
+                  />
+                ) : (
+                  <input type="hidden" value={communityFallbacks.name} {...register('name')} />
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label={formSettings.community.leader_name.label}
-                    placeholder={formSettings.community.leader_name.placeholder}
-                    error={errors.leader_name?.message}
-                    disabled={isSubmitting}
-                    {...register('leader_name')}
-                  />
-                  <Input
-                    label={formSettings.community.phone.label}
-                    placeholder={formSettings.community.phone.placeholder}
-                    error={errors.phone?.message}
-                    disabled={isSubmitting}
-                    {...register('phone')}
-                  />
+                  {formSettings.community.leader_name.visible ? (
+                    <Input
+                      label={formSettings.community.leader_name.label}
+                      placeholder={formSettings.community.leader_name.placeholder}
+                      error={errors.leader_name?.message}
+                      disabled={isSubmitting}
+                      {...register('leader_name')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.leader_name} {...register('leader_name')} />
+                  )}
+                  {formSettings.community.phone.visible ? (
+                    <Input
+                      label={formSettings.community.phone.label}
+                      placeholder={formSettings.community.phone.placeholder}
+                      error={errors.phone?.message}
+                      disabled={isSubmitting}
+                      {...register('phone')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.phone} {...register('phone')} />
+                  )}
                 </div>
 
-                <Input
-                  label={formSettings.community.email.label}
-                  type="email"
-                  placeholder={formSettings.community.email.placeholder}
-                  error={errors.email?.message}
-                  disabled={isSubmitting}
-                  {...register('email')}
-                />
+                {formSettings.community.email.visible ? (
+                  <Input
+                    label={formSettings.community.email.label}
+                    type="email"
+                    placeholder={formSettings.community.email.placeholder}
+                    error={errors.email?.message}
+                    disabled={isSubmitting}
+                    {...register('email')}
+                  />
+                ) : (
+                  <input type="hidden" value={communityFallbacks.email} {...register('email')} />
+                )}
+
+                {formSettings.community.category.visible ? (
+                  <Select
+                    label={formSettings.community.category.label}
+                    placeholder={formSettings.community.category.placeholder}
+                    error={errors.category?.message}
+                    disabled={isSubmitting}
+                    options={formSettings.community.category.options}
+                    {...register('category')}
+                  />
+                ) : (
+                  <input type="hidden" value={communityFallbacks.category} {...register('category')} />
+                )}
 
                 {/* Address Section */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Select
-                    label={formSettings.community.provinsi.label}
-                    placeholder={loadingProvinsi ? 'Memuat provinsi...' : formSettings.community.provinsi.placeholder}
-                    error={errors.provinsi?.message}
-                    disabled={isSubmitting || loadingProvinsi}
-                    options={provinsiList}
-                    {...register('provinsi')}
-                  />
+                  {formSettings.community.provinsi.visible ? (
+                    <Select
+                      label={formSettings.community.provinsi.label}
+                      placeholder={loadingProvinsi ? 'Memuat provinsi...' : formSettings.community.provinsi.placeholder}
+                      error={errors.provinsi?.message}
+                      disabled={isSubmitting || loadingProvinsi}
+                      options={provinsiList}
+                      {...register('provinsi')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.provinsi} {...register('provinsi')} />
+                  )}
 
-                  <Select
-                    label={formSettings.community.kota.label}
-                    placeholder={selectedProvinsi ? (loadingKota ? 'Memuat kota...' : formSettings.community.kota.placeholder) : 'Pilih provinsi dulu'}
-                    error={errors.kota?.message}
-                    disabled={isSubmitting || loadingKota || !selectedProvinsi}
-                    options={kotaList}
-                    {...register('kota')}
-                  />
+                  {formSettings.community.kota.visible ? (
+                    <Select
+                      label={formSettings.community.kota.label}
+                      placeholder={selectedProvinsi ? (loadingKota ? 'Memuat kota...' : formSettings.community.kota.placeholder) : 'Pilih provinsi dulu'}
+                      error={errors.kota?.message}
+                      disabled={isSubmitting || loadingKota || !selectedProvinsi}
+                      options={kotaList}
+                      {...register('kota')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.kota} {...register('kota')} />
+                  )}
 
-                  <Select
-                    label={formSettings.community.kecamatan.label}
-                    placeholder={selectedKota ? (loadingKecamatan ? 'Memuat kecamatan...' : formSettings.community.kecamatan.placeholder) : 'Pilih kota dulu'}
-                    error={errors.kecamatan?.message}
-                    disabled={isSubmitting || loadingKecamatan || !selectedKota}
-                    options={kecamatanList}
-                    {...register('kecamatan')}
-                  />
+                  {formSettings.community.kecamatan.visible ? (
+                    <Select
+                      label={formSettings.community.kecamatan.label}
+                      placeholder={selectedKota ? (loadingKecamatan ? 'Memuat kecamatan...' : formSettings.community.kecamatan.placeholder) : 'Pilih kota dulu'}
+                      error={errors.kecamatan?.message}
+                      disabled={isSubmitting || loadingKecamatan || !selectedKota}
+                      options={kecamatanList}
+                      {...register('kecamatan')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.kecamatan} {...register('kecamatan')} />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label={formSettings.community.password.label}
-                    type="password"
-                    placeholder={formSettings.community.password.placeholder}
-                    error={errors.password?.message}
-                    disabled={isSubmitting}
-                    {...register('password')}
-                  />
-                  <Input
-                    label={formSettings.community.confirmPassword.label}
-                    type="password"
-                    placeholder={formSettings.community.confirmPassword.placeholder}
-                    error={errors.confirmPassword?.message}
-                    disabled={isSubmitting}
-                    {...register('confirmPassword')}
-                  />
+                  {formSettings.community.password.visible ? (
+                    <Input
+                      label={formSettings.community.password.label}
+                      type="password"
+                      placeholder={formSettings.community.password.placeholder}
+                      error={errors.password?.message}
+                      disabled={isSubmitting}
+                      {...register('password')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.password} {...register('password')} />
+                  )}
+                  {formSettings.community.confirmPassword.visible ? (
+                    <Input
+                      label={formSettings.community.confirmPassword.label}
+                      type="password"
+                      placeholder={formSettings.community.confirmPassword.placeholder}
+                      error={errors.confirmPassword?.message}
+                      disabled={isSubmitting}
+                      {...register('confirmPassword')}
+                    />
+                  ) : (
+                    <input type="hidden" value={communityFallbacks.confirmPassword} {...register('confirmPassword')} />
+                  )}
                 </div>
 
                 {/* --- SEPARATOR & PARTICIPANTS HEADER --- */}
@@ -524,97 +599,141 @@ export default function LandingPage() {
 
                       {/* Inputs */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                        <Input
-                          label={formSettings.participants.full_name.label}
-                          placeholder={formSettings.participants.full_name.placeholder}
-                          error={errors.participants?.[index]?.full_name?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.full_name` as const)}
-                        />
-                        <Input
-                          label={formSettings.participants.bib_name.label}
-                          placeholder={formSettings.participants.bib_name.placeholder}
-                          error={errors.participants?.[index]?.bib_name?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.bib_name` as const)}
-                        />
-                        <Input
-                          label={formSettings.participants.email.label}
-                          type="email"
-                          placeholder={formSettings.participants.email.placeholder}
-                          error={errors.participants?.[index]?.email?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.email` as const)}
-                        />
-                        <Input
-                          label={formSettings.participants.phone.label}
-                          placeholder={formSettings.participants.phone.placeholder}
-                          error={errors.participants?.[index]?.phone?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.phone` as const)}
-                        />
-                        <Input
-                          label={formSettings.participants.date_of_birth.label}
-                          type="date"
-                          placeholder={formSettings.participants.date_of_birth.placeholder}
-                          error={errors.participants?.[index]?.date_of_birth?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.date_of_birth` as const)}
-                        />
+                        {formSettings.participants.full_name.visible ? (
+                          <Input
+                            label={formSettings.participants.full_name.label}
+                            placeholder={formSettings.participants.full_name.placeholder}
+                            error={errors.participants?.[index]?.full_name?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.full_name` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).full_name} {...register(`participants.${index}.full_name` as const)} />
+                        )}
+                        {formSettings.participants.bib_name.visible ? (
+                          <Input
+                            label={formSettings.participants.bib_name.label}
+                            placeholder={formSettings.participants.bib_name.placeholder}
+                            error={errors.participants?.[index]?.bib_name?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.bib_name` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).bib_name} {...register(`participants.${index}.bib_name` as const)} />
+                        )}
+                        {formSettings.participants.email.visible ? (
+                          <Input
+                            label={formSettings.participants.email.label}
+                            type="email"
+                            placeholder={formSettings.participants.email.placeholder}
+                            error={errors.participants?.[index]?.email?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.email` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).email} {...register(`participants.${index}.email` as const)} />
+                        )}
+                        {formSettings.participants.phone.visible ? (
+                          <Input
+                            label={formSettings.participants.phone.label}
+                            placeholder={formSettings.participants.phone.placeholder}
+                            error={errors.participants?.[index]?.phone?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.phone` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).phone} {...register(`participants.${index}.phone` as const)} />
+                        )}
+                        {formSettings.participants.date_of_birth.visible ? (
+                          <Input
+                            label={formSettings.participants.date_of_birth.label}
+                            type="date"
+                            placeholder={formSettings.participants.date_of_birth.placeholder}
+                            error={errors.participants?.[index]?.date_of_birth?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.date_of_birth` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).date_of_birth} {...register(`participants.${index}.date_of_birth` as const)} />
+                        )}
                       </div>
 
                       {/* Gender & Jersey Selection */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <Select
-                          label={formSettings.participants.gender.label}
-                          placeholder={formSettings.participants.gender.placeholder}
-                          error={errors.participants?.[index]?.gender?.message}
-                          disabled={isSubmitting}
-                          options={formSettings.participants.gender.options}
-                          {...register(`participants.${index}.gender` as const)}
-                        />
+                        {formSettings.participants.gender.visible ? (
+                          <Select
+                            label={formSettings.participants.gender.label}
+                            placeholder={formSettings.participants.gender.placeholder}
+                            error={errors.participants?.[index]?.gender?.message}
+                            disabled={isSubmitting}
+                            options={formSettings.participants.gender.options}
+                            {...register(`participants.${index}.gender` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).gender} {...register(`participants.${index}.gender` as const)} />
+                        )}
 
-                        <Select
-                          label={formSettings.participants.tshirt_size.label}
-                          placeholder={formSettings.participants.tshirt_size.placeholder}
-                          error={errors.participants?.[index]?.tshirt_size?.message}
-                          disabled={isSubmitting}
-                          options={formSettings.participants.tshirt_size.options}
-                          {...register(`participants.${index}.tshirt_size` as const)}
-                        />
-                        <Select
-                          label={formSettings.participants.blood_type.label}
-                          placeholder={formSettings.participants.blood_type.placeholder}
-                          error={errors.participants?.[index]?.blood_type?.message}
-                          disabled={isSubmitting}
-                          options={formSettings.participants.blood_type.options}
-                          {...register(`participants.${index}.blood_type` as const)}
-                        />
+                        {formSettings.participants.tshirt_size.visible ? (
+                          <Select
+                            label={formSettings.participants.tshirt_size.label}
+                            placeholder={formSettings.participants.tshirt_size.placeholder}
+                            error={errors.participants?.[index]?.tshirt_size?.message}
+                            disabled={isSubmitting}
+                            options={formSettings.participants.tshirt_size.options}
+                            {...register(`participants.${index}.tshirt_size` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).tshirt_size} {...register(`participants.${index}.tshirt_size` as const)} />
+                        )}
+                        {formSettings.participants.blood_type.visible ? (
+                          <Select
+                            label={formSettings.participants.blood_type.label}
+                            placeholder={formSettings.participants.blood_type.placeholder}
+                            error={errors.participants?.[index]?.blood_type?.message}
+                            disabled={isSubmitting}
+                            options={formSettings.participants.blood_type.options}
+                            {...register(`participants.${index}.blood_type` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).blood_type} {...register(`participants.${index}.blood_type` as const)} />
+                        )}
                       </div>
 
-                      <Input
-                        label={formSettings.participants.medical_condition.label}
-                        placeholder={formSettings.participants.medical_condition.placeholder}
-                        error={errors.participants?.[index]?.medical_condition?.message}
-                        disabled={isSubmitting}
-                        {...register(`participants.${index}.medical_condition` as const)}
-                      />
+                      {formSettings.participants.medical_condition.visible ? (
+                        <Input
+                          label={formSettings.participants.medical_condition.label}
+                          placeholder={formSettings.participants.medical_condition.placeholder}
+                          error={errors.participants?.[index]?.medical_condition?.message}
+                          disabled={isSubmitting}
+                          {...register(`participants.${index}.medical_condition` as const)}
+                        />
+                      ) : (
+                        <input type="hidden" value={participantFallbacks(index).medical_condition} {...register(`participants.${index}.medical_condition` as const)} />
+                      )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Input
-                          label={formSettings.participants.emergency_contact_name.label}
-                          placeholder={formSettings.participants.emergency_contact_name.placeholder}
-                          error={errors.participants?.[index]?.emergency_contact_name?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.emergency_contact_name` as const)}
-                        />
-                        <Input
-                          label={formSettings.participants.emergency_contact_phone.label}
-                          placeholder={formSettings.participants.emergency_contact_phone.placeholder}
-                          error={errors.participants?.[index]?.emergency_contact_phone?.message}
-                          disabled={isSubmitting}
-                          {...register(`participants.${index}.emergency_contact_phone` as const)}
-                        />
+                        {formSettings.participants.emergency_contact_name.visible ? (
+                          <Input
+                            label={formSettings.participants.emergency_contact_name.label}
+                            placeholder={formSettings.participants.emergency_contact_name.placeholder}
+                            error={errors.participants?.[index]?.emergency_contact_name?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.emergency_contact_name` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).emergency_contact_name} {...register(`participants.${index}.emergency_contact_name` as const)} />
+                        )}
+                        {formSettings.participants.emergency_contact_phone.visible ? (
+                          <Input
+                            label={formSettings.participants.emergency_contact_phone.label}
+                            placeholder={formSettings.participants.emergency_contact_phone.placeholder}
+                            error={errors.participants?.[index]?.emergency_contact_phone?.message}
+                            disabled={isSubmitting}
+                            {...register(`participants.${index}.emergency_contact_phone` as const)}
+                          />
+                        ) : (
+                          <input type="hidden" value={participantFallbacks(index).emergency_contact_phone} {...register(`participants.${index}.emergency_contact_phone` as const)} />
+                        )}
                       </div>
                     </div>
                   ))}

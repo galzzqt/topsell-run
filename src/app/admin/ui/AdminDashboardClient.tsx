@@ -13,12 +13,14 @@ import {
   Download,
   LogOut,
   Pencil,
+  Plus,
   QrCode,
   RefreshCw,
   Search,
   Settings,
   ShieldCheck,
   TicketCheck,
+  Trash2,
   Users,
 } from 'lucide-react'
 import {
@@ -35,7 +37,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/format'
-import type { AdminEnvSnapshot, AdminSettings, FormInputConfig, FormSelectConfig } from '@/lib/admin/settings-schema'
+import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, FormInputConfig, FormSelectConfig } from '@/lib/admin/settings-schema'
 
 type Relation<T> = T | T[] | null
 
@@ -187,6 +189,7 @@ export function AdminDashboardClient({
   const router = useRouter()
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const lastScanRef = useRef('')
+  const envFieldCounterRef = useRef(0)
   const scanRegionId = 'admin-racepack-reader'
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'participants' | 'payments' | 'scanner' | 'settings'>('scanner')
@@ -533,6 +536,36 @@ export function AdminDashboardClient({
     })
   }
 
+  const addEnvField = () => {
+    envFieldCounterRef.current += 1
+    setSettingsForm((current) => ({
+      ...current,
+      envFields: [
+        ...current.envFields,
+        {
+          key: `CUSTOM_ENV_${envFieldCounterRef.current}`,
+          label: 'Custom Env',
+          description: 'Deskripsi env',
+          sensitive: false,
+        },
+      ],
+    }))
+  }
+
+  const updateEnvField = (index: number, value: Partial<AdminEditableEnvField>) => {
+    setSettingsForm((current) => ({
+      ...current,
+      envFields: current.envFields.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...value } : field)),
+    }))
+  }
+
+  const removeEnvField = (index: number) => {
+    setSettingsForm((current) => ({
+      ...current,
+      envFields: current.envFields.filter((_, fieldIndex) => fieldIndex !== index),
+    }))
+  }
+
   const saveSettings = () => {
     setSettingsMessage('')
     startTransition(async () => {
@@ -578,6 +611,7 @@ export function AdminDashboardClient({
     ['leader_name', 'Nama Ketua / PIC'],
     ['phone', 'No. WhatsApp Ketua'],
     ['email', 'Email Komunitas'],
+    ['category', 'Kategori'],
     ['provinsi', 'Provinsi'],
     ['kota', 'Kota / Kabupaten'],
     ['kecamatan', 'Kecamatan'],
@@ -950,8 +984,16 @@ export function AdminDashboardClient({
                             value={field.placeholder}
                             onChange={(event) => updateCommunityField(key, { placeholder: event.target.value })}
                             placeholder="Placeholder"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
                           />
+                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                            <input
+                              type="checkbox"
+                              checked={field.visible}
+                              onChange={(event) => updateCommunityField(key, { visible: event.target.checked })}
+                            />
+                            Tampilkan field
+                          </label>
                         </div>
                       )
                     })}
@@ -976,8 +1018,16 @@ export function AdminDashboardClient({
                             value={field.placeholder}
                             onChange={(event) => updateParticipantField(key, { placeholder: event.target.value })}
                             placeholder="Placeholder"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
                           />
+                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                            <input
+                              type="checkbox"
+                              checked={field.visible}
+                              onChange={(event) => updateParticipantField(key, { visible: event.target.checked })}
+                            />
+                            Tampilkan field
+                          </label>
                         </div>
                       )
                     })}
@@ -1004,6 +1054,14 @@ export function AdminDashboardClient({
                             placeholder="Placeholder dropdown"
                             className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-3"
                           />
+                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted mb-3">
+                            <input
+                              type="checkbox"
+                              checked={field.visible}
+                              onChange={(event) => updateParticipantField(key, { visible: event.target.checked })}
+                            />
+                            Tampilkan field
+                          </label>
                           <div className="flex flex-col gap-2">
                             {field.options.map((option) => (
                               <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
@@ -1038,6 +1096,52 @@ export function AdminDashboardClient({
                   <p className="text-xs font-bold text-amber-200">
                     Key Supabase/database tidak ditampilkan. Field sensitif sengaja dikosongkan; isi hanya jika ingin mengganti nilainya.
                   </p>
+                </div>
+                <div className="border border-card-border rounded-lg p-3 bg-brand-gray/20 flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Field Env Tambahan</p>
+                      <p className="text-[10px] text-brand-muted">Tambahkan key integrasi lain agar bisa terlihat di panel ini.</p>
+                    </div>
+                    <Button type="button" variant="secondary" size="sm" onClick={addEnvField}>
+                      <Plus className="w-4 h-4 mr-2" />Tambah Env
+                    </Button>
+                  </div>
+                  {settingsForm.envFields.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {settingsForm.envFields.map((field, index) => (
+                        <div key={`${field.key}-${index}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
+                          <input
+                            value={field.key}
+                            onChange={(event) => updateEnvField(index, { key: event.target.value })}
+                            placeholder="NAMA_ENV"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                          />
+                          <input
+                            value={field.label}
+                            onChange={(event) => updateEnvField(index, { label: event.target.value })}
+                            placeholder="Label"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                          />
+                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                            <input
+                              type="checkbox"
+                              checked={field.sensitive}
+                              onChange={(event) => updateEnvField(index, { sensitive: event.target.checked })}
+                            />
+                            Sensitif
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeEnvField(index)}
+                            className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-red-500/30 text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {envSnapshots.map((field) => (
                   <label key={field.key} className="flex flex-col gap-1.5 border border-card-border rounded-lg p-3 bg-brand-gray/20">
