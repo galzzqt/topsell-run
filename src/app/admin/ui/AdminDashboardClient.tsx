@@ -257,7 +257,12 @@ export function AdminDashboardClient({
   const [envForm, setEnvForm] = useState<Record<string, string>>({})
   const [selectedExportCommunities, setSelectedExportCommunities] = useState<Set<string>>(new Set(communities.map((community) => community.id)))
   const [settingsMessage, setSettingsMessage] = useState('')
-  const [adminCreateForm, setAdminCreateForm] = useState({ name: '', username: '', password: '', role: 'admin' as const })
+  const [adminCreateForm, setAdminCreateForm] = useState<{ name: string; username: string; password: string; role: 'admin' | 'superadmin' }>({
+    name: '',
+    username: '',
+    password: '',
+    role: 'admin',
+  })
   const [adminEditForm, setAdminEditForm] = useState<{ id: string; name: string; username: string; password: string; is_active: boolean; role: 'admin' | 'superadmin' } | null>(null)
   const [adminMessage, setAdminMessage] = useState('')
   const [logs, setLogs] = useState<AdminLogEntry[]>(axiomLogs)
