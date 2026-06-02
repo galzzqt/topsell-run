@@ -72,7 +72,7 @@ function DashboardContent() {
     const refreshSoon = () => {
       if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
       refreshTimeoutRef.current = setTimeout(() => {
-        fetchCommunityData(supabase, user.id)
+        fetchCommunityData(supabase, user.id, true)
       }, 400)
     }
 
@@ -92,7 +92,7 @@ function DashboardContent() {
   }, [fetchCommunityData, supabase, user?.id])
 
   useEffect(() => {
-    if (!user?.id) return
+    if (!user?.id || hasCelebratedPayment) return
 
     const paymentResult = searchParams.get('payment')
     const paymentRef = searchParams.get('ref')
@@ -116,7 +116,7 @@ function DashboardContent() {
       if (paymentRef) {
         await syncXenditPaymentStatus(paymentRef)
       }
-      await fetchCommunityData(supabase, user.id)
+      await fetchCommunityData(supabase, user.id, true)
 
       const { payments } = useAppStore.getState()
       const hasPaid = paymentRef
@@ -195,7 +195,7 @@ function DashboardContent() {
         return false
       }
 
-      await fetchCommunityData(supabase, user.id)
+      await fetchCommunityData(supabase, user.id, true)
       const { payments } = useAppStore.getState()
       const hasPaid = payments.some(
         (payment) => payment.payment_reference === checkoutPayload.reference && payment.status === 'paid'

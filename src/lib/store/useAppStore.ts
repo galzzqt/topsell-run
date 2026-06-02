@@ -18,7 +18,7 @@ interface AppState {
   setLoading: (isLoading: boolean) => void
 
   // Data fetching
-  fetchCommunityData: (supabase: SupabaseClient, userId: string) => Promise<void>
+  fetchCommunityData: (supabase: SupabaseClient, userId: string, silent?: boolean) => Promise<void>
   getStats: () => DashboardStats
   clearStore: () => void
 }
@@ -38,8 +38,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPayments: (payments) => set({ payments }),
   setLoading: (isLoading) => set({ isLoading }),
 
-  fetchCommunityData: async (supabase, userId) => {
-    set({ isLoading: true })
+  fetchCommunityData: async (supabase, userId, silent = false) => {
+    if (!silent) set({ isLoading: true })
     try {
       // 1. Fetch community profile
       const { data: communityData } = await supabase
@@ -92,7 +92,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       console.error('Error fetching community data:', error)
     } finally {
-      set({ isLoading: false })
+      if (!silent) set({ isLoading: false })
     }
   },
 
