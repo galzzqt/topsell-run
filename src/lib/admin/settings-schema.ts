@@ -131,6 +131,9 @@ export const EDITABLE_ENV_FIELDS: AdminEditableEnvField[] = [
   { key: 'GHL_REGISTRATION_WEBHOOK_TOKEN', label: 'GHL Registration Token', description: 'Token opsional untuk webhook pendaftaran.', sensitive: true },
   { key: 'GHL_QR_WEBHOOK_URL', label: 'GHL Payment Webhook', description: 'Webhook WA setelah pembayaran diterima.', sensitive: true },
   { key: 'GHL_QR_WEBHOOK_TOKEN', label: 'GHL Payment Token', description: 'Token opsional untuk webhook pembayaran.', sensitive: true },
+  { key: 'AXIOM_TOKEN', label: 'Axiom Token', description: 'Token API untuk query log Axiom.', sensitive: true },
+  { key: 'AXIOM_DATASET', label: 'Axiom Dataset', description: 'Nama dataset log di Axiom.', sensitive: false },
+  { key: 'AXIOM_ORG_ID', label: 'Axiom Org ID', description: 'Opsional: isi jika token personal membutuhkan org id.', sensitive: false },
   { key: 'BINDERBYTE_API_KEY', label: 'Binderbyte API Key', description: 'API key data wilayah.', sensitive: true },
   { key: 'SUPER_ADMIN_PASSWORD', label: 'Password Super Admin', description: 'Password login halaman admin.', sensitive: true },
 ]

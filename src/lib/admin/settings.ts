@@ -209,12 +209,19 @@ export async function updateEditableEnvValues(values: Record<string, string>) {
   }
 
   const settings = await readAdminSettings()
-  const allowedKeys = new Set([...EDITABLE_ENV_FIELDS, ...settings.envFields].map((field) => field.key))
+  const allowedKeys = new Set([
+    ...[...EDITABLE_ENV_FIELDS, ...settings.envFields].map((field) => field.key),
+    'AXIOM_TOKEN',
+    'AXIOM_DATASET',
+    'AXIOM_ORG_ID',
+  ])
   const updates = Object.entries(values)
     .filter(([key, value]) => allowedKeys.has(key) && value.trim().length > 0)
     .map(([key, value]) => [key, serializeEnvValue(value)] as const)
 
-  if (updates.length === 0) return
+  if (updates.length === 0) {
+    return { updatedKeys: [] as string[] }
+  }
 
   let raw = ''
   try {
@@ -235,4 +242,5 @@ export async function updateEditableEnvValues(values: Record<string, string>) {
   }
 
   await fs.writeFile(ENV_PATH, `${lines.join('\n').replace(/\n*$/, '')}\n`, 'utf8')
+  return { updatedKeys: updates.map(([key]) => key) }
 }

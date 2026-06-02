@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 
 export function AdminLogin() {
   const router = useRouter()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -18,7 +19,7 @@ export function AdminLogin() {
     setError('')
 
     startTransition(async () => {
-      const result = await loginAdmin(password)
+      const result = await loginAdmin(username, password)
       if (result.error) {
         setError(result.error)
         return
@@ -47,15 +48,24 @@ export function AdminLogin() {
           </p>
         </div>
 
-        <Input
-          label="Password Admin"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Masukkan password admin"
-          disabled={isPending}
-          error={error}
-        />
+        <div className="grid grid-cols-1 gap-3">
+          <Input
+            label="Username Admin"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="contoh: superadmin"
+            disabled={isPending}
+          />
+          <Input
+            label="Password Admin"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Masukkan password admin"
+            disabled={isPending}
+            error={error}
+          />
+        </div>
 
         <Button type="submit" className="w-full py-3" isLoading={isPending}>
           Masuk Admin

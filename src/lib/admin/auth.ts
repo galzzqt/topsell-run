@@ -3,10 +3,6 @@ import { cookies } from 'next/headers'
 
 const ADMIN_COOKIE = 'topsell_admin_session'
 
-function getAdminPassword() {
-  return process.env.SUPER_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || ''
-}
-
 function getAdminSecret() {
   return process.env.ADMIN_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 }
@@ -21,10 +17,41 @@ function safeCompare(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
-export async function createAdminSession() {
-  const issuedAt = Date.now().toString()
-  const nonce = crypto.randomUUID()
-  const payload = `${issuedAt}.${nonce}`
+export type AdminRole = 'superadmin' | 'admin'
+
+export type AdminSession = {
+  id: string
+  username: string
+  name: string
+  role: AdminRole
+}
+
+type EncodedSession = AdminSession & {
+  issuedAt: number
+}
+
+function encode(payload: EncodedSession) {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url')
+}
+
+function decode(raw: string) {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Partial<EncodedSession>
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.id !== 'string' || typeof parsed.username !== 'string' || typeof parsed.name !== 'string') return null
+    if (parsed.role !== 'admin' && parsed.role !== 'superadmin') return null
+    if (typeof parsed.issuedAt !== 'number' || !Number.isFinite(parsed.issuedAt)) return null
+    return parsed as EncodedSession
+  } catch {
+    return null
+  }
+}
+
+export async function createAdminSession(session: AdminSession) {
+  const payload = encode({
+    ...session,
+    issuedAt: Date.now(),
+  })
   const token = `${payload}.${sign(payload)}`
   const cookieStore = await cookies()
 
@@ -48,25 +75,32 @@ export async function clearAdminSession() {
   })
 }
 
-export async function isAdminAuthenticated() {
+export async function getAdminSession(): Promise<AdminSession | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(ADMIN_COOKIE)?.value
-  if (!token) return false
+  if (!token) return null
 
-  const [issuedAt, nonce, signature] = token.split('.')
-  if (!issuedAt || !nonce || !signature) return false
+  const [encodedPayload, signature] = token.split('.')
+  if (!encodedPayload || !signature) return null
 
-  const issuedAtNumber = Number(issuedAt)
-  if (!Number.isFinite(issuedAtNumber)) return false
+  if (!Boolean(getAdminSecret()) || !safeCompare(signature, sign(encodedPayload))) {
+    return null
+  }
+
+  const payload = decode(encodedPayload)
+  if (!payload) return null
 
   const maxAgeMs = 1000 * 60 * 60 * 8
-  if (Date.now() - issuedAtNumber > maxAgeMs) return false
+  if (Date.now() - payload.issuedAt > maxAgeMs) return null
 
-  return Boolean(getAdminSecret()) && safeCompare(signature, sign(`${issuedAt}.${nonce}`))
+  return {
+    id: payload.id,
+    username: payload.username,
+    name: payload.name,
+    role: payload.role,
+  }
 }
 
-export function verifyAdminPassword(password: string) {
-  const adminPassword = getAdminPassword()
-  if (!adminPassword) return false
-  return safeCompare(password, adminPassword)
+export async function isAdminAuthenticated() {
+  return Boolean(await getAdminSession())
 }

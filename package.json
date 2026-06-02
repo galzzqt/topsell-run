@@ -12,6 +12,7 @@
     "db:migrations": "supabase migration list"
   },
   "dependencies": {
+    "@axiomhq/js": "^1.6.1",
     "@hookform/resolvers": "^5.4.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",

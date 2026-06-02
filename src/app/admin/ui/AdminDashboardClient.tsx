@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
   Activity,
+  BarChart3,
   Camera,
   CheckCircle,
   ChevronDown,
@@ -18,7 +20,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  ShieldCheck,
   TicketCheck,
   Trash2,
   Users,
@@ -28,8 +29,12 @@ import {
 import {
   logoutAdmin,
   markRacepackPickedUp,
+  createManagedAdmin,
+  deleteManagedAdmin,
+  refreshAxiomLogs,
   saveEditableEnvValues,
   saveRegistrationFormSettings,
+  updateManagedAdmin,
   updateAdminCommunity,
   updateAdminParticipant,
   type AdminCommunityUpdateValues,
@@ -40,6 +45,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils/format'
 import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, FormInputConfig, FormSelectConfig } from '@/lib/admin/settings-schema'
+import type { AdminLogEntry } from '@/lib/axiom/logs'
 
 type Relation<T> = T | T[] | null
 
@@ -116,6 +122,40 @@ export type AdminStats = {
   revenue: number
 }
 
+export type AdminUser = {
+  id: string
+  username: string
+  name: string
+  role: 'superadmin' | 'admin'
+}
+
+export type ManagedAdmin = {
+  id: string
+  username: string
+  name: string
+  role: 'admin' | 'superadmin'
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+type SummaryDailyParticipant = {
+  dateKey: string
+  label: string
+  count: number
+}
+
+type AdminTab =
+  | 'summary'
+  | 'participants'
+  | 'payments'
+  | 'scanner'
+  | 'export_participants'
+  | 'export_payments'
+  | 'settings'
+  | 'admins'
+  | 'logs'
+
 type ScanResult = {
   title: string
   body: string
@@ -180,6 +220,10 @@ export function AdminDashboardClient({
   payments,
   adminSettings,
   editableEnv,
+  currentAdmin,
+  managedAdmins,
+  axiomLogs,
+  axiomLogsError,
 }: {
   stats: AdminStats
   participants: AdminParticipant[]
@@ -187,6 +231,10 @@ export function AdminDashboardClient({
   payments: AdminPayment[]
   adminSettings: AdminSettings
   editableEnv: AdminEnvSnapshot[]
+  currentAdmin: AdminUser
+  managedAdmins: ManagedAdmin[]
+  axiomLogs: AdminLogEntry[]
+  axiomLogsError: string | null
 }) {
   const router = useRouter()
   const scannerRef = useRef<Html5Qrcode | null>(null)
@@ -194,7 +242,7 @@ export function AdminDashboardClient({
   const envFieldCounterRef = useRef(0)
   const scanRegionId = 'admin-racepack-reader'
   const [query, setQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'participants' | 'payments' | 'scanner' | 'settings'>('scanner')
+  const [activeTab, setActiveTab] = useState<AdminTab>('summary')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [cameraError, setCameraError] = useState('')
@@ -209,6 +257,11 @@ export function AdminDashboardClient({
   const [envForm, setEnvForm] = useState<Record<string, string>>({})
   const [selectedExportCommunities, setSelectedExportCommunities] = useState<Set<string>>(new Set(communities.map((community) => community.id)))
   const [settingsMessage, setSettingsMessage] = useState('')
+  const [adminCreateForm, setAdminCreateForm] = useState({ name: '', username: '', password: '', role: 'admin' as const })
+  const [adminEditForm, setAdminEditForm] = useState<{ id: string; name: string; username: string; password: string; is_active: boolean; role: 'admin' | 'superadmin' } | null>(null)
+  const [adminMessage, setAdminMessage] = useState('')
+  const [logs, setLogs] = useState<AdminLogEntry[]>(axiomLogs)
+  const [logsMessage, setLogsMessage] = useState(axiomLogsError || '')
   const [isPending, startTransition] = useTransition()
 
   const filteredParticipants = useMemo(() => {
@@ -269,6 +322,38 @@ export function AdminDashboardClient({
 
     return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [filteredParticipants])
+
+  const dailyParticipants = useMemo<SummaryDailyParticipant[]>(() => {
+    const DAYS_TO_SHOW = 14
+    const formatter = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short' })
+    const counts = new Map<string, number>()
+
+    for (const participant of participants) {
+      const createdAt = new Date(participant.created_at)
+      if (Number.isNaN(createdAt.getTime())) continue
+      const key = createdAt.toISOString().slice(0, 10)
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+
+    const days: SummaryDailyParticipant[] = []
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    for (let offset = DAYS_TO_SHOW - 1; offset >= 0; offset -= 1) {
+      const date = new Date(today)
+      date.setDate(today.getDate() - offset)
+      const dateKey = date.toISOString().slice(0, 10)
+      days.push({
+        dateKey,
+        label: formatter.format(date),
+        count: counts.get(dateKey) || 0,
+      })
+    }
+
+    return days
+  }, [participants])
+
+  const dailyParticipantChartMax = useMemo(() => Math.max(...dailyParticipants.map((item) => item.count), 1), [dailyParticipants])
 
   const communitiesByKey = useMemo(() => {
     const map = new Map<string, AdminCommunity>()
@@ -618,6 +703,57 @@ export function AdminDashboardClient({
     })
   }
 
+  const handleCreateAdmin = () => {
+    setAdminMessage('')
+    startTransition(async () => {
+      const result = await createManagedAdmin(adminCreateForm)
+      if (result.error) {
+        setAdminMessage(result.error)
+        return
+      }
+      setAdminCreateForm({ name: '', username: '', password: '', role: 'admin' })
+      setAdminMessage('Akun admin baru berhasil dibuat.')
+      router.refresh()
+    })
+  }
+
+  const handleUpdateAdmin = () => {
+    if (!adminEditForm) return
+    setAdminMessage('')
+    startTransition(async () => {
+      const result = await updateManagedAdmin({
+        id: adminEditForm.id,
+        name: adminEditForm.name,
+        username: adminEditForm.username,
+        password: adminEditForm.password || undefined,
+        is_active: adminEditForm.is_active,
+        role: adminEditForm.role,
+      })
+      if (result.error) {
+        setAdminMessage(result.error)
+        return
+      }
+      setAdminEditForm(null)
+      setAdminMessage('Data admin berhasil diperbarui.')
+      router.refresh()
+    })
+  }
+
+  const handleDeleteAdmin = (adminId: string, adminName: string) => {
+    const confirmed = window.confirm(`Hapus akun admin "${adminName}"?`)
+    if (!confirmed) return
+    setAdminMessage('')
+    startTransition(async () => {
+      const result = await deleteManagedAdmin(adminId)
+      if (result.error) {
+        setAdminMessage(result.error)
+        return
+      }
+      setAdminMessage('Akun admin berhasil dihapus.')
+      router.refresh()
+    })
+  }
+
   const toggleExportCommunity = (communityId: string) => {
     setSelectedExportCommunities((current) => {
       const next = new Set(current)
@@ -630,6 +766,34 @@ export function AdminDashboardClient({
   const setAllExportCommunities = (checked: boolean) => {
     setSelectedExportCommunities(checked ? new Set(communities.map((community) => community.id)) : new Set())
   }
+
+  const fetchLogs = (mode: 'silent' | 'manual' = 'manual') => {
+    if (mode === 'manual') setLogsMessage('')
+    startTransition(async () => {
+      const result = await refreshAxiomLogs()
+      if (result.error) {
+        if (mode === 'manual') setLogsMessage(result.error)
+        else setLogsMessage(result.error)
+      } else if (mode === 'manual') {
+        setLogsMessage('Log Axiom berhasil diperbarui.')
+      }
+      setLogs(result.logs)
+    })
+  }
+
+  const handleRefreshLogs = () => fetchLogs('manual')
+
+  useEffect(() => {
+    if (activeTab !== 'logs') return
+    if (currentAdmin.role !== 'superadmin') return
+
+    const kickoffId = window.setTimeout(() => fetchLogs('silent'), 0)
+    const intervalId = window.setInterval(() => fetchLogs('silent'), 10_000)
+    return () => {
+      window.clearTimeout(kickoffId)
+      window.clearInterval(intervalId)
+    }
+  }, [activeTab, currentAdmin.role])
 
   const communitySettingFields: Array<[keyof AdminSettings['registrationForm']['community'], string]> = [
     ['name', 'Nama Komunitas'],
@@ -661,6 +825,18 @@ export function AdminDashboardClient({
     ['blood_type', 'Golongan Darah'],
   ]
 
+  const adminTabs: Array<{ id: AdminTab; label: string; icon: typeof QrCode }> = [
+    { id: 'summary', label: 'Ringkasan', icon: BarChart3 },
+    { id: 'scanner', label: 'Scan Racepack', icon: QrCode },
+    { id: 'participants', label: 'Peserta', icon: Users },
+    { id: 'payments', label: 'Pembayaran', icon: CreditCard },
+    { id: 'export_participants', label: 'Export Peserta', icon: Download },
+    { id: 'export_payments', label: 'Export Pembayaran', icon: Download },
+    ...(currentAdmin.role === 'superadmin' ? [{ id: 'logs' as const, label: 'Log Axiom', icon: Activity }] : []),
+    ...(currentAdmin.role === 'superadmin' ? [{ id: 'admins' as const, label: 'Kelola Admin', icon: Users }] : []),
+    ...(currentAdmin.role === 'superadmin' ? [{ id: 'settings' as const, label: 'Pengaturan', icon: Settings }] : []),
+  ]
+
   return (
     <div className="min-h-screen bg-brand-dark text-foreground flex flex-col md:flex-row relative">
       {/* Ambient glows */}
@@ -670,13 +846,14 @@ export function AdminDashboardClient({
       {/* MOBILE HEADER (Always Visible on Mobile) */}
       <header className="md:hidden w-full sports-glass sticky top-0 z-30 border-b border-card-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-gradient-to-br from-sport-red to-sport-orange rounded-lg">
-            <ShieldCheck className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <p className="text-[8px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
-            <h1 className="text-xs font-black uppercase text-foreground">Super Admin</h1>
-          </div>
+          <Image
+            src="/images/header.png"
+            alt="TOPSELL RUN 2026"
+            width={136}
+            height={38}
+            className="h-7 w-auto object-contain"
+            priority
+          />
         </div>
         <button
           onClick={() => setSidebarOpen(true)}
@@ -702,15 +879,14 @@ export function AdminDashboardClient({
       >
         {/* Brand Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-lg border border-white/20">
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/70">TOPSELL RUN 2026</p>
-              <h1 className="text-xs font-black uppercase text-white">Super Admin</h1>
-            </div>
-          </div>
+          <Image
+            src="/images/header.png"
+            alt="TOPSELL RUN 2026"
+            width={152}
+            height={43}
+            className="h-8 w-auto object-contain"
+            priority
+          />
           <button
             onClick={() => setSidebarOpen(false)}
             className="md:hidden p-1.5 rounded-lg border border-white/20 text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
@@ -721,19 +897,14 @@ export function AdminDashboardClient({
 
         {/* Sidebar Nav */}
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1.5">
-          {[
-            { id: 'scanner', label: 'Scan Racepack', icon: QrCode },
-            { id: 'participants', label: 'Peserta', icon: Users },
-            { id: 'payments', label: 'Pembayaran', icon: CreditCard },
-            { id: 'settings', label: 'Pengaturan', icon: Settings },
-          ].map((tab) => {
+          {adminTabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveTab(tab.id as any)
+                  setActiveTab(tab.id)
                   setSidebarOpen(false)
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
@@ -753,11 +924,11 @@ export function AdminDashboardClient({
         <div className="p-4 border-t border-white/10 flex flex-col gap-3">
           <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
             <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-black text-white text-xs">
-              SA
+              {currentAdmin.name.slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black text-white truncate uppercase">Super Admin</p>
-              <p className="text-[8px] font-bold text-white/60 truncate">admin@topsell.run</p>
+              <p className="text-[10px] font-black text-white truncate uppercase">{currentAdmin.name}</p>
+              <p className="text-[8px] font-bold text-white/60 truncate">@{currentAdmin.username} • {currentAdmin.role}</p>
             </div>
           </div>
           <Button
@@ -778,10 +949,42 @@ export function AdminDashboardClient({
         <header className="hidden md:flex bg-brand-dark/50 backdrop-blur-md sticky top-0 z-20 border-b border-card-border px-6 py-4 items-center justify-between">
           <div>
             <h2 className="text-sm font-black uppercase tracking-wide text-foreground">
-              {activeTab === 'scanner' ? 'Scan Racepack' : activeTab === 'participants' ? 'Daftar Peserta' : activeTab === 'payments' ? 'Daftar Pembayaran' : 'Pengaturan Form'}
+              {activeTab === 'summary'
+                ? 'Ringkasan Admin'
+                : activeTab === 'scanner'
+                ? 'Scan Racepack'
+                : activeTab === 'participants'
+                ? 'Daftar Peserta'
+                : activeTab === 'payments'
+                ? 'Daftar Pembayaran'
+                : activeTab === 'export_participants'
+                ? 'Export Peserta'
+                : activeTab === 'export_payments'
+                ? 'Export Pembayaran'
+                : activeTab === 'logs'
+                ? 'Log Axiom'
+                : activeTab === 'admins'
+                ? 'Manajemen Admin'
+                : 'Pengaturan Form'}
             </h2>
             <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">
-              {activeTab === 'scanner' ? 'Validasi QR & Pengambilan Racepack Peserta' : activeTab === 'participants' ? 'Kelola komunitas & anggota terdaftar' : activeTab === 'payments' ? 'Riwayat pembayaran kolektif komunitas' : 'Konfigurasi form pendaftaran & environment'}
+              {activeTab === 'summary'
+                ? 'Statistik utama admin dan tren registrasi peserta'
+                : activeTab === 'scanner'
+                ? 'Validasi QR & Pengambilan Racepack Peserta'
+                : activeTab === 'participants'
+                ? 'Kelola komunitas & anggota terdaftar'
+                : activeTab === 'payments'
+                ? 'Riwayat pembayaran kolektif komunitas'
+                : activeTab === 'export_participants'
+                ? 'Ekspor data peserta per komunitas'
+                : activeTab === 'export_payments'
+                ? 'Ekspor data pembayaran per komunitas'
+                : activeTab === 'logs'
+                ? 'Monitoring log aplikasi dari Axiom'
+                : activeTab === 'admins'
+                ? 'Kelola akun admin yang dapat mengakses panel'
+                : 'Konfigurasi form pendaftaran & environment'}
             </p>
           </div>
 
@@ -791,7 +994,13 @@ export function AdminDashboardClient({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={activeTab === 'payments' ? 'Cari pembayaran...' : 'Cari peserta, komunitas...'}
+                placeholder={
+                  activeTab === 'summary'
+                    ? 'Cari data peserta, komunitas, pembayaran...'
+                    : activeTab === 'payments'
+                    ? 'Cari pembayaran...'
+                    : 'Cari peserta, komunitas...'
+                }
                 className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
               />
             </label>
@@ -806,7 +1015,13 @@ export function AdminDashboardClient({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={activeTab === 'payments' ? 'Cari pembayaran...' : 'Cari peserta, komunitas...'}
+                placeholder={
+                  activeTab === 'summary'
+                    ? 'Cari data peserta, komunitas, pembayaran...'
+                    : activeTab === 'payments'
+                    ? 'Cari pembayaran...'
+                    : 'Cari peserta, komunitas...'
+                }
                 className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
               />
             </label>
@@ -815,27 +1030,54 @@ export function AdminDashboardClient({
 
         {/* Main Section */}
         <section className="flex-1 p-4 md:p-6 flex flex-col gap-5 max-w-7xl w-full mx-auto">
-          {/* STATS TILES */}
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-            {[
-              { label: 'Komunitas', value: stats.communities, icon: <Activity className="w-4 h-4" /> },
-              { label: 'Peserta', value: stats.participants, icon: <Users className="w-4 h-4" /> },
-              { label: 'Lunas', value: stats.paidParticipants, icon: <CheckCircle className="w-4 h-4" /> },
-              { label: 'Pending', value: stats.pendingParticipants, icon: <CreditCard className="w-4 h-4" /> },
-              { label: 'Racepack', value: stats.racepacksPickedUp, icon: <TicketCheck className="w-4 h-4" /> },
-              { label: 'Revenue', value: formatCurrency(stats.revenue), icon: <CreditCard className="w-4 h-4" /> },
-            ].map((item) => (
-              <div key={item.label} className="bg-card-bg border border-card-border rounded-lg p-3.5 flex items-center justify-between gap-3 shadow-sm hover:border-sport-orange/30 transition-colors">
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted mb-0.5">{item.label}</p>
-                  <p className="text-base font-black text-foreground">{item.value}</p>
-                </div>
-                <div className="p-2 bg-sport-orange/10 border border-sport-orange/20 rounded-lg text-sport-orange">
-                  {item.icon}
-                </div>
+          {activeTab === 'summary' && (
+            <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                {[
+                  { label: 'Komunitas', value: stats.communities, icon: <Activity className="w-4 h-4" /> },
+                  { label: 'Peserta', value: stats.participants, icon: <Users className="w-4 h-4" /> },
+                  { label: 'Lunas', value: stats.paidParticipants, icon: <CheckCircle className="w-4 h-4" /> },
+                  { label: 'Pending', value: stats.pendingParticipants, icon: <CreditCard className="w-4 h-4" /> },
+                  { label: 'Racepack', value: stats.racepacksPickedUp, icon: <TicketCheck className="w-4 h-4" /> },
+                  { label: 'Revenue', value: formatCurrency(stats.revenue), icon: <CreditCard className="w-4 h-4" /> },
+                ].map((item) => (
+                  <div key={item.label} className="bg-card-bg border border-card-border rounded-lg p-3.5 flex items-center justify-between gap-3 shadow-sm hover:border-sport-orange/30 transition-colors">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted mb-0.5">{item.label}</p>
+                      <p className="text-base font-black text-foreground">{item.value}</p>
+                    </div>
+                    <div className="p-2 bg-sport-orange/10 border border-sport-orange/20 rounded-lg text-sport-orange">
+                      {item.icon}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+
+              <section className="bg-card-bg border border-card-border rounded-lg p-4 md:p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Diagram Peserta</p>
+                    <h2 className="text-sm font-black uppercase text-foreground">Jumlah Peserta Per Hari (14 Hari Terakhir)</h2>
+                  </div>
+                  <Badge variant="neutral">{dailyParticipants.reduce((sum, item) => sum + item.count, 0)} Peserta</Badge>
+                </div>
+                <div className="h-64 w-full">
+                  <div className="h-full flex items-end gap-1.5">
+                    {dailyParticipants.map((item) => {
+                      const heightPercent = Math.max((item.count / dailyParticipantChartMax) * 100, item.count > 0 ? 8 : 3)
+                      return (
+                        <div key={item.dateKey} className="flex-1 min-w-0 h-full flex flex-col justify-end items-center gap-1.5">
+                          <div className="text-[9px] font-black text-brand-muted">{item.count}</div>
+                          <div className="w-full rounded-t-md bg-gradient-to-t from-sport-red/80 to-sport-orange/90 border border-sport-orange/40" style={{ height: `${heightPercent}%` }} />
+                          <div className="text-[9px] font-bold text-brand-muted whitespace-nowrap">{item.label}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
 
           {/* ACTIVE TAB CONTENT */}
           {activeTab === 'scanner' && (
@@ -1097,7 +1339,168 @@ export function AdminDashboardClient({
             </section>
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'logs' && currentAdmin.role === 'superadmin' && (
+            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-card-border flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Axiom</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">Log Aplikasi (100 data terbaru)</h2>
+                </div>
+                <Button type="button" variant="secondary" onClick={handleRefreshLogs} isLoading={isPending}>
+                  <RefreshCw className="w-4 h-4 mr-2" />Refresh Log
+                </Button>
+              </div>
+
+              {logsMessage && (
+                <div className="px-4 py-3 border-b border-card-border text-xs font-bold text-brand-muted">
+                  {logsMessage}
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-brand-dark/30 border-b border-card-border">
+                    <tr>
+                      {['Waktu', 'Level', 'Sumber', 'Pesan'].map((heading) => (
+                        <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log, index) => (
+                      <tr key={`${log.time}-${index}`} className="border-b border-card-border hover:bg-brand-gray/20">
+                        <td className="px-4 py-3 text-xs text-brand-muted whitespace-nowrap">{formatDateTime(log.time)}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant={log.level.toLowerCase().includes('error') ? 'danger' : log.level.toLowerCase().includes('warn') ? 'warning' : 'neutral'}>
+                            {log.level}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-xs font-bold text-foreground">{log.source}</td>
+                        <td className="px-4 py-3 text-xs text-brand-muted min-w-[22rem]">{log.message}</td>
+                      </tr>
+                    ))}
+                    {logs.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
+                          Belum ada log yang ditampilkan dari Axiom.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {activeTab === 'admins' && currentAdmin.role === 'superadmin' && (
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-4">
+              <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-card-border">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Tambah Admin</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">Buat Akun Admin Baru</h2>
+                </div>
+                <div className="p-4 flex flex-col gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-black uppercase text-brand-muted">Nama</span>
+                    <input
+                      value={adminCreateForm.name}
+                      onChange={(event) => setAdminCreateForm({ ...adminCreateForm, name: event.target.value })}
+                      placeholder="Nama admin"
+                      className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-black uppercase text-brand-muted">Role</span>
+                    <select
+                      value={adminCreateForm.role}
+                      onChange={(event) => setAdminCreateForm({ ...adminCreateForm, role: event.target.value as 'admin' | 'superadmin' })}
+                      className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="superadmin">Superadmin</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-black uppercase text-brand-muted">Username</span>
+                    <input
+                      value={adminCreateForm.username}
+                      onChange={(event) => setAdminCreateForm({ ...adminCreateForm, username: event.target.value })}
+                      placeholder="contoh: admin_event"
+                      className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-black uppercase text-brand-muted">Password</span>
+                    <input
+                      type="password"
+                      value={adminCreateForm.password}
+                      onChange={(event) => setAdminCreateForm({ ...adminCreateForm, password: event.target.value })}
+                      placeholder="Minimal 6 karakter"
+                      className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                    />
+                  </label>
+                  <Button type="button" onClick={handleCreateAdmin} isLoading={isPending}>
+                    Tambah Admin
+                  </Button>
+                </div>
+              </section>
+
+              <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-card-border">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Daftar Admin</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">{managedAdmins.length} akun admin terdaftar</h2>
+                </div>
+                <div className="divide-y divide-card-border">
+                  {managedAdmins.map((admin) => (
+                    <div key={admin.id} className="p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-foreground">{admin.name}</p>
+                          <p className="text-[10px] font-bold text-brand-muted">@{admin.username}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="neutral">{admin.role}</Badge>
+                          <Badge variant={admin.is_active ? 'success' : 'warning'}>
+                            {admin.is_active ? 'Aktif' : 'Nonaktif'}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setAdminEditForm({
+                              id: admin.id,
+                              name: admin.name,
+                              username: admin.username,
+                              password: '',
+                              is_active: admin.is_active,
+                              role: admin.role,
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteAdmin(admin.id, admin.name)}>
+                          Hapus
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {managedAdmins.length === 0 && (
+                    <div className="p-6 text-center text-xs font-bold text-brand-muted">
+                      Belum ada admin tambahan. Tambahkan akun admin baru dari form sebelah kiri.
+                    </div>
+                  )}
+                </div>
+                {adminMessage && <p className="px-4 py-3 text-xs font-bold text-green-300 border-t border-card-border">{adminMessage}</p>}
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'settings' && currentAdmin.role === 'superadmin' && (
             <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4">
               <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
@@ -1307,53 +1710,56 @@ export function AdminDashboardClient({
             </div>
           )}
 
-          {/* EXPORT DATA & OPTIONS */}
-          <div className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-3">
-            <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Export Data</p>
-                <p className="text-xs font-bold text-brand-muted">Pilih komunitas, lalu sistem membuat 1 file Excel untuk tiap komunitas.</p>
-              </div>
-              <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                <input
-                  type="checkbox"
-                  checked={selectedExportCommunities.size === communities.length && communities.length > 0}
-                  onChange={(event) => setAllExportCommunities(event.target.checked)}
-                />
-                Pilih semua komunitas
-              </label>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
-              {communities.map((community) => (
-                <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
+          {(activeTab === 'export_participants' || activeTab === 'export_payments') && (
+            <div className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-3">
+              <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">
+                    {activeTab === 'export_participants' ? 'Export Peserta' : 'Export Pembayaran'}
+                  </p>
+                  <p className="text-xs font-bold text-brand-muted">Pilih komunitas, lalu sistem membuat 1 file Excel untuk tiap komunitas.</p>
+                </div>
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
                   <input
                     type="checkbox"
-                    checked={selectedExportCommunities.has(community.id)}
-                    onChange={() => toggleExportCommunity(community.id)}
-                    className="mt-0.5"
+                    checked={selectedExportCommunities.size === communities.length && communities.length > 0}
+                    onChange={(event) => setAllExportCommunities(event.target.checked)}
                   />
-                  <span>
-                    <span className="block font-black text-foreground">{community.name}</span>
-                    <span className="block text-[10px] text-brand-muted">{community.community_code}</span>
-                  </span>
+                  Pilih semua komunitas
                 </label>
-              ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+                {communities.map((community) => (
+                  <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={selectedExportCommunities.has(community.id)}
+                      onChange={() => toggleExportCommunity(community.id)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block font-black text-foreground">{community.name}</span>
+                      <span className="block text-[10px] text-brand-muted">{community.community_code}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="ghost" onClick={() => router.refresh()}>
+                  <RefreshCw className="w-4 h-4 mr-2" />Refresh Data
+                </Button>
+                {activeTab === 'export_participants' ? (
+                  <Button type="button" variant="secondary" onClick={() => exportWorkbook('participants', 'selected')}>
+                    <Download className="w-4 h-4 mr-2" />Export Peserta
+                  </Button>
+                ) : (
+                  <Button type="button" variant="secondary" onClick={() => exportWorkbook('payments', 'selected')}>
+                    <Download className="w-4 h-4 mr-2" />Export Pembayaran
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="ghost" onClick={() => router.refresh()}>
-                <RefreshCw className="w-4 h-4 mr-2" />Refresh Data
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => exportWorkbook('participants', 'selected')}>
-                <Download className="w-4 h-4 mr-2" />Export Peserta
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => exportWorkbook('payments', 'selected')}>
-                <Download className="w-4 h-4 mr-2" />Export Pembayaran
-              </Button>
-              <Button type="button" variant="outline" onClick={() => exportWorkbook('all', 'selected')}>
-                <Download className="w-4 h-4 mr-2" />Export Semua
-              </Button>
-            </div>
-          </div>
+          )}
         </section>
       </div>
 
@@ -1469,6 +1875,67 @@ export function AdminDashboardClient({
             <div className="sm:col-span-2 flex gap-2 pt-3 border-t border-card-border">
               <Button type="button" variant="ghost" className="flex-1" onClick={() => setCommunityEditing(null)}>Batal</Button>
               <Button type="button" className="flex-1" onClick={saveCommunity} isLoading={isPending}>Simpan</Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      <Dialog
+        isOpen={!!adminEditForm}
+        onClose={() => setAdminEditForm(null)}
+        title="Edit Akun Admin"
+        className="max-w-lg"
+      >
+        {adminEditForm && (
+          <div className="grid grid-cols-1 gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black uppercase text-brand-muted">Nama</span>
+              <input
+                value={adminEditForm.name}
+                onChange={(event) => setAdminEditForm({ ...adminEditForm, name: event.target.value })}
+                className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black uppercase text-brand-muted">Role</span>
+              <select
+                value={adminEditForm.role}
+                onChange={(event) => setAdminEditForm({ ...adminEditForm, role: event.target.value as 'admin' | 'superadmin' })}
+                className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
+              >
+                <option value="admin">Admin</option>
+                <option value="superadmin">Superadmin</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black uppercase text-brand-muted">Username</span>
+              <input
+                value={adminEditForm.username}
+                onChange={(event) => setAdminEditForm({ ...adminEditForm, username: event.target.value })}
+                className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black uppercase text-brand-muted">Password Baru (Opsional)</span>
+              <input
+                type="password"
+                value={adminEditForm.password}
+                onChange={(event) => setAdminEditForm({ ...adminEditForm, password: event.target.value })}
+                placeholder="Kosongkan jika tidak diganti"
+                className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
+              />
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+              <input
+                type="checkbox"
+                checked={adminEditForm.is_active}
+                onChange={(event) => setAdminEditForm({ ...adminEditForm, is_active: event.target.checked })}
+              />
+              Admin aktif
+            </label>
+            <div className="flex gap-2 pt-2 border-t border-card-border">
+              <Button type="button" variant="ghost" className="flex-1" onClick={() => setAdminEditForm(null)}>Batal</Button>
+              <Button type="button" className="flex-1" onClick={handleUpdateAdmin} isLoading={isPending}>Simpan</Button>
             </div>
           </div>
         )}

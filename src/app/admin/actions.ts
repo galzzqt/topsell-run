@@ -1,10 +1,13 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
-import { clearAdminSession, createAdminSession, isAdminAuthenticated, verifyAdminPassword } from '@/lib/admin/auth'
+import { clearAdminSession, createAdminSession, getAdminSession, isAdminAuthenticated } from '@/lib/admin/auth'
+import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
+import { queryAdminLogs } from '@/lib/axiom/logs'
 import { readEditableEnvSnapshot, updateEditableEnvValues, writeAdminSettings } from '@/lib/admin/settings'
 import { clearRateLimit, rateLimit } from '@/lib/security/rate-limit'
 import { phoneToAuthEmail } from '@/lib/utils/phone-auth'
+import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { revalidatePath } from 'next/cache'
 import type { AdminSettings } from '@/lib/admin/settings-schema'
 
@@ -16,18 +19,19 @@ function parseParticipantId(scanValue: string) {
   return null
 }
 
-export async function loginAdmin(password: string) {
+export async function loginAdmin(username: string, password: string) {
   const limit = rateLimit('admin-login', 10, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
   }
 
-  if (!verifyAdminPassword(password)) {
-    return { error: 'Password admin tidak valid.' }
+  const session = await resolveAdminLogin(username, password)
+  if (!session) {
+    return { error: 'Username atau password admin tidak valid.' }
   }
 
   clearRateLimit('admin-login')
-  await createAdminSession()
+  await createAdminSession(session)
   revalidatePath('/admin')
   return { success: true }
 }
@@ -39,12 +43,21 @@ export async function logoutAdmin() {
 }
 
 export async function markRacepackPickedUp(scanValue: string) {
-  if (!(await isAdminAuthenticated())) {
+  const session = await getAdminSession()
+  if (!session) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
   const participantId = parseParticipantId(scanValue)
   if (!participantId) {
+    await ingestAdminLog({
+      level: 'warning',
+      source: 'admin',
+      event: 'racepack_scan_invalid',
+      message: 'Scan racepack ditolak: QR tidak valid.',
+      actor: session,
+      data: { scanValue: scanValue.trim().slice(0, 200) },
+    })
     return { error: 'QR tidak valid. Pastikan QR Race Pass peserta yang dipindai.' }
   }
 
@@ -56,14 +69,38 @@ export async function markRacepackPickedUp(scanValue: string) {
     .single()
 
   if (findError || !participant) {
+    await ingestAdminLog({
+      level: 'warning',
+      source: 'admin',
+      event: 'racepack_scan_not_found',
+      message: 'Scan racepack ditolak: peserta tidak ditemukan.',
+      actor: session,
+      data: { participantId },
+    })
     return { error: 'Peserta tidak ditemukan.' }
   }
 
   if (participant.payment_status !== 'paid') {
+    await ingestAdminLog({
+      level: 'warning',
+      source: 'admin',
+      event: 'racepack_scan_unpaid',
+      message: 'Scan racepack ditolak: peserta belum lunas.',
+      actor: session,
+      data: { participantId: participant.id, payment_status: participant.payment_status, checked_in: participant.checked_in },
+    })
     return { error: 'Peserta belum lunas, racepack belum bisa diambil.' }
   }
 
   if (participant.checked_in) {
+    await ingestAdminLog({
+      level: 'warning',
+      source: 'admin',
+      event: 'racepack_scan_already_picked_up',
+      message: 'Scan racepack ditolak: racepack sudah pernah diambil.',
+      actor: session,
+      data: { participantId: participant.id, checked_in_at: participant.checked_in_at },
+    })
     return {
       error: 'Racepack peserta ini sudah pernah diambil. QR tidak bisa digunakan lagi.',
       alreadyPickedUp: true,
@@ -80,8 +117,31 @@ export async function markRacepackPickedUp(scanValue: string) {
     .single()
 
   if (updateError || !updated) {
+    await ingestAdminLog({
+      level: 'error',
+      source: 'admin',
+      event: 'racepack_pickup_failed',
+      message: updateError?.message || 'Gagal menyimpan status pengambilan racepack.',
+      actor: session,
+      data: { participantId, pickedUpAt },
+    })
     return { error: updateError?.message || 'Gagal menyimpan status pengambilan racepack.' }
   }
+
+  await ingestAdminLog({
+    level: 'info',
+    source: 'admin',
+    event: 'racepack_picked_up',
+    message: `Racepack ditandai sudah diambil: ${updated.full_name} (${updated.participant_code || updated.bib_name}).`,
+    actor: session,
+    data: {
+      participantId: updated.id,
+      participant_code: updated.participant_code,
+      bib_name: updated.bib_name,
+      pickedUpAt,
+      community: updated.community,
+    },
+  })
 
   revalidatePath('/admin')
   return { success: true, participant: updated }
@@ -209,9 +269,9 @@ export async function updateAdminCommunity(values: AdminCommunityUpdateValues) {
 }
 
 export async function saveRegistrationFormSettings(settings: AdminSettings) {
-  if (!(await isAdminAuthenticated())) {
-    return { error: 'Sesi admin habis. Silakan login ulang.' }
-  }
+  const session = await getAdminSession()
+  if (!session) return { error: 'Sesi admin habis. Silakan login ulang.' }
+  if (session.role !== 'superadmin') return { error: 'Akses ditolak. Fitur ini hanya untuk superadmin.' }
 
   try {
     await writeAdminSettings(settings)
@@ -225,12 +285,17 @@ export async function saveRegistrationFormSettings(settings: AdminSettings) {
 }
 
 export async function saveEditableEnvValues(values: Record<string, string>) {
-  if (!(await isAdminAuthenticated())) {
-    return { error: 'Sesi admin habis. Silakan login ulang.' }
-  }
+  const session = await getAdminSession()
+  if (!session) return { error: 'Sesi admin habis. Silakan login ulang.' }
+  if (session.role !== 'superadmin') return { error: 'Akses ditolak. Fitur ini hanya untuk superadmin.' }
 
   try {
-    await updateEditableEnvValues(values)
+    const result = await updateEditableEnvValues(values)
+    if (!result || result.updatedKeys.length === 0) {
+      return {
+        error: 'Tidak ada env yang tersimpan. Pastikan field diisi dan key yang diubah termasuk daftar env yang didukung.',
+      }
+    }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Gagal menyimpan konfigurasi env.' }
   }
@@ -240,5 +305,139 @@ export async function saveEditableEnvValues(values: Record<string, string>) {
     success: true,
     env: await readEditableEnvSnapshot(),
     message: 'Konfigurasi env tersimpan. Restart server diperlukan agar semua perubahan env aktif di proses Next.js.',
+  }
+}
+
+const usernameRegex = /^[a-z0-9._-]{4,30}$/
+
+type AdminAccountInput = {
+  name: string
+  username: string
+  password: string
+  role: 'admin' | 'superadmin'
+}
+
+type AdminAccountUpdateInput = {
+  id: string
+  name: string
+  username: string
+  password?: string
+  is_active: boolean
+  role: 'admin' | 'superadmin'
+}
+
+async function requireSuperAdmin() {
+  const session = await getAdminSession()
+  if (!session) return { error: 'Sesi admin habis. Silakan login ulang.' } as const
+  if (session.role !== 'superadmin') return { error: 'Akses ditolak. Fitur ini hanya untuk superadmin.' } as const
+  return { session } as const
+}
+
+function validateAdminName(name: string) {
+  return name.trim().length >= 3
+}
+
+function validateAdminUsername(username: string) {
+  return usernameRegex.test(username.trim().toLowerCase())
+}
+
+function normalizeAdminUsername(username: string) {
+  return username.trim().toLowerCase()
+}
+
+export async function createManagedAdmin(values: AdminAccountInput) {
+  const guard = await requireSuperAdmin()
+  if ('error' in guard) return guard
+
+  if (!validateAdminName(values.name)) return { error: 'Nama admin minimal 3 karakter.' }
+  if (!validateAdminUsername(values.username)) return { error: 'Username harus 4-30 karakter (huruf kecil, angka, titik, underscore, dash).' }
+  if (values.password.length < 6) return { error: 'Password admin minimal 6 karakter.' }
+  if (!['admin', 'superadmin'].includes(values.role)) return { error: 'Role admin tidak valid.' }
+
+  const accounts = await readManagedAdminAccounts()
+  const username = normalizeAdminUsername(values.username)
+  if (accounts.some((account) => account.username === username)) {
+    return { error: 'Username admin sudah digunakan.' }
+  }
+
+  const now = new Date().toISOString()
+  const passwordRecord = createPasswordRecord(values.password)
+  accounts.push({
+    id: crypto.randomUUID(),
+    username,
+    name: values.name.trim(),
+    role: values.role,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+    ...passwordRecord,
+  })
+
+  await writeManagedAdminAccounts(accounts)
+  revalidatePath('/admin')
+  return { success: true, admins: await getAdminPublicAccounts() }
+}
+
+export async function updateManagedAdmin(values: AdminAccountUpdateInput) {
+  const guard = await requireSuperAdmin()
+  if ('error' in guard) return guard
+
+  if (!values.id) return { error: 'ID admin tidak valid.' }
+  if (!validateAdminName(values.name)) return { error: 'Nama admin minimal 3 karakter.' }
+  if (!validateAdminUsername(values.username)) return { error: 'Username harus 4-30 karakter (huruf kecil, angka, titik, underscore, dash).' }
+  if (values.password && values.password.length < 6) return { error: 'Password admin minimal 6 karakter.' }
+  if (!['admin', 'superadmin'].includes(values.role)) return { error: 'Role admin tidak valid.' }
+
+  const accounts = await readManagedAdminAccounts()
+  const username = normalizeAdminUsername(values.username)
+  const targetIndex = accounts.findIndex((account) => account.id === values.id)
+  if (targetIndex < 0) return { error: 'Akun admin tidak ditemukan.' }
+  if (accounts.some((account, index) => index !== targetIndex && account.username === username)) {
+    return { error: 'Username admin sudah digunakan.' }
+  }
+
+  const next = { ...accounts[targetIndex] }
+  next.name = values.name.trim()
+  next.username = username
+  next.is_active = values.is_active
+  next.role = values.role
+  next.updated_at = new Date().toISOString()
+  if (values.password) {
+    Object.assign(next, createPasswordRecord(values.password))
+  }
+
+  accounts[targetIndex] = next
+  await writeManagedAdminAccounts(accounts)
+  revalidatePath('/admin')
+  return { success: true, admins: await getAdminPublicAccounts() }
+}
+
+export async function deleteManagedAdmin(adminId: string) {
+  const guard = await requireSuperAdmin()
+  if ('error' in guard) return guard
+  if (!adminId) return { error: 'ID admin tidak valid.' }
+
+  const accounts = await readManagedAdminAccounts()
+  const filtered = accounts.filter((account) => account.id !== adminId)
+  if (filtered.length === accounts.length) return { error: 'Akun admin tidak ditemukan.' }
+
+  await writeManagedAdminAccounts(filtered)
+  revalidatePath('/admin')
+  return { success: true, admins: await getAdminPublicAccounts() }
+}
+
+export async function refreshAxiomLogs() {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.', logs: [] as Awaited<ReturnType<typeof queryAdminLogs>>['logs'] }
+  }
+  if (session.role !== 'superadmin') {
+    return { error: 'Akses ditolak. Fitur ini hanya untuk superadmin.', logs: [] as Awaited<ReturnType<typeof queryAdminLogs>>['logs'] }
+  }
+
+  const result = await queryAdminLogs(100)
+  return {
+    error: result.error,
+    logs: result.logs,
   }
 }
