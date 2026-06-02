@@ -22,6 +22,8 @@ import {
   TicketCheck,
   Trash2,
   Users,
+  Menu,
+  X,
 } from 'lucide-react'
 import {
   logoutAdmin,
@@ -193,6 +195,7 @@ export function AdminDashboardClient({
   const scanRegionId = 'admin-racepack-reader'
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'participants' | 'payments' | 'scanner' | 'settings'>('scanner')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [cameraError, setCameraError] = useState('')
   const [cameraActive, setCameraActive] = useState(false)
@@ -659,588 +662,700 @@ export function AdminDashboardClient({
   ]
 
   return (
-    <main className="min-h-screen bg-brand-dark text-foreground">
-      <header className="sports-glass sticky top-0 z-30 border-b border-card-border px-4 sm:px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-sport-red to-sport-orange rounded-lg">
-              <ShieldCheck className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
-              <h1 className="text-sm font-black uppercase text-foreground">Super Admin Dashboard</h1>
-            </div>
+    <div className="min-h-screen bg-brand-dark text-foreground flex flex-col md:flex-row relative">
+      {/* Ambient glows */}
+      <div className="fixed top-0 right-0 w-96 h-96 bg-sport-orange/5 rounded-full blur-3xl pointer-events-none z-0" />
+      <div className="fixed bottom-0 left-0 w-96 h-96 bg-sport-red/5 rounded-full blur-3xl pointer-events-none z-0" />
+
+      {/* MOBILE HEADER (Always Visible on Mobile) */}
+      <header className="md:hidden w-full sports-glass sticky top-0 z-30 border-b border-card-border px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-gradient-to-br from-sport-red to-sport-orange rounded-lg">
+            <ShieldCheck className="w-4 h-4 text-white" />
           </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout} isLoading={isPending}>
-            <LogOut className="w-4 h-4 mr-2" />Keluar
-          </Button>
+          <div>
+            <p className="text-[8px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
+            <h1 className="text-xs font-black uppercase text-foreground">Super Admin</h1>
+          </div>
         </div>
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 rounded-lg bg-brand-gray/40 border border-card-border text-brand-muted hover:text-foreground transition-colors cursor-pointer"
+        >
+          <Menu className="w-4 h-4" />
+        </button>
       </header>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5">
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-          {[
-            { label: 'Komunitas', value: stats.communities, icon: <Activity className="w-4 h-4" /> },
-            { label: 'Peserta', value: stats.participants, icon: <Users className="w-4 h-4" /> },
-            { label: 'Lunas', value: stats.paidParticipants, icon: <CheckCircle className="w-4 h-4" /> },
-            { label: 'Pending', value: stats.pendingParticipants, icon: <CreditCard className="w-4 h-4" /> },
-            { label: 'Racepack', value: stats.racepacksPickedUp, icon: <TicketCheck className="w-4 h-4" /> },
-            { label: 'Revenue', value: formatCurrency(stats.revenue), icon: <CreditCard className="w-4 h-4" /> },
-          ].map((item) => (
-            <div key={item.label} className="bg-card-bg border border-card-border rounded-lg p-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">{item.label}</p>
-                <p className="text-lg font-black text-foreground">{item.value}</p>
-              </div>
-              <div className="p-2 bg-sport-orange/10 border border-sport-orange/20 rounded-lg text-sport-orange">
-                {item.icon}
-              </div>
+      {/* SIDEBAR BACKDROP (Mobile) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      <aside
+        className={`w-64 bg-gradient-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Brand Header */}
+        <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/10 rounded-lg border border-white/20">
+              <ShieldCheck className="w-5 h-5 text-white" />
             </div>
-          ))}
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-white/70">TOPSELL RUN 2026</p>
+              <h1 className="text-xs font-black uppercase text-white">Super Admin</h1>
+            </div>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-1.5 rounded-lg border border-white/20 text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="bg-card-bg border border-card-border rounded-lg p-3 flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
-          <div className="flex gap-2">
-            {(['scanner', 'participants', 'payments', 'settings'] as const).map((tab) => (
+        {/* Sidebar Nav */}
+        <nav className="flex-1 px-3 py-4 flex flex-col gap-1.5">
+          {[
+            { id: 'scanner', label: 'Scan Racepack', icon: QrCode },
+            { id: 'participants', label: 'Peserta', icon: Users },
+            { id: 'payments', label: 'Pembayaran', icon: CreditCard },
+            { id: 'settings', label: 'Pengaturan', icon: Settings },
+          ].map((tab) => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+            return (
               <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors ${
-                  activeTab === tab ? 'bg-sport-orange/15 text-sport-orange border border-sport-orange/40' : 'text-brand-muted hover:text-foreground'
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any)
+                  setSidebarOpen(false)
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-white/15 text-white border border-white/20 font-black shadow-md'
+                    : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                 }`}
               >
-                {tab === 'scanner' ? 'Scan Racepack' : tab === 'participants' ? 'Peserta' : tab === 'payments' ? 'Pembayaran' : 'Pengaturan'}
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-white/50'}`} />
+                {tab.label}
               </button>
+            )
+          })}
+        </nav>
+
+        {/* Sidebar Footer */}
+        <div className="p-4 border-t border-white/10 flex flex-col gap-3">
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+            <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-black text-white text-xs">
+              SA
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black text-white truncate uppercase">Super Admin</p>
+              <p className="text-[8px] font-bold text-white/60 truncate">admin@topsell.run</p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-[10px] font-black uppercase tracking-wider text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
+            onClick={handleLogout}
+            isLoading={isPending}
+          >
+            <LogOut className="w-3.5 h-3.5 mr-2 text-white/70" />Keluar
+          </Button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 md:pl-64 flex flex-col min-h-screen relative z-10">
+        {/* Header bar */}
+        <header className="hidden md:flex bg-brand-dark/50 backdrop-blur-md sticky top-0 z-20 border-b border-card-border px-6 py-4 items-center justify-between">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-wide text-foreground">
+              {activeTab === 'scanner' ? 'Scan Racepack' : activeTab === 'participants' ? 'Daftar Peserta' : activeTab === 'payments' ? 'Daftar Pembayaran' : 'Pengaturan Form'}
+            </h2>
+            <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">
+              {activeTab === 'scanner' ? 'Validasi QR & Pengambilan Racepack Peserta' : activeTab === 'participants' ? 'Kelola komunitas & anggota terdaftar' : activeTab === 'payments' ? 'Riwayat pembayaran kolektif komunitas' : 'Konfigurasi form pendaftaran & environment'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="relative w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={activeTab === 'payments' ? 'Cari pembayaran...' : 'Cari peserta, komunitas...'}
+                className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
+              />
+            </label>
+          </div>
+        </header>
+
+        {/* Mobile-only Search Bar (Visible under mobile header when not settings tab) */}
+        {activeTab !== 'settings' && (
+          <div className="md:hidden px-4 py-3 border-b border-card-border/50 bg-brand-dark/20">
+            <label className="relative w-full block">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={activeTab === 'payments' ? 'Cari pembayaran...' : 'Cari peserta, komunitas...'}
+                className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
+              />
+            </label>
+          </div>
+        )}
+
+        {/* Main Section */}
+        <section className="flex-1 p-4 md:p-6 flex flex-col gap-5 max-w-7xl w-full mx-auto">
+          {/* STATS TILES */}
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Komunitas', value: stats.communities, icon: <Activity className="w-4 h-4" /> },
+              { label: 'Peserta', value: stats.participants, icon: <Users className="w-4 h-4" /> },
+              { label: 'Lunas', value: stats.paidParticipants, icon: <CheckCircle className="w-4 h-4" /> },
+              { label: 'Pending', value: stats.pendingParticipants, icon: <CreditCard className="w-4 h-4" /> },
+              { label: 'Racepack', value: stats.racepacksPickedUp, icon: <TicketCheck className="w-4 h-4" /> },
+              { label: 'Revenue', value: formatCurrency(stats.revenue), icon: <CreditCard className="w-4 h-4" /> },
+            ].map((item) => (
+              <div key={item.label} className="bg-card-bg border border-card-border rounded-lg p-3.5 flex items-center justify-between gap-3 shadow-sm hover:border-sport-orange/30 transition-colors">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted mb-0.5">{item.label}</p>
+                  <p className="text-base font-black text-foreground">{item.value}</p>
+                </div>
+                <div className="p-2 bg-sport-orange/10 border border-sport-orange/20 rounded-lg text-sport-orange">
+                  {item.icon}
+                </div>
+              </div>
             ))}
           </div>
-          <label className="relative w-full lg:max-w-sm">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={activeTab === 'payments' ? 'Cari pembayaran, referensi, komunitas...' : 'Cari peserta, komunitas, BIB, email...'}
-              className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-xs text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
-            />
-          </label>
-        </div>
 
-        {activeTab === 'scanner' && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-4">
-            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
-              <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+          {/* ACTIVE TAB CONTENT */}
+          {activeTab === 'scanner' && (
+            <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-4">
+              <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Scanner QR</p>
+                    <h2 className="text-sm font-black uppercase text-foreground">Pengambilan Racepack</h2>
+                  </div>
+                  <QrCode className="w-5 h-5 text-sport-orange" />
+                </div>
+                <div className="p-4 flex flex-col gap-3">
+                  <div className="relative aspect-video bg-brand-dark border border-card-border rounded-lg overflow-hidden flex items-center justify-center">
+                    <div id={scanRegionId} className="w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full" />
+                    {!cameraActive && (
+                      <div className="absolute flex flex-col items-center gap-2 text-brand-muted">
+                        <Camera className="w-8 h-8" />
+                        <span className="text-xs font-bold uppercase">Scanner belum aktif</span>
+                      </div>
+                    )}
+                  </div>
+                  {cameraError && <p className="text-xs text-red-400 font-medium">{cameraError}</p>}
+                  <div className="flex gap-2">
+                    <Button type="button" className="flex-1" onClick={startCamera} disabled={cameraActive || isPending}>
+                      <Camera className="w-4 h-4 mr-2" />Aktifkan Kamera
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={stopCamera} disabled={!cameraActive}>
+                      Stop
+                    </Button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-4">
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Scanner QR</p>
-                  <h2 className="text-sm font-black uppercase text-foreground">Pengambilan Racepack</h2>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Hasil Scan</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">Validasi Peserta</h2>
                 </div>
-                <QrCode className="w-5 h-5 text-sport-orange" />
-              </div>
-              <div className="p-4 flex flex-col gap-3">
-                <div className="relative aspect-video bg-brand-dark border border-card-border rounded-lg overflow-hidden flex items-center justify-center">
-                  <div id={scanRegionId} className="w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full" />
-                  {!cameraActive && (
-                    <div className="absolute flex flex-col items-center gap-2 text-brand-muted">
-                      <Camera className="w-8 h-8" />
-                      <span className="text-xs font-bold uppercase">Scanner belum aktif</span>
+                {!scanResult ? (
+                  <div className="min-h-64 border border-card-border rounded-lg bg-brand-gray/20 flex flex-col items-center justify-center text-center gap-2 p-6">
+                    <QrCode className="w-8 h-8 text-brand-muted" />
+                    <p className="text-xs font-bold uppercase text-brand-muted">Belum ada QR discan</p>
+                    <p className="text-[10px] text-brand-muted leading-relaxed">
+                      Arahkan kamera ke Race Pass peserta. Detail peserta akan muncul di sini untuk dicocokkan oleh petugas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="border border-card-border rounded-lg p-4 bg-brand-gray/30 flex flex-col gap-4">
+                    <div>
+                      <Badge variant={scanResult.variant}>{scanResult.title}</Badge>
+                      <p className="text-xs text-brand-muted mt-2 leading-relaxed">{scanResult.body}</p>
                     </div>
-                  )}
-                </div>
-                {cameraError && <p className="text-xs text-red-400 font-medium">{cameraError}</p>}
-                <div className="flex gap-2">
-                  <Button type="button" className="flex-1" onClick={startCamera} disabled={cameraActive || isPending}>
-                    <Camera className="w-4 h-4 mr-2" />Aktifkan Kamera
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={stopCamera} disabled={!cameraActive}>
-                    Stop
-                  </Button>
-                </div>
-              </div>
-            </section>
 
-            <section className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-4">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Hasil Scan</p>
-                <h2 className="text-sm font-black uppercase text-foreground">Validasi Peserta</h2>
+                    {scanResult.participant && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-card-border pt-4">
+                        {[
+                          { label: 'Nama Lengkap', value: scanResult.participant.full_name },
+                          { label: 'Nama BIB', value: scanResult.participant.bib_name },
+                          { label: 'Nomor BIB', value: scanResult.participant.participant_code || '-' },
+                          { label: 'Tanggal Lahir', value: scanResult.participant.date_of_birth || '-' },
+                          { label: 'Ukuran Baju', value: scanResult.participant.tshirt_size },
+                          { label: 'Gender', value: scanResult.participant.gender === 'male' ? 'Laki-laki' : 'Perempuan' },
+                          { label: 'Gol. Darah', value: scanResult.participant.blood_type || '-' },
+                          { label: 'Nama Kontak Darurat', value: scanResult.participant.emergency_contact_name || '-' },
+                          { label: 'No. Kontak Darurat', value: scanResult.participant.emergency_contact_phone || '-' },
+                          { label: 'WhatsApp', value: scanResult.participant.phone },
+                          { label: 'Email', value: scanResult.participant.email },
+                          { label: 'Komunitas', value: firstRelation(scanResult.participant.community)?.name || '-' },
+                          { label: 'Kode Komunitas', value: firstRelation(scanResult.participant.community)?.community_code || '-' },
+                          { label: 'Status Bayar', value: scanResult.participant.payment_status === 'paid' ? 'Lunas' : scanResult.participant.payment_status },
+                          { label: 'Racepack', value: scanResult.participant.checked_in ? 'Sudah diambil' : 'Belum diambil' },
+                          { label: 'Waktu Ambil', value: formatDateTime(scanResult.participant.checked_in_at) },
+                        ].map((item) => (
+                          <div key={item.label} className="rounded-lg border border-card-border bg-brand-dark/30 p-3 min-w-0">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">{item.label}</p>
+                            <p className="text-sm font-bold text-foreground break-words">{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'participants' && (
+            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+              <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Komunitas</p>
+                  <p className="text-xs font-bold text-foreground">{groupedParticipants.length} komunitas ditemukan</p>
+                </div>
+                <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
               </div>
-              {!scanResult ? (
-                <div className="min-h-64 border border-card-border rounded-lg bg-brand-gray/20 flex flex-col items-center justify-center text-center gap-2 p-6">
-                  <QrCode className="w-8 h-8 text-brand-muted" />
-                  <p className="text-xs font-bold uppercase text-brand-muted">Belum ada QR discan</p>
-                  <p className="text-[10px] text-brand-muted leading-relaxed">
-                    Arahkan kamera ke Race Pass peserta. Detail peserta akan muncul di sini untuk dicocokkan oleh petugas.
-                  </p>
+
+              {groupedParticipants.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-sm font-bold text-foreground">Data peserta tidak ditemukan</p>
+                  <p className="text-xs text-brand-muted mt-1">Coba gunakan kata pencarian lain.</p>
                 </div>
               ) : (
-                <div className="border border-card-border rounded-lg p-4 bg-brand-gray/30 flex flex-col gap-4">
-                  <div>
-                    <Badge variant={scanResult.variant}>{scanResult.title}</Badge>
-                    <p className="text-xs text-brand-muted mt-2 leading-relaxed">{scanResult.body}</p>
-                  </div>
+                <div className="divide-y divide-card-border">
+                  {groupedParticipants.map((group) => {
+                    const isOpen = expandedCommunities.has(group.key)
+                    const editableCommunity = communitiesByKey.get(group.key)
+                    const paidCount = group.participants.filter((participant) => participant.payment_status === 'paid').length
+                    const pickedUpCount = group.participants.filter((participant) => participant.checked_in).length
+                    const pendingCount = group.participants.filter((participant) => participant.payment_status === 'pending').length
 
-                  {scanResult.participant && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-card-border pt-4">
-                      {[
-                        { label: 'Nama Lengkap', value: scanResult.participant.full_name },
-                        { label: 'Nama BIB', value: scanResult.participant.bib_name },
-                        { label: 'Nomor BIB', value: scanResult.participant.participant_code || '-' },
-                        { label: 'Tanggal Lahir', value: scanResult.participant.date_of_birth || '-' },
-                        { label: 'Ukuran Baju', value: scanResult.participant.tshirt_size },
-                        { label: 'Gender', value: scanResult.participant.gender === 'male' ? 'Laki-laki' : 'Perempuan' },
-                        { label: 'Gol. Darah', value: scanResult.participant.blood_type || '-' },
-                        { label: 'Nama Kontak Darurat', value: scanResult.participant.emergency_contact_name || '-' },
-                        { label: 'No. Kontak Darurat', value: scanResult.participant.emergency_contact_phone || '-' },
-                        { label: 'WhatsApp', value: scanResult.participant.phone },
-                        { label: 'Email', value: scanResult.participant.email },
-                        { label: 'Komunitas', value: firstRelation(scanResult.participant.community)?.name || '-' },
-                        { label: 'Kode Komunitas', value: firstRelation(scanResult.participant.community)?.community_code || '-' },
-                        { label: 'Status Bayar', value: scanResult.participant.payment_status === 'paid' ? 'Lunas' : scanResult.participant.payment_status },
-                        { label: 'Racepack', value: scanResult.participant.checked_in ? 'Sudah diambil' : 'Belum diambil' },
-                        { label: 'Waktu Ambil', value: formatDateTime(scanResult.participant.checked_in_at) },
-                      ].map((item) => (
-                        <div key={item.label} className="rounded-lg border border-card-border bg-brand-dark/30 p-3 min-w-0">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">{item.label}</p>
-                          <p className="text-sm font-bold text-foreground break-words">{item.value}</p>
+                    return (
+                      <div key={group.key}>
+                        <div className="w-full px-4 py-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto_auto] gap-3 text-left items-center hover:bg-brand-gray/20 transition-colors">
+                          <div className="min-w-0 flex items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleCommunity(group.key)}
+                              className="mt-0.5 p-1.5 rounded-lg bg-brand-gray/40 border border-card-border text-brand-muted"
+                            >
+                              {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-foreground break-words">{group.name}</p>
+                              <p className="text-[10px] font-bold text-brand-muted">{group.code}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <Badge variant="neutral">{group.participants.length} Peserta</Badge>
+                            <Badge variant={paidCount === group.participants.length ? 'success' : 'warning'}>
+                              {paidCount} Lunas
+                            </Badge>
+                            {pendingCount > 0 && <Badge variant="warning">{pendingCount} Pending</Badge>}
+                          </div>
+
+                          <div className="text-xs font-bold text-brand-muted lg:text-right">
+                            Racepack
+                            <span className="block text-sm font-black text-foreground">{pickedUpCount}/{group.participants.length}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 lg:justify-end">
+                            {editableCommunity && (
+                              <button
+                                type="button"
+                                onClick={() => openCommunityEditor(editableCommunity)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
+                              >
+                                <Pencil className="w-3 h-3" />Edit Komunitas
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => toggleCommunity(group.key)}
+                              className="text-[10px] font-black uppercase tracking-wider text-sport-orange"
+                            >
+                              {isOpen ? 'Tutup Detail' : 'Lihat Detail'}
+                            </button>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+
+                        {isOpen && (
+                          <div className="border-t border-card-border bg-brand-dark/20 overflow-x-auto">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="border-b border-card-border">
+                                  {['Peserta', 'Status', 'Racepack', 'Kontak', 'Jersey', 'Aksi'].map((heading) => (
+                                    <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.participants.map((participant) => (
+                                  <tr key={participant.id} className="border-b border-card-border last:border-b-0 hover:bg-brand-gray/20">
+                                    <td className="px-4 py-3">
+                                      <p className="text-sm font-bold text-foreground">{participant.full_name}</p>
+                                      <p className="text-[10px] text-sport-orange font-bold">{participant.participant_code || 'Belum ada kode'}</p>
+                                      <p className="text-[10px] text-brand-muted">{participant.bib_name}</p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Badge variant={participant.payment_status === 'paid' ? 'success' : 'warning'}>
+                                        {participant.payment_status === 'paid' ? 'Lunas' : 'Pending'}
+                                      </Badge>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Badge variant={participant.checked_in ? 'success' : 'neutral'}>
+                                        {participant.checked_in ? 'Sudah Diambil' : 'Belum'}
+                                      </Badge>
+                                      <p className="text-[10px] text-brand-muted mt-1">{formatDateTime(participant.checked_in_at)}</p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <p className="text-xs text-foreground">{participant.phone}</p>
+                                      <p className="text-[10px] text-brand-muted break-all">{participant.email}</p>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs font-black text-foreground">{participant.tshirt_size}</td>
+                                    <td className="px-4 py-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => openParticipantEditor(participant)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
+                                      >
+                                        <Pencil className="w-3 h-3" />Edit
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </section>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'participants' && (
-          <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
-            <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Komunitas</p>
-                <p className="text-xs font-bold text-foreground">{groupedParticipants.length} komunitas ditemukan</p>
+          {activeTab === 'payments' && (
+            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-brand-dark/30 border-b border-card-border">
+                    <tr>
+                      {['Referensi', 'Komunitas', 'Nominal', 'Metode', 'Status', 'Tanggal'].map((heading) => (
+                        <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPayments.map((payment) => {
+                      const community = getPaymentCommunity(payment)
+                      return (
+                        <tr key={payment.id} className="border-b border-card-border hover:bg-brand-gray/20">
+                          <td className="px-4 py-3 text-xs font-bold text-foreground">{payment.payment_reference}</td>
+                          <td className="px-4 py-3">
+                            <p className="text-xs font-bold text-foreground">{community?.name || '-'}</p>
+                            <p className="text-[10px] text-brand-muted">{community?.community_code || '-'}</p>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-black text-foreground">{formatCurrency(payment.amount)}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-brand-muted">{payment.payment_method || '-'}</td>
+                          <td className="px-4 py-3">
+                            <Badge variant={payment.status === 'paid' ? 'success' : 'warning'}>{payment.status}</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-brand-muted">{formatDateTime(payment.paid_at || payment.created_at)}</td>
+                        </tr>
+                      )
+                    })}
+                    {filteredPayments.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
+                          Tidak ada pembayaran yang cocok dengan pencarian.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
-            </div>
+            </section>
+          )}
 
-            {groupedParticipants.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-sm font-bold text-foreground">Data peserta tidak ditemukan</p>
-                <p className="text-xs text-brand-muted mt-1">Coba gunakan kata pencarian lain.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-card-border">
-                {groupedParticipants.map((group) => {
-                  const isOpen = expandedCommunities.has(group.key)
-                  const editableCommunity = communitiesByKey.get(group.key)
-                  const paidCount = group.participants.filter((participant) => participant.payment_status === 'paid').length
-                  const pickedUpCount = group.participants.filter((participant) => participant.checked_in).length
-                  const pendingCount = group.participants.filter((participant) => participant.payment_status === 'pending').length
-
-                  return (
-                    <div key={group.key}>
-                      <div className="w-full px-4 py-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto_auto] gap-3 text-left items-center hover:bg-brand-gray/20 transition-colors">
-                        <div className="min-w-0 flex items-start gap-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleCommunity(group.key)}
-                            className="mt-0.5 p-1.5 rounded-lg bg-brand-gray/40 border border-card-border text-brand-muted"
-                          >
-                            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                          </button>
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-foreground break-words">{group.name}</p>
-                            <p className="text-[10px] font-bold text-brand-muted">{group.code}</p>
+          {activeTab === 'settings' && (
+            <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4">
+              <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Form Pendaftaran</p>
+                    <h2 className="text-sm font-black uppercase text-foreground">Edit Label, Placeholder, dan Dropdown</h2>
+                  </div>
+                  <Settings className="w-5 h-5 text-sport-orange" />
+                </div>
+                <div className="p-4 flex flex-col gap-5">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Komunitas</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {communitySettingFields.map(([key, title]) => {
+                        const field = settingsForm.registrationForm.community[key]
+                        return (
+                          <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                            <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
+                            <input
+                              value={field.label}
+                              onChange={(event) => updateCommunityField(key, { label: event.target.value })}
+                              placeholder="Label field"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                            />
+                            <input
+                              value={field.placeholder}
+                              onChange={(event) => updateCommunityField(key, { placeholder: event.target.value })}
+                              placeholder="Placeholder"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                            />
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateCommunityField(key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
                           </div>
-                        </div>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          <Badge variant="neutral">{group.participants.length} Peserta</Badge>
-                          <Badge variant={paidCount === group.participants.length ? 'success' : 'warning'}>
-                            {paidCount} Lunas
-                          </Badge>
-                          {pendingCount > 0 && <Badge variant="warning">{pendingCount} Pending</Badge>}
-                        </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Peserta</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {participantInputSettingFields.map(([key, title]) => {
+                        const field = settingsForm.registrationForm.participants[key] as FormInputConfig
+                        return (
+                          <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                            <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
+                            <input
+                              value={field.label}
+                              onChange={(event) => updateParticipantField(key, { label: event.target.value })}
+                              placeholder="Label field"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                            />
+                            <input
+                              value={field.placeholder}
+                              onChange={(event) => updateParticipantField(key, { placeholder: event.target.value })}
+                              placeholder="Placeholder"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                            />
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateParticipantField(key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-                        <div className="text-xs font-bold text-brand-muted lg:text-right">
-                          Racepack
-                          <span className="block text-sm font-black text-foreground">{pickedUpCount}/{group.participants.length}</span>
-                        </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Dropdown Peserta</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {participantSelectSettingFields.map(([key, title]) => {
+                        const field = settingsForm.registrationForm.participants[key] as FormSelectConfig
+                        return (
+                          <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                            <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
+                            <input
+                              value={field.label}
+                              onChange={(event) => updateParticipantField(key, { label: event.target.value })}
+                              placeholder="Label dropdown"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                            />
+                            <input
+                              value={field.placeholder}
+                              onChange={(event) => updateParticipantField(key, { placeholder: event.target.value })}
+                              placeholder="Placeholder dropdown"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-3"
+                            />
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted mb-3">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateParticipantField(key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
+                            <div className="flex flex-col gap-2">
+                              {field.options.map((option) => (
+                                <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
+                                  <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
+                                  <input
+                                    value={option.label}
+                                    onChange={(event) => updateSelectOptionLabel(key, option.value, event.target.value)}
+                                    className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-                        <div className="flex items-center gap-2 lg:justify-end">
-                          {editableCommunity && (
+                  <Button type="button" onClick={saveSettings} isLoading={isPending}>
+                    Simpan Pengaturan Form
+                  </Button>
+                </div>
+              </section>
+
+              <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-card-border">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Environment</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">Edit Key Integrasi</h2>
+                </div>
+                <div className="p-4 flex flex-col gap-3">
+                  <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3">
+                    <p className="text-xs font-bold text-amber-200">
+                      Key Supabase/database tidak ditampilkan. Field sensitif sengaja dikosongkan; isi hanya jika ingin mengganti nilainya.
+                    </p>
+                  </div>
+                  <div className="border border-card-border rounded-lg p-3 bg-brand-gray/20 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Field Env Tambahan</p>
+                        <p className="text-[10px] text-brand-muted">Tambahkan key integrasi lain agar bisa terlihat di panel ini.</p>
+                      </div>
+                      <Button type="button" variant="secondary" size="sm" onClick={addEnvField}>
+                        <Plus className="w-4 h-4 mr-2" />Tambah Env
+                      </Button>
+                    </div>
+                    {settingsForm.envFields.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        {settingsForm.envFields.map((field, index) => (
+                          <div key={`${field.key}-${index}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
+                            <input
+                              value={field.key}
+                              onChange={(event) => updateEnvField(index, { key: event.target.value })}
+                              placeholder="NAMA_ENV"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                            />
+                            <input
+                              value={field.label}
+                              onChange={(event) => updateEnvField(index, { label: event.target.value })}
+                              placeholder="Label"
+                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                            />
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.sensitive}
+                                onChange={(event) => updateEnvField(index, { sensitive: event.target.checked })}
+                              />
+                              Sensitif
+                            </label>
                             <button
                               type="button"
-                              onClick={() => openCommunityEditor(editableCommunity)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
+                              onClick={() => removeEnvField(index)}
+                              className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-red-500/30 text-red-400"
                             >
-                              <Pencil className="w-3 h-3" />Edit Komunitas
+                              <Trash2 className="w-4 h-4" />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => toggleCommunity(group.key)}
-                            className="text-[10px] font-black uppercase tracking-wider text-sport-orange"
-                          >
-                            {isOpen ? 'Tutup Detail' : 'Lihat Detail'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {isOpen && (
-                        <div className="border-t border-card-border bg-brand-dark/20 overflow-x-auto">
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr className="border-b border-card-border">
-                                {['Peserta', 'Status', 'Racepack', 'Kontak', 'Jersey', 'Aksi'].map((heading) => (
-                                  <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {group.participants.map((participant) => (
-                                <tr key={participant.id} className="border-b border-card-border last:border-b-0 hover:bg-brand-gray/20">
-                                  <td className="px-4 py-3">
-                                    <p className="text-sm font-bold text-foreground">{participant.full_name}</p>
-                                    <p className="text-[10px] text-sport-orange font-bold">{participant.participant_code || 'Belum ada kode'}</p>
-                                    <p className="text-[10px] text-brand-muted">{participant.bib_name}</p>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <Badge variant={participant.payment_status === 'paid' ? 'success' : 'warning'}>
-                                      {participant.payment_status === 'paid' ? 'Lunas' : 'Pending'}
-                                    </Badge>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <Badge variant={participant.checked_in ? 'success' : 'neutral'}>
-                                      {participant.checked_in ? 'Sudah Diambil' : 'Belum'}
-                                    </Badge>
-                                    <p className="text-[10px] text-brand-muted mt-1">{formatDateTime(participant.checked_in_at)}</p>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <p className="text-xs text-foreground">{participant.phone}</p>
-                                    <p className="text-[10px] text-brand-muted break-all">{participant.email}</p>
-                                  </td>
-                                  <td className="px-4 py-3 text-xs font-black text-foreground">{participant.tshirt_size}</td>
-                                  <td className="px-4 py-3">
-                                    <button
-                                      type="button"
-                                      onClick={() => openParticipantEditor(participant)}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
-                                    >
-                                      <Pencil className="w-3 h-3" />Edit
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-        )}
-
-        {activeTab === 'payments' && (
-          <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-brand-dark/30 border-b border-card-border">
-                  <tr>
-                    {['Referensi', 'Komunitas', 'Nominal', 'Metode', 'Status', 'Tanggal'].map((heading) => (
-                      <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPayments.map((payment) => {
-                    const community = getPaymentCommunity(payment)
-                    return (
-                      <tr key={payment.id} className="border-b border-card-border hover:bg-brand-gray/20">
-                        <td className="px-4 py-3 text-xs font-bold text-foreground">{payment.payment_reference}</td>
-                        <td className="px-4 py-3">
-                          <p className="text-xs font-bold text-foreground">{community?.name || '-'}</p>
-                          <p className="text-[10px] text-brand-muted">{community?.community_code || '-'}</p>
-                        </td>
-                        <td className="px-4 py-3 text-xs font-black text-foreground">{formatCurrency(payment.amount)}</td>
-                        <td className="px-4 py-3 text-xs font-bold text-brand-muted">{payment.payment_method || '-'}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant={payment.status === 'paid' ? 'success' : 'warning'}>{payment.status}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-brand-muted">{formatDateTime(payment.paid_at || payment.created_at)}</td>
-                      </tr>
-                    )
-                  })}
-                  {filteredPayments.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
-                        Tidak ada pembayaran yang cocok dengan pencarian.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4">
-            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
-              <div className="px-4 py-3 border-b border-card-border flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Form Pendaftaran</p>
-                  <h2 className="text-sm font-black uppercase text-foreground">Edit Label, Placeholder, dan Dropdown</h2>
-                </div>
-                <Settings className="w-5 h-5 text-sport-orange" />
-              </div>
-              <div className="p-4 flex flex-col gap-5">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Komunitas</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {communitySettingFields.map(([key, title]) => {
-                      const field = settingsForm.registrationForm.community[key]
-                      return (
-                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
-                          <input
-                            value={field.label}
-                            onChange={(event) => updateCommunityField(key, { label: event.target.value })}
-                            placeholder="Label field"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                          />
-                          <input
-                            value={field.placeholder}
-                            onChange={(event) => updateCommunityField(key, { placeholder: event.target.value })}
-                            placeholder="Placeholder"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                          />
-                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                            <input
-                              type="checkbox"
-                              checked={field.visible}
-                              onChange={(event) => updateCommunityField(key, { visible: event.target.checked })}
-                            />
-                            Tampilkan field
-                          </label>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Peserta</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {participantInputSettingFields.map(([key, title]) => {
-                      const field = settingsForm.registrationForm.participants[key] as FormInputConfig
-                      return (
-                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
-                          <input
-                            value={field.label}
-                            onChange={(event) => updateParticipantField(key, { label: event.target.value })}
-                            placeholder="Label field"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                          />
-                          <input
-                            value={field.placeholder}
-                            onChange={(event) => updateParticipantField(key, { placeholder: event.target.value })}
-                            placeholder="Placeholder"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                          />
-                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                            <input
-                              type="checkbox"
-                              checked={field.visible}
-                              onChange={(event) => updateParticipantField(key, { visible: event.target.checked })}
-                            />
-                            Tampilkan field
-                          </label>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Dropdown Peserta</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {participantSelectSettingFields.map(([key, title]) => {
-                      const field = settingsForm.registrationForm.participants[key] as FormSelectConfig
-                      return (
-                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
-                          <input
-                            value={field.label}
-                            onChange={(event) => updateParticipantField(key, { label: event.target.value })}
-                            placeholder="Label dropdown"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                          />
-                          <input
-                            value={field.placeholder}
-                            onChange={(event) => updateParticipantField(key, { placeholder: event.target.value })}
-                            placeholder="Placeholder dropdown"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-3"
-                          />
-                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted mb-3">
-                            <input
-                              type="checkbox"
-                              checked={field.visible}
-                              onChange={(event) => updateParticipantField(key, { visible: event.target.checked })}
-                            />
-                            Tampilkan field
-                          </label>
-                          <div className="flex flex-col gap-2">
-                            {field.options.map((option) => (
-                              <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
-                                <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
-                                <input
-                                  value={option.label}
-                                  onChange={(event) => updateSelectOptionLabel(key, option.value, event.target.value)}
-                                  className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
-                                />
-                              </label>
-                            ))}
                           </div>
-                        </div>
-                      )
-                    })}
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  {envSnapshots.map((field) => (
+                    <label key={field.key} className="flex flex-col gap-1.5 border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                      <span className="text-[10px] font-black uppercase text-brand-muted">{field.label}</span>
+                      <span className="text-[10px] text-brand-muted">{field.key} • {field.hasValue ? 'Sudah terisi' : 'Belum terisi'}</span>
+                      <input
+                        type={field.sensitive ? 'password' : 'text'}
+                        value={envForm[field.key] ?? field.currentValue}
+                        onChange={(event) => setEnvForm({ ...envForm, [field.key]: event.target.value })}
+                        placeholder={field.sensitive ? 'Kosongkan jika tidak diganti' : field.description}
+                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                      />
+                    </label>
+                  ))}
+                  <Button type="button" onClick={saveEnv} isLoading={isPending}>
+                    Simpan Env
+                  </Button>
+                  {settingsMessage && <p className="text-xs font-bold text-green-300">{settingsMessage}</p>}
                 </div>
-
-                <Button type="button" onClick={saveSettings} isLoading={isPending}>
-                  Simpan Pengaturan Form
-                </Button>
-              </div>
-            </section>
-
-            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
-              <div className="px-4 py-3 border-b border-card-border">
-                <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Environment</p>
-                <h2 className="text-sm font-black uppercase text-foreground">Edit Key Integrasi</h2>
-              </div>
-              <div className="p-4 flex flex-col gap-3">
-                <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3">
-                  <p className="text-xs font-bold text-amber-200">
-                    Key Supabase/database tidak ditampilkan. Field sensitif sengaja dikosongkan; isi hanya jika ingin mengganti nilainya.
-                  </p>
-                </div>
-                <div className="border border-card-border rounded-lg p-3 bg-brand-gray/20 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Field Env Tambahan</p>
-                      <p className="text-[10px] text-brand-muted">Tambahkan key integrasi lain agar bisa terlihat di panel ini.</p>
-                    </div>
-                    <Button type="button" variant="secondary" size="sm" onClick={addEnvField}>
-                      <Plus className="w-4 h-4 mr-2" />Tambah Env
-                    </Button>
-                  </div>
-                  {settingsForm.envFields.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {settingsForm.envFields.map((field, index) => (
-                        <div key={`${field.key}-${index}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
-                          <input
-                            value={field.key}
-                            onChange={(event) => updateEnvField(index, { key: event.target.value })}
-                            placeholder="NAMA_ENV"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
-                          />
-                          <input
-                            value={field.label}
-                            onChange={(event) => updateEnvField(index, { label: event.target.value })}
-                            placeholder="Label"
-                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
-                          />
-                          <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                            <input
-                              type="checkbox"
-                              checked={field.sensitive}
-                              onChange={(event) => updateEnvField(index, { sensitive: event.target.checked })}
-                            />
-                            Sensitif
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => removeEnvField(index)}
-                            className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-red-500/30 text-red-400"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {envSnapshots.map((field) => (
-                  <label key={field.key} className="flex flex-col gap-1.5 border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                    <span className="text-[10px] font-black uppercase text-brand-muted">{field.label}</span>
-                    <span className="text-[10px] text-brand-muted">{field.key} • {field.hasValue ? 'Sudah terisi' : 'Belum terisi'}</span>
-                    <input
-                      type={field.sensitive ? 'password' : 'text'}
-                      value={envForm[field.key] ?? field.currentValue}
-                      onChange={(event) => setEnvForm({ ...envForm, [field.key]: event.target.value })}
-                      placeholder={field.sensitive ? 'Kosongkan jika tidak diganti' : field.description}
-                      className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
-                    />
-                  </label>
-                ))}
-                <Button type="button" onClick={saveEnv} isLoading={isPending}>
-                  Simpan Env
-                </Button>
-                {settingsMessage && <p className="text-xs font-bold text-green-300">{settingsMessage}</p>}
-              </div>
-            </section>
-          </div>
-        )}
-
-        <div className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-3">
-          <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Export Data</p>
-              <p className="text-xs font-bold text-brand-muted">Pilih komunitas, lalu sistem membuat 1 file Excel untuk tiap komunitas.</p>
+              </section>
             </div>
-            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-              <input
-                type="checkbox"
-                checked={selectedExportCommunities.size === communities.length && communities.length > 0}
-                onChange={(event) => setAllExportCommunities(event.target.checked)}
-              />
-              Pilih semua komunitas
-            </label>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
-            {communities.map((community) => (
-              <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
+          )}
+
+          {/* EXPORT DATA & OPTIONS */}
+          <div className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-3">
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Export Data</p>
+                <p className="text-xs font-bold text-brand-muted">Pilih komunitas, lalu sistem membuat 1 file Excel untuk tiap komunitas.</p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
                 <input
                   type="checkbox"
-                  checked={selectedExportCommunities.has(community.id)}
-                  onChange={() => toggleExportCommunity(community.id)}
-                  className="mt-0.5"
+                  checked={selectedExportCommunities.size === communities.length && communities.length > 0}
+                  onChange={(event) => setAllExportCommunities(event.target.checked)}
                 />
-                <span>
-                  <span className="block font-black text-foreground">{community.name}</span>
-                  <span className="block text-[10px] text-brand-muted">{community.community_code}</span>
-                </span>
+                Pilih semua komunitas
               </label>
-            ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+              {communities.map((community) => (
+                <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectedExportCommunities.has(community.id)}
+                    onChange={() => toggleExportCommunity(community.id)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block font-black text-foreground">{community.name}</span>
+                    <span className="block text-[10px] text-brand-muted">{community.community_code}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="ghost" onClick={() => router.refresh()}>
+                <RefreshCw className="w-4 h-4 mr-2" />Refresh Data
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => exportWorkbook('participants', 'selected')}>
+                <Download className="w-4 h-4 mr-2" />Export Peserta
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => exportWorkbook('payments', 'selected')}>
+                <Download className="w-4 h-4 mr-2" />Export Pembayaran
+              </Button>
+              <Button type="button" variant="outline" onClick={() => exportWorkbook('all', 'selected')}>
+                <Download className="w-4 h-4 mr-2" />Export Semua
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="ghost" onClick={() => router.refresh()}>
-            <RefreshCw className="w-4 h-4 mr-2" />Refresh Data
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => exportWorkbook('participants', 'selected')}>
-            <Download className="w-4 h-4 mr-2" />Export Peserta
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => exportWorkbook('payments', 'selected')}>
-            <Download className="w-4 h-4 mr-2" />Export Pembayaran
-          </Button>
-          <Button type="button" variant="outline" onClick={() => exportWorkbook('all', 'selected')}>
-            <Download className="w-4 h-4 mr-2" />Export Semua
-          </Button>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <Dialog
         isOpen={!!participantEditing}
@@ -1358,6 +1473,6 @@ export function AdminDashboardClient({
           </div>
         )}
       </Dialog>
-    </main>
+    </div>
   )
 }
