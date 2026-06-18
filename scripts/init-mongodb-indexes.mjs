@@ -51,6 +51,13 @@ async function main() {
   const client = await connectMongo()
   const db = client.db(dbName)
 
+  try {
+    await db.collection('participants').dropIndex('participant_code_1')
+    console.log('Old index participant_code_1 dropped.')
+  } catch {
+    // ignore if index does not exist
+  }
+
   await Promise.all([
     db.collection('communities').createIndexes([
       { key: { id: 1 }, unique: true },
@@ -61,7 +68,7 @@ async function main() {
       { key: { id: 1 }, unique: true },
       { key: { community_id: 1 } },
       { key: { registration_id: 1 } },
-      { key: { participant_code: 1 }, unique: true, sparse: true },
+      { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
       { key: { payment_status: 1 } },
     ]),
     db.collection('registrations').createIndexes([

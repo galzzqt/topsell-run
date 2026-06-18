@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useRouter } from 'next/navigation'
+import { useForm, useFieldArray, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Users, Trophy, CheckCircle, Calendar, MapPin,
@@ -108,7 +109,7 @@ function EventCountdown() {
         <React.Fragment key={t.label}>
           <div className="flex flex-col items-center gap-1">
             <div className="w-16 sm:w-20 h-16 sm:h-20 rounded-xl bg-white border border-card-border flex items-center justify-center shadow-md relative overflow-hidden group hover:border-sport-purple/50 transition-colors">
-              <span className="text-2xl sm:text-3xl font-black tabular-nums bg-gradient-to-r from-sport-purple via-sport-red to-sport-orange bg-clip-text text-transparent">
+              <span className="text-2xl sm:text-3xl font-black tabular-nums bg-linear-to-r from-sport-purple via-sport-red to-sport-orange bg-clip-text text-transparent">
                 {String(t.value).padStart(2, '0')}
               </span>
             </div>
@@ -122,6 +123,7 @@ function EventCountdown() {
 }
 
 export default function LandingPage() {
+  const router = useRouter()
   const isSuccess = false
   const [authError, setAuthError] = useState<string | null>(null)
   const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
@@ -134,7 +136,7 @@ export default function LandingPage() {
   const [loadingKota, setLoadingKota] = useState(false)
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
 
-  const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
+  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       name: '',
@@ -147,15 +149,15 @@ export default function LandingPage() {
       kecamatan: '',
       password: '',
       confirmPassword: '',
-      participants: Array.from({ length: 10 }, () => ({ ...defaultParticipant })),
+      participants: Array.from({ length: 3 }, () => ({ ...defaultParticipant })),
       agreement_safety: false,
       agreement_data: false,
       agreement_refund: false,
     },
   })
 
-  const selectedProvinsi = watch('provinsi')
-  const selectedKota = watch('kota')
+  const selectedProvinsi = useWatch({ control, name: 'provinsi' })
+  const selectedKota = useWatch({ control, name: 'kota' })
   const communityFallbacks = {
     name: 'Komunitas Topsell',
     leader_name: 'PIC Komunitas',
@@ -274,7 +276,8 @@ export default function LandingPage() {
         origin: { y: 0.6 },
         colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
       })
-      window.location.href = '/dashboard'
+      router.refresh()
+      router.push('/dashboard')
     }
   }
 
@@ -289,7 +292,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden relative">
       {/* Background noise grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-[0.4] pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-size-[4rem_4rem] opacity-[0.4] pointer-events-none" />
 
       {/* Glow orbs */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full opacity-20 blur-3xl pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)' }} />
@@ -401,11 +404,11 @@ export default function LandingPage() {
           /* ——— Form State ——— */
           <div className="bg-white border border-card-border rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
             {/* Header Gradient line */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-sport-purple via-sport-red to-sport-orange" />
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
 
             <div className="flex flex-col gap-5">
               <div className="flex flex-col items-center text-center gap-1.5 mb-2">
-                <div className="p-3 rounded-xl mb-1 bg-gradient-to-br from-sport-purple via-sport-red to-sport-orange">
+                <div className="p-3 rounded-xl mb-1 bg-linear-to-br from-sport-purple via-sport-red to-sport-orange">
                   <UserPlus className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-xl font-black uppercase text-slate-900">Daftar Komunitas</h2>
@@ -414,7 +417,7 @@ export default function LandingPage() {
 
               {/* Info strip */}
               <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
-                <Users className="w-4 h-4 text-sport-purple flex-shrink-0 mt-0.5" />
+                <Users className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
                 <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
                   <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data komunitas, input semua nama peserta lari, lalu lakukan checkout kolektif di dashboard untuk mendapatkan QR Race Pass resmi.
                 </p>
@@ -567,7 +570,7 @@ export default function LandingPage() {
                         <Users className="w-4 h-4 text-sport-purple" />
                         Daftar Peserta Lari
                       </h3>
-                      <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 10 peserta untuk komunitas Anda</p>
+                      <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 3 peserta untuk komunitas Anda</p>
                     </div>
                     <button
                       type="button"
@@ -586,7 +589,7 @@ export default function LandingPage() {
                       {/* Participant Header */}
                       <div className="flex justify-between items-center pb-2 border-b border-card-border/50">
                         <span className="text-[10px] font-black uppercase text-sport-purple tracking-wider">Peserta #{index + 1}</span>
-                        {fields.length > 10 && (
+                        {fields.length > 3 && (
                           <button
                             type="button"
                             onClick={() => remove(index)}

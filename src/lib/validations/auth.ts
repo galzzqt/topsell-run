@@ -66,7 +66,7 @@ export const registerSchema = z
       .min(1, 'Kecamatan wajib dipilih'),
     password: z.string().min(6, 'Password minimal 6 karakter'),
     confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
-    participants: z.array(participantItemSchema).min(10, 'Minimal 10 peserta harus didaftarkan'),
+    participants: z.array(participantItemSchema).min(3, 'Minimal 3 peserta harus didaftarkan'),
     agreement_safety: z.boolean().refine(val => val === true, 'Persetujuan risiko wajib dicentang'),
     agreement_data: z.boolean().refine(val => val === true, 'Persetujuan data wajib dicentang'),
     agreement_refund: z.boolean().refine(val => val === true, 'Persetujuan pembatalan/S&K wajib dicentang'),

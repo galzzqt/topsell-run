@@ -7,10 +7,6 @@ const globalForMongo = globalThis as typeof globalThis & {
   mongoClientPromise?: Promise<MongoClient>
 }
 
-function getMongoUri() {
-  return process.env.MONGODB_URI || process.env.MONGODB_URI_STANDARD || ''
-}
-
 function getDbName() {
   return process.env.MONGODB_DB_NAME || 'topsell-run'
 }
@@ -71,7 +67,7 @@ export async function ensureIndexes() {
       { key: { id: 1 }, unique: true },
       { key: { community_id: 1 } },
       { key: { registration_id: 1 } },
-      { key: { participant_code: 1 }, unique: true, sparse: true },
+      { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
       { key: { payment_status: 1 } },
     ]),
     db.collection('registrations').createIndexes([
