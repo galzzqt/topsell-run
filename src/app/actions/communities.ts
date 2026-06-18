@@ -10,6 +10,7 @@ import {
 } from '@/lib/db'
 import { communityProfileSchema, CommunityProfileValues } from '@/lib/validations/community'
 import { revalidatePath } from 'next/cache'
+import { ingestAdminLog } from '@/lib/axiom/ingest'
 
 export async function updateCommunityProfile(values: CommunityProfileValues) {
   const validated = communityProfileSchema.safeParse(values)
@@ -34,6 +35,23 @@ export async function updateCommunityProfile(values: CommunityProfileValues) {
 
   if (values.password) {
     await updateCommunityAuthPassword(session.id, createPasswordRecord(values.password))
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'community',
+      event: 'community_profile_updated',
+      message: `Profil komunitas diperbarui sendiri oleh pengguna: ${session.name} (HP Baru: ${values.phone}, Email Baru: ${values.email}).`,
+      data: {
+        communityId: session.id,
+        name: session.name,
+        phone: values.phone,
+        email: values.email,
+      }
+    })
+  } catch (logError) {
+    console.error('Failed to log community profile update:', logError)
   }
 
   revalidatePath('/dashboard')

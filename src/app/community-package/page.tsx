@@ -11,8 +11,8 @@ import {
   Timer, ArrowRight, UserPlus, Plus, Trash2,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
-import { registerFamilySchema, RegisterFamilyFormValues } from '@/lib/validations/auth'
-import { signUpFamily } from '@/app/actions/family-auth'
+import { registerSchema, RegisterFormValues } from '@/lib/validations/auth'
+import { signUpCommunity } from '@/app/actions/auth'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -136,8 +136,8 @@ export default function LandingPage() {
   const [loadingKota, setLoadingKota] = useState(false)
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
 
-  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<RegisterFamilyFormValues>({
-    resolver: zodResolver(registerFamilySchema),
+  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
     defaultValues: {
       name: '',
       leader_name: '',
@@ -158,9 +158,9 @@ export default function LandingPage() {
 
   const selectedProvinsi = useWatch({ control, name: 'provinsi' })
   const selectedKota = useWatch({ control, name: 'kota' })
-  const familyFallbacks = {
-    name: 'Keluarga Topsell',
-    leader_name: 'Kepala / Perwakilan Keluarga',
+  const communityFallbacks = {
+    name: 'Komunitas Topsell',
+    leader_name: 'PIC Komunitas',
     phone: '081234567890',
     email: 'presentasi@topsell-run.com',
     category: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000',
@@ -264,9 +264,9 @@ export default function LandingPage() {
     name: 'participants',
   })
 
-  const onSubmit = async (values: RegisterFamilyFormValues) => {
+  const onSubmit = async (values: RegisterFormValues) => {
     setAuthError(null)
-    const result = await signUpFamily(values)
+    const result = await signUpCommunity(values)
     if (result.error) {
       setAuthError(result.error)
     } else {
@@ -277,7 +277,7 @@ export default function LandingPage() {
         colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
       })
       router.refresh()
-      router.push('/dashboard')
+      router.push('/community-dashboard')
     }
   }
 
@@ -312,7 +312,7 @@ export default function LandingPage() {
             />
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-xs font-bold text-brand-muted hover:text-foreground border border-card-border px-3 py-1.5 rounded-lg transition-colors">Masuk</Link>
+            <Link href="/community-login" className="text-xs font-bold text-brand-muted hover:text-foreground border border-card-border px-3 py-1.5 rounded-lg transition-colors">Masuk</Link>
             <a
               href="#register-section"
               onClick={handleScrollToRegister}
@@ -331,7 +331,7 @@ export default function LandingPage() {
           {/* Event badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 border border-card-border rounded-full backdrop-blur-sm shadow-sm">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Pendaftaran Family Package Dibuka</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Pendaftaran Komunitas Dibuka</span>
           </div>
 
           {/* Main title */}
@@ -369,7 +369,7 @@ export default function LandingPage() {
             className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-xs font-black text-white uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-sport-purple/20 cursor-pointer"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
           >
-            Daftarkan Keluarga <ArrowRight className="w-4 h-4" />
+            Daftarkan Komunitas <ArrowRight className="w-4 h-4" />
           </a>
 
           <p className="text-[10px] text-brand-muted font-bold uppercase tracking-wider mt-1">
@@ -389,14 +389,14 @@ export default function LandingPage() {
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-sport-orange mb-1">Registrasi Berhasil!</p>
-              <h2 className="text-xl font-black uppercase text-slate-900">Keluarga Terdaftar</h2>
+              <h2 className="text-xl font-black uppercase text-slate-900">Komunitas Terdaftar</h2>
               <p className="text-xs text-brand-muted mt-2 leading-relaxed">
-                Akun keluarga Anda telah berhasil dibuat. Silakan lanjut ke dashboard untuk melakukan pembayaran.
+                Akun komunitas Anda telah berhasil dibuat. Silakan lanjut ke dashboard untuk melakukan pembayaran kolektif.
               </p>
             </div>
-            <Link href="/login" className="w-full">
+            <Link href="/community-login" className="w-full">
               <Button variant="primary" className="w-full py-4 text-xs font-black" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}>
-                Masuk ke Dashboard Keluarga →
+                Masuk ke Dashboard Komunitas →
               </Button>
             </Link>
           </div>
@@ -411,15 +411,15 @@ export default function LandingPage() {
                 <div className="p-3 rounded-xl mb-1 bg-linear-to-br from-sport-purple via-sport-red to-sport-orange">
                   <UserPlus className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-xl font-black uppercase text-slate-900">Daftar Family Package</h2>
-                <p className="text-xs text-brand-muted font-medium">Buat akun untuk mendaftarkan peserta lari keluarga Anda</p>
+                <h2 className="text-xl font-black uppercase text-slate-900">Daftar Komunitas</h2>
+                <p className="text-xs text-brand-muted font-medium">Buat akun untuk mendaftarkan peserta lari tim Anda</p>
               </div>
 
               {/* Info strip */}
               <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
                 <Users className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
                 <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-                  <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data keluarga, input semua nama anggota keluarga, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
+                  <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data komunitas, input semua nama peserta lari, lalu lakukan checkout kolektif di dashboard untuk mendapatkan QR Race Pass resmi.
                 </p>
               </div>
 
@@ -432,65 +432,65 @@ export default function LandingPage() {
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 {formSettings.community.name.visible ? (
                   <Input
-                    label="Nama Keluarga"
-                    placeholder="Contoh: Keluarga Budi, Keluarga Sanjaya"
+                    label={formSettings.community.name.label}
+                    placeholder={formSettings.community.name.placeholder}
                     error={errors.name?.message}
                     disabled={isSubmitting}
                     {...register('name')}
                   />
                 ) : (
-                  <input type="hidden" value={familyFallbacks.name} {...register('name')} />
+                  <input type="hidden" value={communityFallbacks.name} {...register('name')} />
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {formSettings.community.leader_name.visible ? (
                     <Input
-                      label="Nama Perwakilan / Kepala Keluarga"
-                      placeholder="Nama lengkap kepala keluarga atau perwakilan"
+                      label={formSettings.community.leader_name.label}
+                      placeholder={formSettings.community.leader_name.placeholder}
                       error={errors.leader_name?.message}
                       disabled={isSubmitting}
                       {...register('leader_name')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.leader_name} {...register('leader_name')} />
+                    <input type="hidden" value={communityFallbacks.leader_name} {...register('leader_name')} />
                   )}
                   {formSettings.community.phone.visible ? (
                     <Input
-                      label="No. WhatsApp Perwakilan"
-                      placeholder="08xxxxxxxxxx"
+                      label={formSettings.community.phone.label}
+                      placeholder={formSettings.community.phone.placeholder}
                       error={errors.phone?.message}
                       disabled={isSubmitting}
                       {...register('phone')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.phone} {...register('phone')} />
+                    <input type="hidden" value={communityFallbacks.phone} {...register('phone')} />
                   )}
                 </div>
 
                 {formSettings.community.email.visible ? (
                   <Input
-                    label="Email Perwakilan"
+                    label={formSettings.community.email.label}
                     type="email"
-                    placeholder="email@keluarga.com"
+                    placeholder={formSettings.community.email.placeholder}
                     error={errors.email?.message}
                     disabled={isSubmitting}
                     {...register('email')}
                   />
                 ) : (
-                  <input type="hidden" value={familyFallbacks.email} {...register('email')} />
+                  <input type="hidden" value={communityFallbacks.email} {...register('email')} />
                 )}
 
                 {formSettings.community.category.visible ? (
                   <Select
-                    label="Kategori"
-                    placeholder="Pilih kategori"
+                    label={formSettings.community.category.label}
+                    placeholder={formSettings.community.category.placeholder}
                     error={errors.category?.message}
                     disabled={isSubmitting}
                     options={formSettings.community.category.options}
                     {...register('category')}
                   />
                 ) : (
-                  <input type="hidden" value={familyFallbacks.category} {...register('category')} />
+                  <input type="hidden" value={communityFallbacks.category} {...register('category')} />
                 )}
 
                 {/* Address Section */}
@@ -505,7 +505,7 @@ export default function LandingPage() {
                       {...register('provinsi')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.provinsi} {...register('provinsi')} />
+                    <input type="hidden" value={communityFallbacks.provinsi} {...register('provinsi')} />
                   )}
 
                   {formSettings.community.kota.visible ? (
@@ -518,7 +518,7 @@ export default function LandingPage() {
                       {...register('kota')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.kota} {...register('kota')} />
+                    <input type="hidden" value={communityFallbacks.kota} {...register('kota')} />
                   )}
 
                   {formSettings.community.kecamatan.visible ? (
@@ -531,7 +531,7 @@ export default function LandingPage() {
                       {...register('kecamatan')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.kecamatan} {...register('kecamatan')} />
+                    <input type="hidden" value={communityFallbacks.kecamatan} {...register('kecamatan')} />
                   )}
                 </div>
 
@@ -546,7 +546,7 @@ export default function LandingPage() {
                       {...register('password')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.password} {...register('password')} />
+                    <input type="hidden" value={communityFallbacks.password} {...register('password')} />
                   )}
                   {formSettings.community.confirmPassword.visible ? (
                     <Input
@@ -558,7 +558,7 @@ export default function LandingPage() {
                       {...register('confirmPassword')}
                     />
                   ) : (
-                    <input type="hidden" value={familyFallbacks.confirmPassword} {...register('confirmPassword')} />
+                    <input type="hidden" value={communityFallbacks.confirmPassword} {...register('confirmPassword')} />
                   )}
                 </div>
 
@@ -568,9 +568,9 @@ export default function LandingPage() {
                     <div>
                       <h3 className="text-sm font-black uppercase text-slate-900 flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-sport-purple" />
-                        Daftar Anggota Keluarga
+                        Daftar Peserta Lari
                       </h3>
-                      <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 3 peserta untuk keluarga Anda</p>
+                      <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 3 peserta untuk komunitas Anda</p>
                     </div>
                     <button
                       type="button"
@@ -816,13 +816,13 @@ export default function LandingPage() {
                   style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
                   isLoading={isSubmitting}
                 >
-                  <Trophy className="w-4 h-4 mr-2" />Daftarkan Keluarga Sekarang
+                  <Trophy className="w-4 h-4 mr-2" />Daftarkan Komunitas Sekarang
                 </Button>
               </form>
 
               <p className="text-xs text-center text-brand-muted mt-2">
                 Sudah punya akun?{' '}
-                <Link href="/login" className="font-bold hover:underline text-sport-purple">Login di sini</Link>
+                <Link href="/community-login" className="font-bold hover:underline text-sport-purple">Login di sini</Link>
               </p>
             </div>
           </div>
@@ -845,7 +845,7 @@ export default function LandingPage() {
             © 2026 TOPSELL x SAMSUNG RUN FOR CHANGES. All rights reserved. • Mojokerto, Jawa Timur
           </p>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="text-[10px] font-black text-brand-muted hover:text-sport-purple transition-colors uppercase tracking-wider">Login</Link>
+            <Link href="/community-login" className="text-[10px] font-black text-brand-muted hover:text-sport-purple transition-colors uppercase tracking-wider">Login</Link>
             <a href="#register-section" onClick={handleScrollToRegister} className="text-[10px] font-black text-brand-muted hover:text-sport-purple transition-colors uppercase tracking-wider">Daftar</a>
           </div>
         </div>

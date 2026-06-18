@@ -88,6 +88,34 @@ async function main() {
       { key: { id: 1 }, unique: true },
       { key: { phone: 1 }, unique: true },
     ]),
+    db.collection('families').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { phone: 1 }, unique: true },
+      { key: { family_code: 1 }, unique: true },
+    ]),
+    db.collection('family_participants').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { family_id: 1 } },
+      { key: { registration_id: 1 } },
+      { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
+      { key: { payment_status: 1 } },
+    ]),
+    db.collection('family_registrations').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { family_id: 1 } },
+      { key: { status: 1 } },
+    ]),
+    db.collection('family_payments').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { registration_id: 1 } },
+      { key: { payment_reference: 1 }, unique: true },
+      { key: { xendit_session_id: 1 }, sparse: true },
+      { key: { status: 1 } },
+    ]),
+    db.collection('family_auth').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { phone: 1 }, unique: true },
+    ]),
   ])
 
   console.log(`MongoDB indexes initialized on database "${dbName}".`)

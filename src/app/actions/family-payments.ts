@@ -1,26 +1,26 @@
 'use server'
 
-import { getCommunitySession } from '@/lib/auth/community'
+import { getFamilySession } from '@/lib/auth/family'
 import { generateRandomReference } from '@/lib/utils/format'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
-import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
-import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
+import { sendFamilyRacepackEmailsForRegistration } from '@/lib/email/racepack'
+import { sendFamilyRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
 import {
-  createPayment,
-  createRegistration,
-  deleteRegistration,
-  findCommunityById,
-  findPaymentWithRegistration,
-  findPaymentWithRegistrationByReference,
-  findPendingParticipantsWithoutRegistration,
-  findPendingPaymentByRegistrationIds,
-  findPendingRegistrationsByCommunityId,
-  linkParticipantsToRegistration,
-  markPaymentPaid,
-  updatePayment,
-  markPaymentFailed,
+  createFamilyPayment as dbCreateFamilyPayment,
+  createFamilyRegistration,
+  deleteFamilyRegistration,
+  findFamilyById,
+  findFamilyPaymentWithRegistration,
+  findFamilyPaymentWithRegistrationByReference,
+  findPendingFamilyParticipantsWithoutRegistration,
+  findPendingFamilyPaymentByRegistrationIds,
+  findPendingFamilyRegistrationsByFamilyId,
+  linkFamilyParticipantsToRegistration,
+  markFamilyPaymentPaid,
+  updateFamilyPayment,
+  markFamilyPaymentFailed,
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
@@ -53,7 +53,7 @@ function canUseReturnUrl(appUrl: string | undefined) {
   }
 }
 
-function getReturnUrls(paymentRef?: string) {
+function getFamilyReturnUrls(paymentRef?: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   if (!canUseReturnUrl(appUrl)) return {}
 
@@ -69,7 +69,7 @@ function toXenditReference(value: string) {
 }
 
 function toXenditName(value: string | null | undefined) {
-  return (value || 'Komunitas').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50) || 'Komunitas'
+  return (value || 'Keluarga').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50) || 'Keluarga'
 }
 
 function isDemoSession(payment: { payment_method: string | null; xendit_session_id: string | null }) {
@@ -106,15 +106,15 @@ async function resolveXenditPaymentMethod(sessionData: unknown, authHeader: stri
   return extractXenditPaymentMethod(paymentRequest.data)
 }
 
-export async function createCommunityPayment() {
-  const session = await getCommunitySession()
+export async function createFamilyPayment() {
+  const session = await getFamilySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const community = await findCommunityById(session.id)
-  const pendingRegistrations = await findPendingRegistrationsByCommunityId(session.id)
+  const family = await findFamilyById(session.id)
+  const pendingRegistrations = await findPendingFamilyRegistrationsByFamilyId(session.id)
 
   if (pendingRegistrations.length > 0) {
-    const existingPayment = await findPendingPaymentByRegistrationIds(
+    const existingPayment = await findPendingFamilyPaymentByRegistrationIds(
       pendingRegistrations.map((registration) => registration.id)
     )
 
@@ -137,20 +137,20 @@ export async function createCommunityPayment() {
     }
   }
 
-  const participants = await findPendingParticipantsWithoutRegistration(session.id)
+  const participants = await findPendingFamilyParticipantsWithoutRegistration(session.id)
   if (participants.length === 0) {
-    return { error: 'Tidak ada peserta baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
+    return { error: 'Tidak ada anggota keluarga baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
   }
 
   const participantIds = participants.map((participant) => participant.id)
   const totalAmount = participants.length * TOPSELL_RUN_EVENT.price_per_participant
-  const paymentRefRaw = generateRandomReference('TSR')
+  const paymentRefRaw = generateRandomReference('FAM')
   const paymentRef = toXenditReference(paymentRefRaw)
 
   let registration
   try {
-    registration = await createRegistration({
-      community_id: session.id,
+    registration = await createFamilyRegistration({
+      family_id: session.id,
       total_participants: participants.length,
       total_amount: totalAmount,
       status: 'pending',
@@ -160,22 +160,22 @@ export async function createCommunityPayment() {
   }
 
   try {
-    await linkParticipantsToRegistration(participantIds, registration.id)
+    await linkFamilyParticipantsToRegistration(participantIds, registration.id)
   } catch {
-    await deleteRegistration(registration.id)
+    await deleteFamilyRegistration(registration.id)
     return { error: 'Gagal menautkan peserta ke registrasi.' }
   }
 
   let payment
   try {
-    payment = await createPayment({
+    payment = await dbCreateFamilyPayment({
       registration_id: registration.id,
       amount: totalAmount,
       payment_reference: paymentRef,
       status: 'pending',
     })
   } catch {
-    await deleteRegistration(registration.id)
+    await deleteFamilyRegistration(registration.id)
     return { error: 'Gagal membuat invoice pembayaran.' }
   }
 
@@ -208,14 +208,14 @@ export async function createCommunityPayment() {
           mode: 'PAYMENT_LINK',
           capture_method: 'AUTOMATIC',
           allowed_payment_channels: getXenditChannels(),
-          description: `TOPSELL RUN 6K - ${participants.length} peserta`,
+          description: `TOPSELL RUN 6K Family - ${participants.length} peserta`,
           customer: {
             reference_id: toXenditReference(session.id),
             type: 'INDIVIDUAL',
             individual_detail: {
-              given_names: toXenditName(community?.leader_name || community?.name),
+              given_names: toXenditName(family?.leader_name || family?.name),
             },
-            email: community?.email || undefined,
+            email: family?.email || undefined,
           },
           items: participants.map((p) => ({
             reference_id: p.id,
@@ -226,7 +226,7 @@ export async function createCommunityPayment() {
             net_unit_amount: TOPSELL_RUN_EVENT.price_per_participant,
             currency: 'IDR',
           })),
-          ...getReturnUrls(paymentRef),
+          ...getFamilyReturnUrls(paymentRef),
         }),
       })
 
@@ -237,18 +237,18 @@ export async function createCommunityPayment() {
       } else {
         const errorText = await res.text()
         console.error('Xendit error:', res.status, errorText)
-        await deleteRegistration(registration.id)
+        await deleteFamilyRegistration(registration.id)
         return { error: `Gagal membuat checkout Xendit: ${errorText}` }
       }
     } catch (err) {
       console.error('Xendit API failed:', err)
-      await deleteRegistration(registration.id)
+      await deleteFamilyRegistration(registration.id)
       return { error: 'Gagal menghubungi Xendit. Periksa koneksi server dan konfigurasi XENDIT_SECRET_KEY.' }
     }
   }
 
   try {
-    await updatePayment(payment.id, {
+    await updateFamilyPayment(payment.id, {
       payment_method: isDemoMode ? 'xendit_demo' : null,
       snap_token: checkoutUrl,
       provider: 'xendit',
@@ -256,7 +256,7 @@ export async function createCommunityPayment() {
       checkout_url: checkoutUrl,
     })
   } catch (error) {
-    await deleteRegistration(registration.id)
+    await deleteFamilyRegistration(registration.id)
     return { error: 'Gagal menyimpan data checkout Xendit: ' + (error instanceof Error ? error.message : 'Unknown error') }
   }
 
@@ -264,10 +264,10 @@ export async function createCommunityPayment() {
     await ingestAdminLog({
       level: 'info',
       source: 'payment',
-      event: 'community_payment_created',
-      message: `Invoice checkout pendaftaran komunitas baru dibuat: ${session.name} (Ref: ${paymentRef}, Jumlah Peserta: ${participants.length}, Total: IDR ${totalAmount.toLocaleString('id-ID')}).`,
+      event: 'family_payment_created',
+      message: `Invoice checkout pendaftaran keluarga baru dibuat: ${session.name} (Ref: ${paymentRef}, Jumlah Anggota: ${participants.length}, Total: IDR ${totalAmount.toLocaleString('id-ID')}).`,
       data: {
-        communityId: session.id,
+        familyId: session.id,
         paymentId: payment.id,
         reference: paymentRef,
         amount: totalAmount,
@@ -276,7 +276,7 @@ export async function createCommunityPayment() {
       }
     })
   } catch (logError) {
-    console.error('Failed to log community payment creation:', logError)
+    console.error('Failed to log family payment creation:', logError)
   }
 
   revalidatePath('/dashboard')
@@ -294,37 +294,33 @@ export async function createCommunityPayment() {
   }
 }
 
-export async function createCollectivePayment() {
-  return createCommunityPayment()
-}
-
-export async function simulatePaymentSuccess(paymentId: string) {
-  const session = await getCommunitySession()
+export async function simulateFamilyPaymentSuccess(paymentId: string) {
+  const session = await getFamilySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const payment = await findPaymentWithRegistration(paymentId)
+  const payment = await findFamilyPaymentWithRegistration(paymentId)
   if (!payment) return { error: 'Invoice tidak ditemukan.' }
-  if (payment.registration?.community_id !== session.id) return { error: 'Tidak memiliki akses.' }
+  if (payment.registration?.family_id !== session.id) return { error: 'Tidak memiliki akses.' }
 
-  await markPaymentPaid(paymentId, {
+  await markFamilyPaymentPaid(paymentId, {
     payment_method: 'xendit_demo',
   })
 
   await Promise.all([
-    sendRacepackEmailsForRegistration(payment.registration_id),
-    sendRacepackWhatsappsForRegistration(payment.registration_id),
+    sendFamilyRacepackEmailsForRegistration(payment.registration_id),
+    sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
   ])
 
   try {
     await ingestAdminLog({
       level: 'info',
       source: 'payment',
-      event: 'community_payment_simulated',
-      message: `Simulasi pembayaran komunitas sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      event: 'family_payment_simulated',
+      message: `Simulasi pembayaran keluarga sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
       data: { paymentId, reference: payment.payment_reference, amount: payment.amount }
     })
   } catch (logError) {
-    console.error('Failed to log payment simulation:', logError)
+    console.error('Failed to log family payment simulation:', logError)
   }
 
   revalidatePath('/dashboard')
@@ -336,13 +332,13 @@ function isXenditPaidStatus(status: unknown) {
   return value === 'SUCCEEDED' || value === 'COMPLETED' || value === 'PAID' || value === 'SETTLED' || value === 'SUCCESS'
 }
 
-export async function syncXenditPaymentStatus(paymentReference: string) {
-  const session = await getCommunitySession()
+export async function syncXenditFamilyPaymentStatus(paymentReference: string) {
+  const session = await getFamilySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const payment = await findPaymentWithRegistrationByReference(paymentReference)
+  const payment = await findFamilyPaymentWithRegistrationByReference(paymentReference)
   if (!payment) return { error: 'Invoice tidak ditemukan.' }
-  if (payment.registration?.community_id !== session.id) return { error: 'Tidak memiliki akses.' }
+  if (payment.registration?.family_id !== session.id) return { error: 'Tidak memiliki akses.' }
   if (payment.status === 'paid' && hasSpecificPaymentMethod(payment.payment_method)) {
     return { success: true, status: 'paid' as const, paymentMethod: payment.payment_method }
   }
@@ -363,17 +359,17 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
   if (!isXenditPaidStatus(xenditData?.status)) {
     const status = (xenditData?.status || '').toUpperCase()
     if (status === 'EXPIRED' || status === 'FAILED') {
-      await markPaymentFailed(payment.id)
+      await markFamilyPaymentFailed(payment.id)
       try {
         await ingestAdminLog({
           level: 'warning',
           source: 'payment',
-          event: status === 'EXPIRED' ? 'community_payment_synced_expired' : 'community_payment_synced_failed',
-          message: `Sinkronisasi pembayaran komunitas: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+          event: status === 'EXPIRED' ? 'family_payment_synced_expired' : 'family_payment_synced_failed',
+          message: `Sinkronisasi pembayaran keluarga: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
           data: { paymentId: payment.id, reference: paymentReference, status }
         })
       } catch (logError) {
-        console.error('Failed to log payment sync failure:', logError)
+        console.error('Failed to log family payment sync failure:', logError)
       }
       revalidatePath('/dashboard')
       return { success: true, status }
@@ -383,35 +379,35 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
       await ingestAdminLog({
         level: 'info',
         source: 'payment',
-        event: 'community_payment_synced_pending',
-        message: `Sinkronisasi pembayaran komunitas: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+        event: 'family_payment_synced_pending',
+        message: `Sinkronisasi pembayaran keluarga: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
         data: { paymentId: payment.id, reference: paymentReference, status }
       })
     } catch (logError) {
-      console.error('Failed to log payment sync pending:', logError)
+      console.error('Failed to log family payment sync pending:', logError)
     }
 
     return { success: true, status: xenditData?.status || 'UNKNOWN' }
   }
 
   const paymentMethod = await resolveXenditPaymentMethod(xenditData, authHeader) || payment.payment_method || 'xendit'
-  await markPaymentPaid(payment.id, { payment_method: paymentMethod })
+  await markFamilyPaymentPaid(payment.id, { payment_method: paymentMethod })
 
   await Promise.all([
-    sendRacepackEmailsForRegistration(payment.registration_id),
-    sendRacepackWhatsappsForRegistration(payment.registration_id),
+    sendFamilyRacepackEmailsForRegistration(payment.registration_id),
+    sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
   ])
 
   try {
     await ingestAdminLog({
       level: 'info',
       source: 'payment',
-      event: 'community_payment_synced_paid',
-      message: `Sinkronisasi pembayaran komunitas: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      event: 'family_payment_synced_paid',
+      message: `Sinkronisasi pembayaran keluarga: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
       data: { paymentId: payment.id, reference: paymentReference, paymentMethod }
     })
   } catch (logError) {
-    console.error('Failed to log payment sync success:', logError)
+    console.error('Failed to log family payment sync success:', logError)
   }
 
   revalidatePath('/dashboard')

@@ -2,13 +2,26 @@ import { NextResponse } from 'next/server'
 import {
   markPaymentsPaidByReference,
   markPaymentsPaidBySessionId,
+  markFamilyPaymentsPaidByReference,
+  markFamilyPaymentsPaidBySessionId,
+  markPaymentFailed,
+  markFamilyPaymentFailed,
 } from '@/lib/db'
-import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
-import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
+import {
+  sendRacepackEmailsForRegistration,
+  sendFamilyRacepackEmailsForRegistration,
+} from '@/lib/email/racepack'
+import {
+  sendRacepackWhatsappsForRegistration,
+  sendFamilyRacepackWhatsappsForRegistration,
+} from '@/lib/whatsapp/racepack'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId } from '@/lib/utils/xendit'
+import { ingestAdminLog } from '@/lib/axiom/ingest'
+import { getDb } from '@/lib/mongodb/client'
 
 type XenditWebhookPayload = {
   event?: string
+  status?: string
   reference_id?: string
   referenceId?: string
   reference?: string
@@ -147,12 +160,61 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
   }
 
-  if (!isPaidEvent(payload)) {
-    return NextResponse.json({ received: true, ignored: true })
-  }
-
   const referenceCandidates = extractReferenceCandidates(payload)
   const sessionCandidates = extractSessionCandidates(payload)
+
+  if (!isPaidEvent(payload)) {
+    const status = (payload.data?.status || payload.status || '').toUpperCase()
+    const event = (payload.event || '').toLowerCase()
+    const isExpired = status === 'EXPIRED' || event.includes('expired')
+    const isFailed = status === 'FAILED' || event.includes('failed')
+
+    if (isExpired || isFailed) {
+      if (referenceCandidates.length > 0 || sessionCandidates.length > 0) {
+        const db = await getDb()
+        const orQuery = [
+          ...(referenceCandidates.length > 0 ? [{ payment_reference: { $in: referenceCandidates } }] : []),
+          ...(sessionCandidates.length > 0 ? [{ xendit_session_id: { $in: sessionCandidates } }] : []),
+        ]
+
+        let processedAny = false
+
+        // Update community payments
+        const communityPayments = await db.collection('payments').find({ $or: orQuery }).toArray()
+        for (const p of communityPayments) {
+          await markPaymentFailed(p.id)
+          await ingestAdminLog({
+            level: 'warning',
+            source: 'payment',
+            event: isExpired ? 'community_payment_webhook_expired' : 'community_payment_webhook_failed',
+            message: `Pembayaran komunitas ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
+            data: { paymentId: p.id, reference: p.payment_reference, amount: p.amount, status }
+          })
+          processedAny = true
+        }
+
+        // Update family payments
+        const familyPayments = await db.collection('family_payments').find({ $or: orQuery }).toArray()
+        for (const p of familyPayments) {
+          await markFamilyPaymentFailed(p.id)
+          await ingestAdminLog({
+            level: 'warning',
+            source: 'payment',
+            event: isExpired ? 'family_payment_webhook_expired' : 'family_payment_webhook_failed',
+            message: `Pembayaran keluarga ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
+            data: { paymentId: p.id, reference: p.payment_reference, amount: p.amount, status }
+          })
+          processedAny = true
+        }
+
+        if (processedAny) {
+          return NextResponse.json({ received: true, processed: true })
+        }
+      }
+    }
+
+    return NextResponse.json({ received: true, ignored: true })
+  }
 
   if (referenceCandidates.length === 0 && sessionCandidates.length === 0) {
     return NextResponse.json({ error: 'Missing Xendit reference' }, { status: 400 })
@@ -164,23 +226,73 @@ export async function POST(request: Request) {
   }
 
   for (const sessionId of sessionCandidates) {
+    // Try community first
     const payments = await markPaymentsPaidBySessionId(sessionId, update)
     if (payments.length > 0) {
       await Promise.all(payments.flatMap((payment) => [
         sendRacepackEmailsForRegistration(payment.registration_id),
         sendRacepackWhatsappsForRegistration(payment.registration_id),
       ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'community_payment_webhook_paid',
+        message: `Pembayaran komunitas sukses via webhook (Session: ${sessionId}).`,
+        data: { sessionId, reference: payments[0]?.payment_reference, amount: payments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Try family next
+    const familyPayments = await markFamilyPaymentsPaidBySessionId(sessionId, update)
+    if (familyPayments.length > 0) {
+      await Promise.all(familyPayments.flatMap((payment) => [
+        sendFamilyRacepackEmailsForRegistration(payment.registration_id),
+        sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'family_payment_webhook_paid',
+        message: `Pembayaran keluarga sukses via webhook (Session: ${sessionId}).`,
+        data: { sessionId, reference: familyPayments[0]?.payment_reference, amount: familyPayments[0]?.amount }
+      })
       return NextResponse.json({ received: true })
     }
   }
 
   for (const referenceId of referenceCandidates) {
+    // Try community first
     const payments = await markPaymentsPaidByReference(referenceId, update)
     if (payments.length > 0) {
       await Promise.all(payments.flatMap((payment) => [
         sendRacepackEmailsForRegistration(payment.registration_id),
         sendRacepackWhatsappsForRegistration(payment.registration_id),
       ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'community_payment_webhook_paid',
+        message: `Pembayaran komunitas sukses via webhook (Ref: ${referenceId}).`,
+        data: { referenceId, amount: payments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Try family next
+    const familyPayments = await markFamilyPaymentsPaidByReference(referenceId, update)
+    if (familyPayments.length > 0) {
+      await Promise.all(familyPayments.flatMap((payment) => [
+        sendFamilyRacepackEmailsForRegistration(payment.registration_id),
+        sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'family_payment_webhook_paid',
+        message: `Pembayaran keluarga sukses via webhook (Ref: ${referenceId}).`,
+        data: { referenceId, amount: familyPayments[0]?.amount }
+      })
       return NextResponse.json({ received: true })
     }
   }

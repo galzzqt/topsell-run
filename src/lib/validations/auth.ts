@@ -20,8 +20,16 @@ const dateOfBirthSchema = z
 export const loginSchema = z.object({
   phone: z
     .string()
-    .min(1, 'Nomor HP wajib diisi')
-    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    .min(1, 'Nomor WhatsApp atau Email wajib diisi')
+    .refine((val) => {
+      const trimmed = val.trim()
+      if (trimmed.includes('@')) {
+        return z.string().email().safeParse(trimmed).success
+      }
+      return phoneRegex.test(trimmed)
+    }, {
+      message: 'Harap masukkan nomor WhatsApp yang valid (berawalan 08) atau email yang valid',
+    }),
   password: z.string().min(6, 'Password minimal 6 karakter'),
 })
 
@@ -76,6 +84,38 @@ export const registerSchema = z
     path: ['confirmPassword'],
   })
 
+export const registerFamilySchema = z
+  .object({
+    name: z.string().min(3, 'Nama keluarga minimal 3 karakter').max(50, 'Nama keluarga maksimal 50 karakter'),
+    leader_name: z.string().min(3, 'Nama perwakilan keluarga minimal 3 karakter').max(50, 'Nama perwakilan keluarga maksimal 50 karakter'),
+    phone: z
+      .string()
+      .min(1, 'Nomor HP wajib diisi')
+      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    email: emailSchema,
+    category: z.literal('6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', { message: 'Kategori wajib dipilih' }),
+    provinsi: z
+      .string()
+      .min(1, 'Provinsi wajib dipilih'),
+    kota: z
+      .string()
+      .min(1, 'Kota/Kabupaten wajib dipilih'),
+    kecamatan: z
+      .string()
+      .min(1, 'Kecamatan wajib dipilih'),
+    password: z.string().min(6, 'Password minimal 6 karakter'),
+    confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
+    participants: z.array(participantItemSchema).min(3, 'Minimal 3 peserta harus didaftarkan'),
+    agreement_safety: z.boolean().refine(val => val === true, 'Persetujuan risiko wajib dicentang'),
+    agreement_data: z.boolean().refine(val => val === true, 'Persetujuan data wajib dicentang'),
+    agreement_refund: z.boolean().refine(val => val === true, 'Persetujuan pembatalan/S&K wajib dicentang'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Konfirmasi password tidak cocok',
+    path: ['confirmPassword'],
+  })
+
 export type LoginFormValues = z.infer<typeof loginSchema>
 export type RegisterFormValues = z.infer<typeof registerSchema>
+export type RegisterFamilyFormValues = z.infer<typeof registerFamilySchema>
 export type ParticipantItemValues = z.infer<typeof participantItemSchema>

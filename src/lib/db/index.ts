@@ -1,6 +1,7 @@
 export {
   findCommunityById,
   findCommunityByPhone,
+  findCommunityByEmail,
   findCommunityByPhoneExcept,
   listCommunities,
   createCommunity,
@@ -61,3 +62,66 @@ export {
   markPaymentsPaidBySessionId,
   markPaymentsPaidByReference,
 } from './payment-sync'
+
+export {
+  findFamilyById,
+  findFamilyByPhone,
+  findFamilyByEmail,
+  findFamilyByPhoneExcept,
+  listFamilies,
+  createFamily,
+  updateFamily,
+  deleteFamily,
+  saveFamilyAuth,
+  findFamilyAuthByPhone,
+  findFamilyAuthById,
+  updateFamilyAuthPhone,
+  updateFamilyAuthPassword,
+  deleteFamilyAuth,
+} from './families'
+
+export {
+  findFamilyParticipantById,
+  findFamilyParticipantsByFamilyId,
+  findFamilyParticipantsByRegistrationId,
+  listFamilyParticipantsWithFamily,
+  insertFamilyParticipants,
+  updateFamilyParticipants,
+  updateFamilyParticipantById,
+  updateFamilyParticipantIds,
+  linkFamilyParticipantsToRegistration,
+  findPendingFamilyParticipantsWithoutRegistration,
+  countUnsentFamilyRacepackWhatsapps,
+  findPaidFamilyParticipantsForRacepackEmail,
+  findFamilyParticipantWithFamilyById,
+  markFamilyParticipantCheckedIn,
+} from './family-participants'
+
+export {
+  findFamilyRegistrationById,
+  findFamilyRegistrationsByFamilyId,
+  findPendingFamilyRegistrationsByFamilyId,
+  createFamilyRegistration,
+  updateFamilyRegistration,
+  deleteFamilyRegistration,
+  findPaidFamilyRegistrationWithFamily,
+} from './family-registrations'
+
+export {
+  findFamilyPaymentById,
+  findFamilyPaymentByReference,
+  findFamilyPaymentsByRegistrationIds,
+  findPendingFamilyPaymentByRegistrationIds,
+  createFamilyPayment,
+  updateFamilyPayment,
+  listFamilyPaymentsWithRelations,
+  findFamilyPaymentWithRegistration,
+  findFamilyPaymentWithRegistrationByReference,
+} from './family-payments'
+
+export {
+  markFamilyPaymentPaid,
+  markFamilyPaymentFailed,
+  markFamilyPaymentsPaidBySessionId,
+  markFamilyPaymentsPaidByReference,
+} from './family-payment-sync'

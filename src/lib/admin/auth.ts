@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
 const ADMIN_COOKIE = 'topsell_admin_session'
 
@@ -54,11 +54,13 @@ export async function createAdminSession(session: AdminSession) {
   })
   const token = `${payload}.${sign(payload)}`
   const cookieStore = await cookies()
+  const headersList = await headers()
+  const isHttps = headersList.get('x-forwarded-proto') === 'https'
 
   cookieStore.set(ADMIN_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && isHttps,
     path: '/admin',
     maxAge: 60 * 60 * 8,
   })
@@ -66,10 +68,13 @@ export async function createAdminSession(session: AdminSession) {
 
 export async function clearAdminSession() {
   const cookieStore = await cookies()
+  const headersList = await headers()
+  const isHttps = headersList.get('x-forwarded-proto') === 'https'
+
   cookieStore.set(ADMIN_COOKIE, '', {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && isHttps,
     path: '/admin',
     maxAge: 0,
   })

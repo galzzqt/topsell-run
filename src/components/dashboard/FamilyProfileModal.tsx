@@ -4,28 +4,28 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { KeyRound } from 'lucide-react'
-import { useCommunityStore } from '@/lib/store/useCommunityStore'
-import { communityProfileSchema, CommunityProfileValues } from '@/lib/validations/community'
-import { updateCommunityProfile } from '@/app/actions/communities'
+import { useFamilyStore } from '@/lib/store/useFamilyStore'
+import { familyProfileSchema, FamilyProfileValues } from '@/lib/validations/family'
+import { updateFamilyProfile } from '@/app/actions/families'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
-interface CommunityProfileModalProps {
+interface FamilyProfileModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
-export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModalProps) {
-  const { user, community, fetchCommunityData } = useCommunityStore()
+export function FamilyProfileModal({ isOpen, onClose }: FamilyProfileModalProps) {
+  const { user, family, fetchFamilyData } = useFamilyStore()
 
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<CommunityProfileValues>({
-    resolver: zodResolver(communityProfileSchema),
+  } = useForm<FamilyProfileValues>({
+    resolver: zodResolver(familyProfileSchema),
     defaultValues: {
       phone: '',
       email: '',
@@ -34,24 +34,24 @@ export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModal
   })
 
   useEffect(() => {
-    if (!isOpen || !community) return
+    if (!isOpen || !family) return
 
     reset({
-      phone: community.phone || '',
-      email: community.email || '',
+      phone: family.phone || '',
+      email: family.email || '',
       password: '',
     })
-  }, [community, isOpen, reset])
+  }, [family, isOpen, reset])
 
-  const onSubmit = async (values: CommunityProfileValues) => {
-    const result = await updateCommunityProfile(values)
+  const onSubmit = async (values: FamilyProfileValues) => {
+    const result = await updateFamilyProfile(values)
     if (result.error) {
       alert(result.error)
       return
     }
 
     if (user?.id) {
-      await fetchCommunityData()
+      await fetchFamilyData()
     }
     onClose()
   }
@@ -62,27 +62,27 @@ export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModal
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Akun Komunitas">
+    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Akun Keluarga">
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <KeyRound className="w-4 h-4 text-sport-orange shrink-0" />
           <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-            Komunitas hanya dapat mengubah nomor HP, email, dan password akun. Data peserta dikelola oleh admin.
+            Keluarga hanya dapat mengubah nomor HP, email, dan password akun. Data peserta dikelola oleh admin.
           </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <Input
-            label="No. HP / WhatsApp Komunitas"
+            label="No. HP / WhatsApp Keluarga"
             placeholder="08xxxxxxxxxx"
             error={errors.phone?.message}
             disabled={isSubmitting}
             {...register('phone')}
           />
           <Input
-            label="Email Komunitas"
+            label="Email Keluarga"
             type="email"
-            placeholder="email@komunitas.com"
+            placeholder="email@keluarga.com"
             error={errors.email?.message}
             disabled={isSubmitting}
             {...register('email')}

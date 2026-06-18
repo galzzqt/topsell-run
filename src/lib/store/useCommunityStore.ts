@@ -8,7 +8,7 @@ export type CommunityUser = {
   name: string
 }
 
-interface AppState {
+interface CommunityState {
   user: CommunityUser | null
   community: Community | null
   participants: Participant[]
@@ -28,7 +28,7 @@ interface AppState {
   clearStore: () => void
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useCommunityStore = create<CommunityState>((set, get) => ({
   user: null,
   community: null,
   participants: [],

@@ -5,22 +5,19 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Pencil } from 'lucide-react'
 import { participantEditSchema, ParticipantFormValues } from '@/lib/validations/participant'
-import { updateParticipant } from '@/app/actions/participants'
-import { useCommunityStore } from '@/lib/store/useCommunityStore'
-import { Participant } from '@/lib/types'
+import { FamilyParticipant } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
-interface ParticipantFormModalProps {
+interface FamilyParticipantFormModalProps {
   isOpen: boolean
   onClose: () => void
-  editParticipant?: Participant | null
+  editParticipant?: FamilyParticipant | null
 }
 
-export function ParticipantFormModal({ isOpen, onClose, editParticipant }: ParticipantFormModalProps) {
-  const { user, fetchCommunityData } = useCommunityStore()
+export function FamilyParticipantFormModal({ isOpen, onClose, editParticipant }: FamilyParticipantFormModalProps) {
 
   const {
     register,
@@ -68,22 +65,9 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
   }, [editParticipant, isOpen, reset, setValue])
 
   const onSubmit = async (values: ParticipantFormValues) => {
-    if (!editParticipant) {
-      alert('Pilih peserta yang ingin diedit.')
-      return
-    }
-
-    const result = await updateParticipant(editParticipant.id, values)
-    if (result.error) {
-      alert(result.error)
-      return
-    }
-
-    if (user?.id) {
-      await fetchCommunityData()
-    }
-
-    reset()
+    void values
+    // This is not active since edit is blocked for non-admin, but keeping matching flow
+    alert('Data peserta hanya dapat diedit oleh admin.')
     onClose()
   }
 
@@ -93,7 +77,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Data Peserta">
+    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Data Anggota Keluarga">
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <Pencil className="w-4 h-4 text-sport-orange shrink-0" />
@@ -107,7 +91,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
             label="Nama Lengkap Peserta"
             placeholder="Nama sesuai identitas"
             error={errors.full_name?.message}
-            disabled={isSubmitting}
+            disabled={true}
             {...register('full_name')}
           />
 
@@ -116,7 +100,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
               label="Nama BIB"
               placeholder="Nama yang dicetak di BIB"
               error={errors.bib_name?.message}
-              disabled={isSubmitting}
+              disabled={true}
               {...register('bib_name')}
             />
             <Input
@@ -124,21 +108,21 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
               type="email"
               placeholder="peserta@email.com"
               error={errors.email?.message}
-              disabled={isSubmitting}
+              disabled={true}
               {...register('email')}
             />
             <Input
               label="No. HP / WhatsApp"
               placeholder="08xxxxxxxxxx"
               error={errors.phone?.message}
-              disabled={isSubmitting}
+              disabled={true}
               {...register('phone')}
             />
             <Input
               label="Tanggal Lahir"
               type="date"
               error={errors.date_of_birth?.message}
-              disabled={isSubmitting}
+              disabled={true}
               {...register('date_of_birth')}
             />
           </div>
@@ -147,7 +131,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
             <Select
               label="Jenis Kelamin"
               error={errors.gender?.message}
-              disabled={isSubmitting}
+              disabled={true}
               options={[
                 { value: 'male', label: 'Laki-laki' },
                 { value: 'female', label: 'Perempuan' },
@@ -157,7 +141,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
             <Select
               label="Ukuran Jersey"
               error={errors.tshirt_size?.message}
-              disabled={isSubmitting}
+              disabled={true}
               options={[
                 { value: 'XS', label: 'XS' },
                 { value: 'S', label: 'S' },
@@ -174,7 +158,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
             <Select
               label="Gol. Darah"
               error={errors.blood_type?.message}
-              disabled={isSubmitting}
+              disabled={true}
               options={[
                 { value: 'A', label: 'A' },
                 { value: 'B', label: 'B' },
@@ -189,7 +173,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
             label="Penyakit Bawaan"
             placeholder="Isi jika ada"
             error={errors.medical_condition?.message}
-            disabled={isSubmitting}
+            disabled={true}
             {...register('medical_condition')}
           />
 
@@ -198,24 +182,21 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
               label="Nama Kontak Darurat"
               placeholder="Nama keluarga/kerabat"
               error={errors.emergency_contact_name?.message}
-              disabled={isSubmitting}
+              disabled={true}
               {...register('emergency_contact_name')}
             />
             <Input
               label="No. Kontak Darurat"
               placeholder="08xxxxxxxxxx"
               error={errors.emergency_contact_phone?.message}
-              disabled={isSubmitting}
+              disabled={true}
               {...register('emergency_contact_phone')}
             />
           </div>
 
           <div className="flex gap-3 pt-2 border-t border-card-border">
             <Button type="button" variant="ghost" className="flex-1" onClick={handleClose} disabled={isSubmitting}>
-              Batal
-            </Button>
-            <Button type="submit" variant="primary" className="flex-1" isLoading={isSubmitting}>
-              Simpan Perubahan
+              Tutup
             </Button>
           </div>
         </form>

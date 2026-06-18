@@ -8,17 +8,17 @@ import {
   TrendingUp, Copy, Check, ExternalLink, Settings,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
-import { useFamilyStore } from '@/lib/store/useFamilyStore'
-import { getFamilySessionAction } from '@/app/actions/family-dashboard'
+import { useCommunityStore } from '@/lib/store/useCommunityStore'
+import { getCommunitySessionAction } from '@/app/actions/dashboard'
 import { formatCurrency } from '@/lib/utils/format'
-import { signOutFamily } from '@/app/actions/family-auth'
-import { createFamilyPayment, simulateFamilyPaymentSuccess, syncXenditFamilyPaymentStatus } from '@/app/actions/family-payments'
-import { FamilyParticipant, TOPSELL_RUN_EVENT } from '@/lib/types'
+import { signOutCommunity } from '@/app/actions/auth'
+import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus } from '@/app/actions/payments'
+import { Participant, TOPSELL_RUN_EVENT } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
 import { Dialog } from '@/components/ui/dialog'
-import { FamilyProfileModal } from '@/components/dashboard/FamilyProfileModal'
+import { CommunityProfileModal } from '@/components/dashboard/CommunityProfileModal'
 
 type CheckoutPayload = {
   paymentId: string
@@ -34,9 +34,9 @@ type CheckoutPayload = {
 function DashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, family, participants, isLoading, setUser, fetchFamilyData, getStats, clearStore } = useFamilyStore()
+  const { user, community, participants, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useCommunityStore()
 
-  const [qrParticipant, setQrParticipant] = useState<FamilyParticipant | null>(null)
+  const [qrParticipant, setQrParticipant] = useState<Participant | null>(null)
   const [checkoutPayload, setCheckoutPayload] = useState<CheckoutPayload | null>(null)
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
   const [paymentSimLoading, setPaymentSimLoading] = useState(false)
@@ -51,12 +51,12 @@ function DashboardContent() {
   // Auth init
   useEffect(() => {
     const init = async () => {
-      const session = await getFamilySessionAction()
+      const session = await getCommunitySessionAction()
       if (session.user) {
         setUser(session.user)
-        await fetchFamilyData()
+        await fetchCommunityData()
       } else {
-        router.push('/login')
+        router.push('/community-login')
       }
     }
     init()
@@ -67,11 +67,11 @@ function DashboardContent() {
     if (!user?.id) return
 
     const interval = setInterval(() => {
-      fetchFamilyData(true)
+      fetchCommunityData(true)
     }, 15000)
 
     return () => clearInterval(interval)
-  }, [fetchFamilyData, user?.id])
+  }, [fetchCommunityData, user?.id])
 
   useEffect(() => {
     if (!user?.id || hasCelebratedPayment) return
@@ -81,12 +81,12 @@ function DashboardContent() {
     if (!paymentResult) return
 
     if (paymentResult === 'cancelled') {
-      router.replace('/dashboard')
+      router.replace('/community-dashboard')
       return
     }
 
     if (paymentResult !== 'success') {
-      router.replace('/dashboard')
+      router.replace('/community-dashboard')
       return
     }
 
@@ -96,11 +96,11 @@ function DashboardContent() {
     const poll = async () => {
       attempts += 1
       if (paymentRef) {
-        await syncXenditFamilyPaymentStatus(paymentRef)
+        await syncXenditPaymentStatus(paymentRef)
       }
-      await fetchFamilyData(true)
+      await fetchCommunityData(true)
 
-      const { payments } = useFamilyStore.getState()
+      const { payments } = useCommunityStore.getState()
       const hasPaid = paymentRef
         ? payments.some((p) => p.status === 'paid' && p.payment_reference === paymentRef)
         : payments.some((p) => p.status === 'paid')
@@ -108,11 +108,11 @@ function DashboardContent() {
       if (!cancelled && hasPaid && !hasCelebratedPayment) {
         confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
         setHasCelebratedPayment(true)
-        router.replace('/dashboard')
+        router.replace('/community-dashboard')
       }
 
       if (!cancelled && attempts >= 12) {
-        router.replace('/dashboard')
+        router.replace('/community-dashboard')
       }
     }
 
@@ -123,20 +123,20 @@ function DashboardContent() {
       cancelled = true
       clearInterval(intervalId)
     }
-  }, [fetchFamilyData, hasCelebratedPayment, router, searchParams, user?.id])
+  }, [fetchCommunityData, hasCelebratedPayment, router, searchParams, user?.id])
 
   const stats = getStats()
 
   const handleLogout = async () => {
-    await signOutFamily()
+    await signOutCommunity()
     clearStore()
-    router.push('/login')
+    router.push('/community-login')
   }
 
   const handleCheckout = async () => {
     setIsCheckoutLoading(true)
     try {
-      const res = await createFamilyPayment()
+      const res = await createCommunityPayment()
       if (!res.success) return alert(res.error)
       setPaymentSyncMessage('')
       setHasOpenedCheckout(false)
@@ -150,10 +150,10 @@ function DashboardContent() {
     if (!checkoutPayload) return
     setPaymentSimLoading(true)
     try {
-      const res = await simulateFamilyPaymentSuccess(checkoutPayload.paymentId)
+      const res = await simulatePaymentSuccess(checkoutPayload.paymentId)
       if (res.error) return alert(res.error)
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
-      if (user?.id) await fetchFamilyData()
+      if (user?.id) await fetchCommunityData()
       setCheckoutPayload(null)
       setHasOpenedCheckout(false)
       setPaymentSyncMessage('')
@@ -171,14 +171,14 @@ function DashboardContent() {
     }
 
     try {
-      const res = await syncXenditFamilyPaymentStatus(checkoutPayload.reference)
+      const res = await syncXenditPaymentStatus(checkoutPayload.reference)
       if (res.error) {
         if (!silent) setPaymentSyncMessage(res.error)
         return false
       }
 
-      await fetchFamilyData(true)
-      const { payments } = useFamilyStore.getState()
+      await fetchCommunityData(true)
+      const { payments } = useCommunityStore.getState()
       const hasPaid = payments.some(
         (payment) => payment.payment_reference === checkoutPayload.reference && payment.status === 'paid'
       )
@@ -201,7 +201,7 @@ function DashboardContent() {
     } finally {
       if (!silent) setPaymentSyncLoading(false)
     }
-  }, [checkoutPayload, fetchFamilyData, hasCelebratedPayment, user?.id])
+  }, [checkoutPayload, fetchCommunityData, hasCelebratedPayment, user?.id])
 
   useEffect(() => {
     if (!checkoutPayload || checkoutPayload.isDemoMode || !hasOpenedCheckout) return
@@ -226,8 +226,8 @@ function DashboardContent() {
   }
 
   const handleCopyCode = () => {
-    if (!family?.family_code) return
-    navigator.clipboard.writeText(family.family_code)
+    if (!community?.community_code) return
+    navigator.clipboard.writeText(community.community_code)
     setCodeCopied(true)
     setTimeout(() => setCodeCopied(false), 2000)
   }
@@ -258,20 +258,20 @@ function DashboardContent() {
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
               <p className="text-xs font-black uppercase tracking-wide text-foreground hidden sm:block">
-                {family?.name || 'Dashboard Keluarga'}
+                {community?.name || 'Dashboard Komunitas'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Family Code Badge */}
-            {family?.family_code && (
+            {/* Community Code Badge */}
+            {community?.community_code && (
               <button
                 onClick={handleCopyCode}
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-brand-gray border border-card-border rounded-lg text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-foreground cursor-pointer transition-colors"
               >
                 {codeCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                {family.family_code}
+                {community.community_code}
               </button>
             )}
             <button
@@ -295,7 +295,7 @@ function DashboardContent() {
         {/* STATS TILES */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Total Anggota', value: stats.totalParticipants, icon: <Users className="w-4 h-4 text-brand-muted" />, color: 'bg-brand-gray border-card-border' },
+            { label: 'Total Peserta', value: stats.totalParticipants, icon: <Users className="w-4 h-4 text-brand-muted" />, color: 'bg-brand-gray border-card-border' },
             { label: 'Sudah Lunas', value: stats.paidParticipants, icon: <Trophy className="w-4 h-4 text-green-400" />, color: 'bg-green-500/5 border-green-500/20', valueClass: 'text-green-400' },
             { label: 'Belum Bayar', value: stats.pendingParticipants, icon: <Clock className="w-4 h-4 text-amber-400" />, color: 'bg-amber-500/5 border-amber-500/20', valueClass: 'text-amber-400' },
             { label: 'Total Terbayar', value: formatCurrency(stats.totalAmountPaid), icon: <TrendingUp className="w-4 h-4 text-sport-orange" />, color: 'bg-sport-orange/5 border-sport-orange/20', valueClass: 'text-sport-orange text-base' },
@@ -320,29 +320,29 @@ function DashboardContent() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Event Aktif</p>
               <p className="text-sm font-black uppercase text-foreground">{TOPSELL_RUN_EVENT.name}</p>
               <p className="text-[10px] text-brand-muted font-medium">
-                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Kategori Keluarga / {TOPSELL_RUN_EVENT.category}
+                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Kategori {TOPSELL_RUN_EVENT.category}
               </p>
             </div>
           </div>
            <div className="text-left sm:text-right shrink-0">
-            <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Biaya/Anggota</p>
+            <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Biaya/Peserta</p>
             <p className="text-base font-black text-foreground">{formatCurrency(TOPSELL_RUN_EVENT.price_per_participant)}</p>
           </div>
         </div>
 
-        {/* FAMILY PAYMENT */}
+        {/* COMMUNITY PAYMENT */}
         <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-sport-orange/10 border border-sport-orange/20 rounded-lg shrink-0">
               <CreditCard className="w-4 h-4 text-sport-orange" />
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Keluarga</p>
-              <p className="text-sm font-black uppercase text-foreground">Bayar semua anggota sekaligus</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Komunitas</p>
+              <p className="text-sm font-black uppercase text-foreground">Bayar semua peserta sekaligus</p>
               <p className="text-[10px] text-brand-muted font-medium mt-1">
                 {pendingParticipants.length > 0
-                  ? `${pendingParticipants.length} anggota pending akan dibayar dalam satu checkout Xendit VA / QRIS.`
-                  : 'Semua anggota keluarga sudah lunas atau belum ada anggota pending.'}
+                  ? `${pendingParticipants.length} peserta pending akan dibayar dalam satu checkout Xendit VA / QRIS.`
+                  : 'Semua peserta komunitas sudah lunas atau belum ada peserta pending.'}
               </p>
             </div>
           </div>
@@ -358,7 +358,7 @@ function DashboardContent() {
               onClick={handleCheckout}
               disabled={pendingParticipants.length === 0}
             >
-              <CreditCard className="w-4 h-4 mr-2" />Bayar Semua Anggota
+              <CreditCard className="w-4 h-4 mr-2" />Bayar Semua Peserta
             </Button>
           </div>
         </div>
@@ -386,7 +386,7 @@ function DashboardContent() {
             </div>
 
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
-              Pembayaran dilakukan kolektif oleh keluarga
+              Pembayaran dilakukan kolektif oleh komunitas
             </p>
           </div>
 
@@ -397,7 +397,7 @@ function DashboardContent() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Memuat data anggota...</p>
+              <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Memuat data peserta...</p>
             </div>
           )}
 
@@ -407,9 +407,9 @@ function DashboardContent() {
               <div className="p-4 bg-brand-gray border border-card-border rounded-full">
                 <Users className="w-8 h-8 text-brand-muted" />
               </div>
-              <h4 className="text-sm font-bold text-foreground uppercase">Belum ada anggota</h4>
+              <h4 className="text-sm font-bold text-foreground uppercase">Belum ada peserta</h4>
               <p className="text-xs text-brand-muted text-center max-w-xs">
-                Anggota didaftarkan melalui form registrasi di halaman utama.
+                Peserta didaftarkan melalui form registrasi di halaman utama.
               </p>
             </div>
           )}
@@ -421,7 +421,7 @@ function DashboardContent() {
                 <thead>
                   <tr className="border-b border-card-border bg-brand-dark/20">
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">#</th>
-                    <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Anggota / BIB</th>
+                    <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Peserta / BIB</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted hidden md:table-cell">Gender</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Jersey</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted hidden lg:table-cell">Medis</th>
@@ -485,7 +485,7 @@ function DashboardContent() {
         onClose={() => setQrParticipant(null)}
       />
       
-      <FamilyProfileModal
+      <CommunityProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
       />
@@ -498,7 +498,7 @@ function DashboardContent() {
           setHasOpenedCheckout(false)
           setPaymentSyncMessage('')
         }}
-        title="Pembayaran Keluarga"
+        title="Pembayaran Kolektif"
         className="max-w-md"
       >
         {checkoutPayload && (
@@ -520,8 +520,8 @@ function DashboardContent() {
             <div className="flex flex-col gap-3 border-y border-card-border py-4">
               {[
                 { label: 'Referensi', value: checkoutPayload.reference },
-                { label: 'Keluarga', value: family?.name },
-                { label: 'Jumlah Anggota', value: `${checkoutPayload.participantCount} orang` },
+                { label: 'Komunitas', value: community?.name },
+                { label: 'Jumlah Peserta', value: `${checkoutPayload.participantCount} orang` },
                 { label: 'Kategori', value: 'TOPSELL RUN 6K' },
                 { label: 'Metode', value: 'Xendit VA / QRIS' },
               ].map((r) => (
@@ -581,7 +581,7 @@ function DashboardContent() {
   )
 }
 
-export default function DashboardPage() {
+export default function CommunityDashboardPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-brand-dark" />}>
       <DashboardContent />

@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Activity, Lock, ArrowLeft } from 'lucide-react'
 import { loginSchema, LoginFormValues } from '@/lib/validations/auth'
-import { signInFamily } from '@/app/actions/family-auth'
+import { signInCommunity } from '@/app/actions/auth'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
@@ -22,12 +22,12 @@ export default function LoginPage() {
 
   const onSubmit = async (values: LoginFormValues) => {
     setAuthError(null)
-    const result = await signInFamily(values)
+    const result = await signInCommunity(values)
     if (result.error) {
       setAuthError(result.error)
     } else {
       router.refresh()
-      router.push('/dashboard')
+      router.push('/community-dashboard')
     }
   }
 
@@ -51,8 +51,8 @@ export default function LoginPage() {
             <Activity className="w-5 h-5 text-white" />
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-sport-purple">TOPSELL RUN 2026</p>
-          <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk Keluarga</h1>
-          <p className="text-xs text-brand-muted font-medium">Login untuk mengelola peserta keluarga Anda</p>
+          <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk Komunitas</h1>
+          <p className="text-xs text-brand-muted font-medium">Login untuk mengelola peserta komunitas Anda</p>
         </div>
 
         {/* Card */}
@@ -64,7 +64,7 @@ export default function LoginPage() {
             </div>
           )}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            <Input label="Nomor WhatsApp / Email Perwakilan" placeholder="08xxxxxxxxxx atau email@keluarga.com" error={errors.phone?.message} disabled={isSubmitting} {...register('phone')} />
+            <Input label="Nomor WhatsApp / Email Komunitas" placeholder="08xxxxxxxxxx atau email@komunitas.com" error={errors.phone?.message} disabled={isSubmitting} {...register('phone')} />
             <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} disabled={isSubmitting} {...register('password')} />
             <Button type="submit" variant="primary" className="w-full py-4 mt-1 text-xs font-black" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }} isLoading={isSubmitting}>
               <Lock className="w-4 h-4 mr-2" />Masuk ke Dashboard
@@ -73,8 +73,8 @@ export default function LoginPage() {
         </div>
 
         <p className="text-xs text-center text-brand-muted">
-          Belum punya akun keluarga?{' '}
-          <Link href="/#register-section" className="font-bold hover:underline text-sport-purple">Daftar Sekarang</Link>
+          Belum punya akun komunitas?{' '}
+          <Link href="/community-package#register-section" className="font-bold hover:underline text-sport-purple">Daftar Sekarang</Link>
         </p>
       </div>
     </div>

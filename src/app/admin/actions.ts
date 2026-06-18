@@ -8,8 +8,18 @@ import {
   updateCommunityAuthPassword,
   updateCommunityAuthPhone,
   updateParticipantById,
+  findParticipantById,
+  // family database imports
+  findFamilyParticipantWithFamilyById,
+  findFamilyParticipantById,
+  markFamilyParticipantCheckedIn,
+  updateFamilyParticipantById,
+  updateFamily,
+  updateFamilyAuthPhone,
+  updateFamilyAuthPassword,
+  findFamilyByPhoneExcept,
 } from '@/lib/db'
-import { clearAdminSession, createAdminSession, getAdminSession, isAdminAuthenticated } from '@/lib/admin/auth'
+import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
 import { queryAdminLogs } from '@/lib/axiom/logs'
@@ -40,6 +50,19 @@ export async function loginAdmin(username: string, password: string) {
 
   clearRateLimit('admin-login')
   await createAdminSession(session)
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'auth',
+      event: 'admin_signin',
+      message: `Admin login berhasil: ${session.name} (Username: ${session.username}, Role: ${session.role}).`,
+      actor: session,
+    })
+  } catch (logError) {
+    console.error('Failed to log admin login:', logError)
+  }
+
   revalidatePath('/admin')
   return { success: true }
 }
@@ -69,7 +92,32 @@ export async function markRacepackPickedUp(scanValue: string) {
     return { error: 'QR tidak valid. Pastikan QR Race Pass peserta yang dipindai.' }
   }
 
-  const participant = await findParticipantWithCommunityById(participantId)
+  type ScannedParticipantType = {
+    id: string
+    full_name: string
+    bib_name: string
+    phone: string
+    email: string
+    payment_status: string
+    checked_in: boolean
+    checked_in_at: string | null
+    participant_code: string | null
+    community: { name: string; community_code: string } | null
+  }
+
+  let participant = (await findParticipantWithCommunityById(participantId)) as ScannedParticipantType | null
+  let isFamily = false
+
+  if (!participant) {
+    const familyParticipant = await findFamilyParticipantWithFamilyById(participantId)
+    if (familyParticipant) {
+      isFamily = true
+      participant = {
+        ...familyParticipant,
+        community: familyParticipant.family ? { name: familyParticipant.family.name, community_code: familyParticipant.family.family_code } : null
+      } as unknown as ScannedParticipantType
+    }
+  }
 
   if (!participant) {
     await ingestAdminLog({
@@ -111,8 +159,22 @@ export async function markRacepackPickedUp(scanValue: string) {
     }
   }
 
-  const pickedUpAt = await markParticipantCheckedIn(participantId)
-  const updated = await findParticipantWithCommunityById(participantId)
+  const pickedUpAt = isFamily
+    ? await markFamilyParticipantCheckedIn(participantId)
+    : await markParticipantCheckedIn(participantId)
+
+  let updated = null
+  if (isFamily) {
+    const familyParticipant = await findFamilyParticipantWithFamilyById(participantId)
+    if (familyParticipant) {
+      updated = {
+        ...familyParticipant,
+        community: familyParticipant.family ? { name: familyParticipant.family.name, community_code: familyParticipant.family.family_code } : null
+      } as unknown as ScannedParticipantType
+    }
+  } else {
+    updated = (await findParticipantWithCommunityById(participantId)) as ScannedParticipantType | null
+  }
 
   if (!updated) {
     await ingestAdminLog({
@@ -163,7 +225,8 @@ export type AdminParticipantUpdateValues = {
 }
 
 export async function updateAdminParticipant(participantId: string, values: AdminParticipantUpdateValues) {
-  if (!(await isAdminAuthenticated())) {
+  const session = await getAdminSession()
+  if (!session) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
@@ -175,7 +238,7 @@ export async function updateAdminParticipant(participantId: string, values: Admi
   if (!phoneRegex.test(values.emergency_contact_phone)) return { error: 'Nomor kontak darurat tidak valid.' }
   if (!['male', 'female'].includes(values.gender)) return { error: 'Gender tidak valid.' }
 
-  await updateParticipantById(participantId, {
+  const payload = {
     full_name: values.full_name.trim(),
     bib_name: values.bib_name.trim(),
     email: values.email.trim(),
@@ -187,7 +250,104 @@ export async function updateAdminParticipant(participantId: string, values: Admi
     medical_condition: values.medical_condition.trim() || null,
     emergency_contact_name: values.emergency_contact_name.trim(),
     emergency_contact_phone: values.emergency_contact_phone.trim(),
+  }
+
+  const existingCommunity = await findParticipantById(participantId)
+  if (existingCommunity) {
+    await updateParticipantById(participantId, payload)
+  } else {
+    const existingFamily = await findFamilyParticipantById(participantId)
+    if (existingFamily) {
+      await updateFamilyParticipantById(participantId, payload)
+    } else {
+      return { error: 'Peserta tidak ditemukan.' }
+    }
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_participant_updated',
+      message: `Admin ${session.name} memperbarui data peserta: ${payload.full_name} (BIB: ${payload.bib_name}, HP: ${payload.phone}, Tipe: ${existingCommunity ? 'Komunitas' : 'Keluarga'}).`,
+      actor: session,
+      data: {
+        participantId,
+        full_name: payload.full_name,
+        bib_name: payload.bib_name,
+        email: payload.email,
+        phone: payload.phone,
+        isFamily: !existingCommunity,
+      }
+    })
+  } catch (logError) {
+    console.error('Failed to log admin participant update:', logError)
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export type AdminFamilyUpdateValues = {
+  id: string
+  name: string
+  leader_name: string
+  email: string
+  phone: string
+  provinsi: string
+  kota: string
+  kecamatan: string
+  password: string
+}
+
+export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  if (!values.name.trim() || !values.leader_name.trim()) return { error: 'Nama keluarga dan penanggung jawab wajib diisi.' }
+  if (!emailRegex.test(values.email)) return { error: 'Email keluarga tidak valid.' }
+  if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP keluarga tidak valid.' }
+  if (values.password && values.password.length < 6) return { error: 'Password minimal 6 karakter.' }
+
+  const duplicate = await findFamilyByPhoneExcept(values.phone, values.id)
+  if (duplicate) return { error: 'Nomor HP sudah digunakan keluarga lain.' }
+
+  await updateFamily(values.id, {
+    name: values.name.trim(),
+    leader_name: values.leader_name.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+    provinsi: values.provinsi.trim() || null,
+    kota: values.kota.trim() || null,
+    kecamatan: values.kecamatan.trim() || null,
   })
+
+  await updateFamilyAuthPhone(values.id, values.phone)
+
+  if (values.password) {
+    await updateFamilyAuthPassword(values.id, createCommunityPasswordRecord(values.password))
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_family_updated',
+      message: `Admin ${session.name} memperbarui data keluarga: ${values.name} (Penanggung Jawab: ${values.leader_name}, HP: ${values.phone}).`,
+      actor: session,
+      data: {
+        familyId: values.id,
+        name: values.name,
+        leaderName: values.leader_name,
+        phone: values.phone,
+        email: values.email,
+      }
+    })
+  } catch (logError) {
+    console.error('Failed to log admin family update:', logError)
+  }
 
   revalidatePath('/admin')
   return { success: true }
@@ -206,7 +366,8 @@ export type AdminCommunityUpdateValues = {
 }
 
 export async function updateAdminCommunity(values: AdminCommunityUpdateValues) {
-  if (!(await isAdminAuthenticated())) {
+  const session = await getAdminSession()
+  if (!session) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
@@ -232,6 +393,25 @@ export async function updateAdminCommunity(values: AdminCommunityUpdateValues) {
 
   if (values.password) {
     await updateCommunityAuthPassword(values.id, createCommunityPasswordRecord(values.password))
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_community_updated',
+      message: `Admin ${session.name} memperbarui data komunitas: ${values.name} (Ketua: ${values.leader_name}, HP: ${values.phone}).`,
+      actor: session,
+      data: {
+        communityId: values.id,
+        name: values.name,
+        leaderName: values.leader_name,
+        phone: values.phone,
+        email: values.email,
+      }
+    })
+  } catch (logError) {
+    console.error('Failed to log admin community update:', logError)
   }
 
   revalidatePath('/admin')

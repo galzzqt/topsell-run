@@ -19,6 +19,12 @@ export async function findCommunityByPhone(phone: string) {
   return stripMongoId(doc) as Community | null
 }
 
+export async function findCommunityByEmail(email: string) {
+  const db = await getDb()
+  const doc = await db.collection<CommunityDoc>('communities').findOne({ email: { $regex: new RegExp(`^${email.trim()}$`, 'i') } })
+  return stripMongoId(doc) as Community | null
+}
+
 export async function findCommunityByPhoneExcept(phone: string, excludeId: string) {
   const db = await getDb()
   const doc = await db.collection<CommunityDoc>('communities').findOne({ phone, id: { $ne: excludeId } })

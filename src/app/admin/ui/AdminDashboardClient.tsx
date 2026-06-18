@@ -36,6 +36,7 @@ import {
   saveRegistrationFormSettings,
   updateManagedAdmin,
   updateAdminCommunity,
+  updateAdminFamily,
   updateAdminParticipant,
   type AdminCommunityUpdateValues,
   type AdminParticipantUpdateValues,
@@ -218,6 +219,9 @@ export function AdminDashboardClient({
   participants,
   communities,
   payments,
+  familyParticipants = [],
+  families = [],
+  familyPayments = [],
   adminSettings,
   editableEnv,
   currentAdmin,
@@ -229,6 +233,9 @@ export function AdminDashboardClient({
   participants: AdminParticipant[]
   communities: AdminCommunity[]
   payments: AdminPayment[]
+  familyParticipants?: AdminParticipant[]
+  families?: AdminCommunity[]
+  familyPayments?: AdminPayment[]
   adminSettings: AdminSettings
   editableEnv: AdminEnvSnapshot[]
   currentAdmin: AdminUser
@@ -242,6 +249,8 @@ export function AdminDashboardClient({
   const envFieldCounterRef = useRef(0)
   const scanRegionId = 'admin-racepack-reader'
   const [query, setQuery] = useState('')
+  const [packageType, setPackageType] = useState<'community' | 'family'>('community')
+  const [combineFiles, setCombineFiles] = useState(false)
   const [activeTab, setActiveTab] = useState<AdminTab>('summary')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
@@ -255,7 +264,7 @@ export function AdminDashboardClient({
   const [settingsForm, setSettingsForm] = useState<AdminSettings>(adminSettings)
   const [envSnapshots, setEnvSnapshots] = useState<AdminEnvSnapshot[]>(editableEnv)
   const [envForm, setEnvForm] = useState<Record<string, string>>({})
-  const [selectedExportCommunities, setSelectedExportCommunities] = useState<Set<string>>(new Set(communities.map((community) => community.id)))
+  const [selectedExportCommunities, setSelectedExportCommunities] = useState<Set<string> | null>(null)
   const [settingsMessage, setSettingsMessage] = useState('')
   const [adminCreateForm, setAdminCreateForm] = useState<{ name: string; username: string; password: string; role: 'admin' | 'superadmin' }>({
     name: '',
@@ -269,10 +278,15 @@ export function AdminDashboardClient({
   const [logsMessage, setLogsMessage] = useState(axiomLogsError || '')
   const [isPending, startTransition] = useTransition()
 
+  const resolvedSelection = useMemo(() => {
+    return selectedExportCommunities ?? new Set((packageType === 'community' ? communities : families).map((c) => c.id))
+  }, [selectedExportCommunities, packageType, communities, families])
+
   const filteredParticipants = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    if (!keyword) return participants
-    return participants.filter((participant) => {
+    const targetParticipants = packageType === 'community' ? participants : familyParticipants
+    if (!keyword) return targetParticipants
+    return targetParticipants.filter((participant) => {
       const community = getParticipantCommunity(participant)
       return [
         participant.full_name,
@@ -284,13 +298,14 @@ export function AdminDashboardClient({
         community?.community_code || '',
       ].some((value) => value.toLowerCase().includes(keyword))
     })
-  }, [participants, query])
+  }, [participants, familyParticipants, query, packageType])
 
   const filteredPayments = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    if (!keyword) return payments
+    const targetPayments = packageType === 'community' ? payments : familyPayments
+    if (!keyword) return targetPayments
 
-    return payments.filter((payment) => {
+    return targetPayments.filter((payment) => {
       const community = getPaymentCommunity(payment)
       return [
         payment.payment_reference,
@@ -306,7 +321,7 @@ export function AdminDashboardClient({
         community?.community_code || '',
       ].some((value) => value.toLowerCase().includes(keyword))
     })
-  }, [payments, query])
+  }, [payments, familyPayments, query, packageType])
 
   const groupedParticipants = useMemo(() => {
     const groups = new Map<string, { key: string; name: string; code: string; participants: AdminParticipant[] }>()
@@ -314,7 +329,7 @@ export function AdminDashboardClient({
     for (const participant of filteredParticipants) {
       const community = getParticipantCommunity(participant)
       const code = community?.community_code || 'TANPA-KODE'
-      const name = community?.name || 'Tanpa Komunitas'
+      const name = community?.name || (packageType === 'community' ? 'Tanpa Komunitas' : 'Tanpa Keluarga')
       const key = `${code}:${name}`
       const current = groups.get(key)
 
@@ -326,14 +341,15 @@ export function AdminDashboardClient({
     }
 
     return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [filteredParticipants])
+  }, [filteredParticipants, packageType])
 
   const dailyParticipants = useMemo<SummaryDailyParticipant[]>(() => {
     const DAYS_TO_SHOW = 14
     const formatter = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short' })
     const counts = new Map<string, number>()
 
-    for (const participant of participants) {
+    const allP = [...participants, ...familyParticipants]
+    for (const participant of allP) {
       const createdAt = new Date(participant.created_at)
       if (Number.isNaN(createdAt.getTime())) continue
       const key = createdAt.toISOString().slice(0, 10)
@@ -356,17 +372,18 @@ export function AdminDashboardClient({
     }
 
     return days
-  }, [participants])
+  }, [participants, familyParticipants])
 
   const dailyParticipantChartMax = useMemo(() => Math.max(...dailyParticipants.map((item) => item.count), 1), [dailyParticipants])
 
   const communitiesByKey = useMemo(() => {
     const map = new Map<string, AdminCommunity>()
-    for (const community of communities) {
+    const targetCommunities = packageType === 'community' ? communities : families
+    for (const community of targetCommunities) {
       map.set(`${community.community_code}:${community.name}`, community)
     }
     return map
-  }, [communities])
+  }, [communities, families, packageType])
 
   const stopCamera = () => {
     const scanner = scannerRef.current
@@ -494,28 +511,56 @@ export function AdminDashboardClient({
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
     const XLSX = await import('xlsx')
     const today = new Date().toISOString().slice(0, 10)
-    const selectedIds = mode === 'selected' ? selectedExportCommunities : new Set(communities.map((community) => community.id))
-    const selectedCommunities = communities.filter((community) => selectedIds.has(community.id))
+    const targetCommunities = packageType === 'community' ? communities : families
+    const selectedIds = mode === 'selected' ? resolvedSelection : new Set(targetCommunities.map((community) => community.id))
+    const selectedCommunities = targetCommunities.filter((community) => selectedIds.has(community.id))
 
     if (mode === 'selected' && selectedCommunities.length === 0) {
-      alert('Pilih minimal satu komunitas untuk diekspor.')
+      alert(`Pilih minimal satu ${packageType === 'community' ? 'komunitas' : 'keluarga'} untuk diekspor.`)
       return
     }
 
-    for (const community of selectedCommunities) {
-      const communityParticipants = participants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
-      const communityPayments = payments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+    const targetParticipants = packageType === 'community' ? participants : familyParticipants
+    const targetPayments = packageType === 'community' ? payments : familyPayments
+
+    if (combineFiles) {
       const workbook = XLSX.utils.book_new()
+      const allParticipantsRows: Array<Record<string, unknown>> = []
+      const allPaymentsRows: Array<Record<string, unknown>> = []
+
+      for (const community of selectedCommunities) {
+        const communityParticipants = targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
+        const communityPayments = targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+        
+        allParticipantsRows.push(...buildParticipantExportRows(communityParticipants))
+        allPaymentsRows.push(...buildPaymentExportRows(communityPayments))
+      }
 
       if (type === 'participants' || type === 'all') {
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildParticipantExportRows(communityParticipants)), 'Peserta')
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allParticipantsRows), 'Peserta')
       }
 
       if (type === 'payments' || type === 'all') {
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPaymentExportRows(communityPayments)), 'Pembayaran')
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allPaymentsRows), 'Pembayaran')
       }
 
-      XLSX.writeFile(workbook, `topsell-run-${slugify(community.community_code)}-${slugify(community.name)}-${type}-${today}.xlsx`)
+      const segmentName = packageType === 'community' ? 'komunitas' : 'keluarga'
+      XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}-${today}.xlsx`)
+    } else {
+      for (const community of selectedCommunities) {
+        const communityParticipants = targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
+        const communityPayments = targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+        const workbook = XLSX.utils.book_new()
+
+        if (type === 'participants' || type === 'all') {
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildParticipantExportRows(communityParticipants)), 'Peserta')
+        }
+
+        if (type === 'payments' || type === 'all') {
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPaymentExportRows(communityPayments)), 'Pembayaran')
+        }
+        XLSX.writeFile(workbook, `topsell-run-${slugify(community.community_code)}-${slugify(community.name)}-${type}-${today}.xlsx`)
+      }
     }
   }
 
@@ -591,7 +636,9 @@ export function AdminDashboardClient({
   const saveCommunity = () => {
     if (!communityForm) return
     startTransition(async () => {
-      const result = await updateAdminCommunity(communityForm)
+      const result = packageType === 'community'
+        ? await updateAdminCommunity(communityForm)
+        : await updateAdminFamily(communityForm)
       if (result.error) {
         alert(result.error)
         return
@@ -769,7 +816,8 @@ export function AdminDashboardClient({
   }
 
   const setAllExportCommunities = (checked: boolean) => {
-    setSelectedExportCommunities(checked ? new Set(communities.map((community) => community.id)) : new Set())
+    const targetCommunities = packageType === 'community' ? communities : families
+    setSelectedExportCommunities(checked ? new Set(targetCommunities.map((community) => community.id)) : new Set())
   }
 
   const fetchLogs = (mode: 'silent' | 'manual' = 'manual') => {
@@ -878,7 +926,7 @@ export function AdminDashboardClient({
 
       {/* SIDEBAR */}
       <aside
-        className={`w-64 bg-gradient-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${
+        className={`w-64 bg-linear-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -1073,7 +1121,7 @@ export function AdminDashboardClient({
                       return (
                         <div key={item.dateKey} className="flex-1 min-w-0 h-full flex flex-col justify-end items-center gap-1.5">
                           <div className="text-[9px] font-black text-brand-muted">{item.count}</div>
-                          <div className="w-full rounded-t-md bg-gradient-to-t from-sport-red/80 to-sport-orange/90 border border-sport-orange/40" style={{ height: `${heightPercent}%` }} />
+                          <div className="w-full rounded-t-md bg-linear-to-t from-sport-red/80 to-sport-orange/90 border border-sport-orange/40" style={{ height: `${heightPercent}%` }} />
                           <div className="text-[9px] font-bold text-brand-muted whitespace-nowrap">{item.label}</div>
                         </div>
                       )
@@ -1159,7 +1207,7 @@ export function AdminDashboardClient({
                         ].map((item) => (
                           <div key={item.label} className="rounded-lg border border-card-border bg-brand-dark/30 p-3 min-w-0">
                             <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">{item.label}</p>
-                            <p className="text-sm font-bold text-foreground break-words">{item.value}</p>
+                            <p className="text-sm font-bold text-foreground wrap-break-word">{item.value}</p>
                           </div>
                         ))}
                       </div>
@@ -1172,10 +1220,36 @@ export function AdminDashboardClient({
 
           {activeTab === 'participants' && (
             <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+              <div className="flex border-b border-card-border">
+                <button
+                  onClick={() => setPackageType('community')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'community'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Community Package
+                </button>
+                <button
+                  onClick={() => setPackageType('family')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'family'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Family Package
+                </button>
+              </div>
               <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Komunitas</p>
-                  <p className="text-xs font-bold text-foreground">{groupedParticipants.length} komunitas ditemukan</p>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                    {packageType === 'community' ? 'Komunitas' : 'Keluarga'}
+                  </p>
+                  <p className="text-xs font-bold text-foreground">
+                    {groupedParticipants.length} {packageType === 'community' ? 'komunitas' : 'keluarga'} ditemukan
+                  </p>
                 </div>
                 <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
               </div>
@@ -1206,7 +1280,7 @@ export function AdminDashboardClient({
                               {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                             </button>
                             <div className="min-w-0">
-                              <p className="text-sm font-black text-foreground break-words">{group.name}</p>
+                              <p className="text-sm font-black text-foreground wrap-break-word">{group.name}</p>
                               <p className="text-[10px] font-bold text-brand-muted">{group.code}</p>
                             </div>
                           </div>
@@ -1231,7 +1305,7 @@ export function AdminDashboardClient({
                                 onClick={() => openCommunityEditor(editableCommunity)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
                               >
-                                <Pencil className="w-3 h-3" />Edit Komunitas
+                                <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : 'Keluarga'}
                               </button>
                             )}
                             <button
@@ -1303,11 +1377,33 @@ export function AdminDashboardClient({
 
           {activeTab === 'payments' && (
             <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+              <div className="flex border-b border-card-border">
+                <button
+                  onClick={() => setPackageType('community')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'community'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Community Package
+                </button>
+                <button
+                  onClick={() => setPackageType('family')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'family'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Family Package
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-brand-dark/30 border-b border-card-border">
                     <tr>
-                      {['Referensi', 'Komunitas', 'Nominal', 'Metode', 'Status', 'Tanggal'].map((heading) => (
+                      {['Referensi', packageType === 'community' ? 'Komunitas' : 'Keluarga', 'Nominal', 'Metode', 'Status', 'Tanggal'].map((heading) => (
                         <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
                       ))}
                     </tr>
@@ -1381,7 +1477,7 @@ export function AdminDashboardClient({
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-xs font-bold text-foreground">{log.source}</td>
-                        <td className="px-4 py-3 text-xs text-brand-muted min-w-[22rem]">{log.message}</td>
+                        <td className="px-4 py-3 text-xs text-brand-muted w-88">{log.message}</td>
                       </tr>
                     ))}
                     {logs.length === 0 && (
@@ -1717,28 +1813,62 @@ export function AdminDashboardClient({
 
           {(activeTab === 'export_participants' || activeTab === 'export_payments') && (
             <div className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-3">
+              <div className="flex border-b border-card-border mb-2">
+                <button
+                  onClick={() => setPackageType('community')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'community'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Community Package
+                </button>
+                <button
+                  onClick={() => setPackageType('family')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'family'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Family Package
+                </button>
+              </div>
               <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">
                     {activeTab === 'export_participants' ? 'Export Peserta' : 'Export Pembayaran'}
                   </p>
-                  <p className="text-xs font-bold text-brand-muted">Pilih komunitas, lalu sistem membuat 1 file Excel untuk tiap komunitas.</p>
+                  <p className="text-xs font-bold text-brand-muted">
+                    Pilih {packageType === 'community' ? 'komunitas' : 'keluarga'}, lalu sistem membuat {combineFiles ? '1 file Excel gabungan' : `1 file Excel untuk tiap ${packageType === 'community' ? 'komunitas' : 'keluarga'}`}.
+                  </p>
                 </div>
-                <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                  <input
-                    type="checkbox"
-                    checked={selectedExportCommunities.size === communities.length && communities.length > 0}
-                    onChange={(event) => setAllExportCommunities(event.target.checked)}
-                  />
-                  Pilih semua komunitas
-                </label>
+                <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={combineFiles}
+                      onChange={(event) => setCombineFiles(event.target.checked)}
+                    />
+                    Gabung menjadi 1 file Excel
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={resolvedSelection.size === (packageType === 'community' ? communities : families).length && (packageType === 'community' ? communities : families).length > 0}
+                      onChange={(event) => setAllExportCommunities(event.target.checked)}
+                    />
+                    Pilih semua {packageType === 'community' ? 'komunitas' : 'keluarga'}
+                  </label>
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
-                {communities.map((community) => (
+                {(packageType === 'community' ? communities : families).map((community) => (
                   <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
                     <input
                       type="checkbox"
-                      checked={selectedExportCommunities.has(community.id)}
+                      checked={resolvedSelection.has(community.id)}
                       onChange={() => toggleExportCommunity(community.id)}
                       className="mt-0.5"
                     />

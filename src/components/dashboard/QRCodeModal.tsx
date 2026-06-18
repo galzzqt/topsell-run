@@ -3,12 +3,12 @@
 import React, { useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
 import { Download, Printer, Shield, QrCode } from 'lucide-react'
-import { Participant } from '@/lib/types'
+import { Participant, FamilyParticipant } from '@/lib/types'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
 interface QRCodeModalProps {
-  participant: Participant | null
+  participant: Participant | FamilyParticipant | null
   isOpen: boolean
   onClose: () => void
 }
@@ -88,7 +88,7 @@ export function QRCodeModal({ participant, isOpen, onClose }: QRCodeModalProps) 
 
           {/* QR Code + Participant Info */}
           <div className="px-5 py-5 flex gap-5 items-center">
-            <div className="rounded-xl overflow-hidden border border-white/10 bg-white p-1.5 flex-shrink-0">
+            <div className="rounded-xl overflow-hidden border border-white/10 bg-white p-1.5 shrink-0">
               <canvas ref={canvasRef} />
             </div>
             <div className="flex flex-col gap-2.5 min-w-0">

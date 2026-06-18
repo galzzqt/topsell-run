@@ -3,21 +3,22 @@
 import {
   clearCommunitySession,
   createCommunitySession,
-  getCommunitySession,
 } from '@/lib/auth/community'
 import { createPasswordRecord, verifyPassword } from '@/lib/auth/password'
 import {
   createCommunity,
   deleteCommunity,
-  deleteCommunityAuth,
   findCommunityAuthByPhone,
   findCommunityByPhone,
+  findCommunityByEmail,
+  findCommunityAuthById,
   insertParticipants,
   saveCommunityAuth,
   updateCommunity,
 } from '@/lib/db'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
+import { ingestAdminLog } from '@/lib/axiom/ingest'
 
 export async function signUpCommunity(values: RegisterFormValues) {
   const validated = registerSchema.safeParse(values)
@@ -113,23 +114,54 @@ export async function signUpCommunity(values: RegisterFormValues) {
     name: community.name,
   })
 
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'auth',
+      event: 'community_signup',
+      message: `Pendaftaran komunitas baru: ${values.name} (Ketua: ${values.leader_name}, HP: ${values.phone}, Jumlah Peserta: ${values.participants.length}).`,
+      data: {
+        communityId: community.id,
+        name: values.name,
+        leaderName: values.leader_name,
+        phone: values.phone,
+        participantCount: values.participants.length,
+      },
+    })
+  } catch (logError) {
+    console.error('Failed to log community signup:', logError)
+  }
+
   return { success: true, phone: values.phone }
 }
 
 export async function signInCommunity(values: LoginFormValues) {
   const validated = loginSchema.safeParse(values)
   if (!validated.success) {
-    return { error: 'Nomor HP atau password tidak valid' }
+    const errorMsg = validated.error.issues[0]?.message || 'Nomor HP/Email atau password tidak valid'
+    return { error: errorMsg }
   }
 
-  const auth = await findCommunityAuthByPhone(values.phone)
-  if (!auth || !verifyPassword(values.password, auth)) {
-    return { error: 'Nomor HP atau password salah' }
+  const input = values.phone.trim()
+  const isEmail = input.includes('@')
+
+  let community = null
+  let auth = null
+
+  if (isEmail) {
+    community = await findCommunityByEmail(input)
+    if (community) {
+      auth = await findCommunityAuthById(community.id)
+    }
+  } else {
+    community = await findCommunityByPhone(input)
+    if (community) {
+      auth = await findCommunityAuthByPhone(input)
+    }
   }
 
-  const community = await findCommunityByPhone(values.phone)
-  if (!community) {
-    return { error: 'Profil komunitas tidak ditemukan.' }
+  if (!community || !auth || !verifyPassword(values.password, auth)) {
+    return { error: 'Nomor HP/Email atau password salah' }
   }
 
   await createCommunitySession({
@@ -137,6 +169,22 @@ export async function signInCommunity(values: LoginFormValues) {
     phone: community.phone,
     name: community.name,
   })
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'auth',
+      event: 'community_signin',
+      message: `Komunitas login berhasil: ${community.name} (HP: ${community.phone}).`,
+      data: {
+        communityId: community.id,
+        name: community.name,
+        phone: community.phone,
+      },
+    })
+  } catch (logError) {
+    console.error('Failed to log community login:', logError)
+  }
 
   return {
     success: true,

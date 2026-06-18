@@ -2,14 +2,14 @@ import 'server-only'
 
 import { createHmac, timingSafeEqual } from 'crypto'
 import { cookies, headers } from 'next/headers'
-import { COMMUNITY_COOKIE, type CommunitySession } from './community-session'
+import { FAMILY_COOKIE, type FamilySession } from './family-session'
 
-function getCommunitySecret() {
-  return process.env.COMMUNITY_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || process.env.MONGODB_URI || ''
+function getFamilySecret() {
+  return process.env.FAMILY_SESSION_SECRET || process.env.COMMUNITY_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || process.env.MONGODB_URI || ''
 }
 
 function sign(value: string) {
-  return createHmac('sha256', getCommunitySecret()).update(value).digest('hex')
+  return createHmac('sha256', getFamilySecret()).update(value).digest('hex')
 }
 
 function safeCompare(a: string, b: string) {
@@ -18,7 +18,7 @@ function safeCompare(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
-type EncodedSession = CommunitySession & {
+type EncodedSession = FamilySession & {
   issuedAt: number
 }
 
@@ -38,7 +38,7 @@ function decode(raw: string) {
   }
 }
 
-export async function createCommunitySession(session: CommunitySession) {
+export async function createFamilySession(session: FamilySession) {
   const payload = encode({
     ...session,
     issuedAt: Date.now(),
@@ -48,7 +48,7 @@ export async function createCommunitySession(session: CommunitySession) {
   const headersList = await headers()
   const isHttps = headersList.get('x-forwarded-proto') === 'https'
 
-  cookieStore.set(COMMUNITY_COOKIE, token, {
+  cookieStore.set(FAMILY_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production' && isHttps,
@@ -57,12 +57,12 @@ export async function createCommunitySession(session: CommunitySession) {
   })
 }
 
-export async function clearCommunitySession() {
+export async function clearFamilySession() {
   const cookieStore = await cookies()
   const headersList = await headers()
   const isHttps = headersList.get('x-forwarded-proto') === 'https'
 
-  cookieStore.set(COMMUNITY_COOKIE, '', {
+  cookieStore.set(FAMILY_COOKIE, '', {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production' && isHttps,
@@ -71,23 +71,42 @@ export async function clearCommunitySession() {
   })
 }
 
-export async function getCommunitySession(): Promise<CommunitySession | null> {
+export async function getFamilySession(): Promise<FamilySession | null> {
   const cookieStore = await cookies()
-  const token = cookieStore.get(COMMUNITY_COOKIE)?.value
-  if (!token) return null
+  const token = cookieStore.get(FAMILY_COOKIE)?.value
+  if (!token) {
+    console.log('[DEBUG] No FAMILY_COOKIE token found')
+    return null
+  }
 
   const [encodedPayload, signature] = token.split('.')
-  if (!encodedPayload || !signature) return null
+  if (!encodedPayload || !signature) {
+    console.log('[DEBUG] Token split failed')
+    return null
+  }
 
-  if (!getCommunitySecret() || !safeCompare(signature, sign(encodedPayload))) {
+  if (!getFamilySecret()) {
+    console.log('[DEBUG] getFamilySecret() returned empty')
+    return null
+  }
+
+  const expectedSignature = sign(encodedPayload)
+  if (!safeCompare(signature, expectedSignature)) {
+    console.log('[DEBUG] Signature safeCompare failed')
     return null
   }
 
   const payload = decode(encodedPayload)
-  if (!payload) return null
+  if (!payload) {
+    console.log('[DEBUG] Decode encodedPayload failed')
+    return null
+  }
 
   const maxAgeMs = 1000 * 60 * 60 * 24 * 7
-  if (Date.now() - payload.issuedAt > maxAgeMs) return null
+  if (Date.now() - payload.issuedAt > maxAgeMs) {
+    console.log('[DEBUG] Session expired')
+    return null
+  }
 
   return {
     id: payload.id,
@@ -96,4 +115,4 @@ export async function getCommunitySession(): Promise<CommunitySession | null> {
   }
 }
 
-export type { CommunitySession }
+export type { FamilySession }
