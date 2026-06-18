@@ -1,13 +1,26 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getCommunitySession } from '@/lib/auth/community'
 import { generateRandomReference } from '@/lib/utils/format'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
 import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
 import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import {
+  createPayment,
+  createRegistration,
+  deleteRegistration,
+  findCommunityById,
+  findPaymentWithRegistration,
+  findPaymentWithRegistrationByReference,
+  findPendingParticipantsWithoutRegistration,
+  findPendingPaymentByRegistrationIds,
+  findPendingRegistrationsByCommunityId,
+  linkParticipantsToRegistration,
+  markPaymentPaid,
+  updatePayment,
+} from '@/lib/db'
 
 const XENDIT_SESSION_URL = 'https://api.xendit.co/sessions'
 const XENDIT_PAYMENT_REQUEST_URL = 'https://api.xendit.co/payment_requests'
@@ -57,21 +70,6 @@ function toXenditName(value: string | null | undefined) {
   return (value || 'Komunitas').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50) || 'Komunitas'
 }
 
-async function updatePaymentAsAdmin(paymentId: string, values: Record<string, unknown>) {
-  const admin = createAdminClient()
-  return admin
-    .from('payments')
-    .update(values)
-    .eq('id', paymentId)
-    .select('id')
-    .single()
-}
-
-async function deleteRegistrationAsAdmin(registrationId: string) {
-  const admin = createAdminClient()
-  return admin.from('registrations').delete().eq('id', registrationId)
-}
-
 function isDemoSession(payment: { payment_method: string | null; xendit_session_id: string | null }) {
   return payment.payment_method === 'xendit_demo' || Boolean(payment.xendit_session_id?.startsWith('demo-xendit-session-'))
 }
@@ -106,40 +104,22 @@ async function resolveXenditPaymentMethod(sessionData: unknown, authHeader: stri
   return extractXenditPaymentMethod(paymentRequest.data)
 }
 
-// Create one collective payment for all pending participants under the logged-in community
 export async function createCommunityPayment() {
-  const supabase = await createClient()
+  const session = await getCommunitySession()
+  if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'Sesi habis. Silakan login kembali.' }
+  const community = await findCommunityById(session.id)
+  const pendingRegistrations = await findPendingRegistrationsByCommunityId(session.id)
 
-  // Fetch community profile
-  const { data: community } = await supabase
-    .from('communities')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  const { data: pendingRegistrations } = await supabase
-    .from('registrations')
-    .select('id, total_participants')
-    .eq('community_id', user.id)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-
-  if (pendingRegistrations && pendingRegistrations.length > 0) {
-    const pendingRegistrationIds = pendingRegistrations.map((registration) => registration.id)
-    const { data: existingPayment } = await supabase
-      .from('payments')
-      .select('id, registration_id, amount, payment_method, payment_reference, xendit_session_id, checkout_url, status')
-      .in('registration_id', pendingRegistrationIds)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+  if (pendingRegistrations.length > 0) {
+    const existingPayment = await findPendingPaymentByRegistrationIds(
+      pendingRegistrations.map((registration) => registration.id)
+    )
 
     if (existingPayment) {
-      const existingRegistration = pendingRegistrations.find((registration) => registration.id === existingPayment.registration_id)
+      const existingRegistration = pendingRegistrations.find(
+        (registration) => registration.id === existingPayment.registration_id
+      )
       return {
         success: true,
         paymentId: existingPayment.id,
@@ -155,72 +135,49 @@ export async function createCommunityPayment() {
     }
   }
 
-  // Fetch pending participants that are not already attached to an active checkout.
-  const { data: participants, error: partError } = await supabase
-    .from('participants')
-    .select('*')
-    .eq('community_id', user.id)
-    .eq('payment_status', 'pending')
-    .is('registration_id', null)
-    .order('created_at', { ascending: true })
-
-  if (partError || !participants || participants.length === 0) {
+  const participants = await findPendingParticipantsWithoutRegistration(session.id)
+  if (participants.length === 0) {
     return { error: 'Tidak ada peserta baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
   }
 
   const participantIds = participants.map((participant) => participant.id)
-
   const totalAmount = participants.length * TOPSELL_RUN_EVENT.price_per_participant
   const paymentRefRaw = generateRandomReference('TSR')
   const paymentRef = toXenditReference(paymentRefRaw)
 
-  // Create registration record
-  const { data: registration, error: regError } = await supabase
-    .from('registrations')
-    .insert({
-      community_id: user.id,
+  let registration
+  try {
+    registration = await createRegistration({
+      community_id: session.id,
       total_participants: participants.length,
       total_amount: totalAmount,
       status: 'pending',
     })
-    .select()
-    .single()
-
-  if (regError || !registration) {
-    return { error: 'Gagal membuat registrasi: ' + (regError?.message || 'Data kosong') }
+  } catch (error) {
+    return { error: 'Gagal membuat registrasi: ' + (error instanceof Error ? error.message : 'Data kosong') }
   }
 
-  // Link participants to this registration
-  const { error: linkError } = await supabase
-    .from('participants')
-    .update({ registration_id: registration.id })
-    .in('id', participantIds)
-
-  if (linkError) {
-    await deleteRegistrationAsAdmin(registration.id)
+  try {
+    await linkParticipantsToRegistration(participantIds, registration.id)
+  } catch {
+    await deleteRegistration(registration.id)
     return { error: 'Gagal menautkan peserta ke registrasi.' }
   }
 
-  // Create payment record
-  const { data: payment, error: payError } = await supabase
-    .from('payments')
-    .insert({
+  let payment
+  try {
+    payment = await createPayment({
       registration_id: registration.id,
       amount: totalAmount,
       payment_reference: paymentRef,
       status: 'pending',
     })
-    .select()
-    .single()
-
-  if (payError || !payment) {
-    await deleteRegistrationAsAdmin(registration.id)
+  } catch {
+    await deleteRegistration(registration.id)
     return { error: 'Gagal membuat invoice pembayaran.' }
   }
 
-  // --- Xendit Payment Session Integration ---
   const xenditSecretKey = process.env.XENDIT_SECRET_KEY || ''
-
   let checkoutUrl: string | null = null
   let xenditSessionId: string | null = null
   let isDemoMode = false
@@ -251,12 +208,12 @@ export async function createCommunityPayment() {
           allowed_payment_channels: getXenditChannels(),
           description: `TOPSELL RUN 6K - ${participants.length} peserta`,
           customer: {
-            reference_id: toXenditReference(user.id),
+            reference_id: toXenditReference(session.id),
             type: 'INDIVIDUAL',
             individual_detail: {
               given_names: toXenditName(community?.leader_name || community?.name),
             },
-            email: community?.email || user.email || undefined,
+            email: community?.email || undefined,
           },
           items: participants.map((p) => ({
             reference_id: p.id,
@@ -278,28 +235,27 @@ export async function createCommunityPayment() {
       } else {
         const errorText = await res.text()
         console.error('Xendit error:', res.status, errorText)
-        await deleteRegistrationAsAdmin(registration.id)
+        await deleteRegistration(registration.id)
         return { error: `Gagal membuat checkout Xendit: ${errorText}` }
       }
     } catch (err) {
       console.error('Xendit API failed:', err)
-      await deleteRegistrationAsAdmin(registration.id)
+      await deleteRegistration(registration.id)
       return { error: 'Gagal menghubungi Xendit. Periksa koneksi server dan konfigurasi XENDIT_SECRET_KEY.' }
     }
   }
 
-  // Save Xendit session data to payment record
-  const { error: metadataError } = await updatePaymentAsAdmin(payment.id, {
-    payment_method: isDemoMode ? 'xendit_demo' : null,
-    snap_token: checkoutUrl,
-    provider: 'xendit',
-    xendit_session_id: xenditSessionId,
-    checkout_url: checkoutUrl,
-  })
-
-  if (metadataError) {
-    await deleteRegistrationAsAdmin(registration.id)
-    return { error: 'Gagal menyimpan data checkout Xendit: ' + metadataError.message }
+  try {
+    await updatePayment(payment.id, {
+      payment_method: isDemoMode ? 'xendit_demo' : null,
+      snap_token: checkoutUrl,
+      provider: 'xendit',
+      xendit_session_id: xenditSessionId,
+      checkout_url: checkoutUrl,
+    })
+  } catch (error) {
+    await deleteRegistration(registration.id)
+    return { error: 'Gagal menyimpan data checkout Xendit: ' + (error instanceof Error ? error.message : 'Unknown error') }
   }
 
   revalidatePath('/dashboard')
@@ -321,30 +277,17 @@ export async function createCollectivePayment() {
   return createCommunityPayment()
 }
 
-// Simulate successful payment (Demo Mode only)
 export async function simulatePaymentSuccess(paymentId: string) {
-  const supabase = await createClient()
+  const session = await getCommunitySession()
+  if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'Sesi habis. Silakan login kembali.' }
-
-  // Verify payment belongs to this community via registration
-  const { data: payment } = await supabase
-    .from('payments')
-    .select('*, registration:registrations(community_id)')
-    .eq('id', paymentId)
-    .single()
-
+  const payment = await findPaymentWithRegistration(paymentId)
   if (!payment) return { error: 'Invoice tidak ditemukan.' }
-  if (payment.registration?.community_id !== user.id) return { error: 'Tidak memiliki akses.' }
+  if (payment.registration?.community_id !== session.id) return { error: 'Tidak memiliki akses.' }
 
-  const { error } = await updatePaymentAsAdmin(paymentId, {
-    status: 'paid',
-    paid_at: new Date().toISOString(),
+  await markPaymentPaid(paymentId, {
     payment_method: 'xendit_demo',
   })
-
-  if (error) return { error: error.message }
 
   await Promise.all([
     sendRacepackEmailsForRegistration(payment.registration_id),
@@ -361,19 +304,12 @@ function isXenditPaidStatus(status: unknown) {
 }
 
 export async function syncXenditPaymentStatus(paymentReference: string) {
-  const supabase = await createClient()
+  const session = await getCommunitySession()
+  if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'Sesi habis. Silakan login kembali.' }
-
-  const { data: payment, error: paymentError } = await supabase
-    .from('payments')
-    .select('*, registration:registrations(community_id)')
-    .eq('payment_reference', paymentReference)
-    .single()
-
-  if (paymentError || !payment) return { error: 'Invoice tidak ditemukan.' }
-  if (payment.registration?.community_id !== user.id) return { error: 'Tidak memiliki akses.' }
+  const payment = await findPaymentWithRegistrationByReference(paymentReference)
+  if (!payment) return { error: 'Invoice tidak ditemukan.' }
+  if (payment.registration?.community_id !== session.id) return { error: 'Tidak memiliki akses.' }
   if (payment.status === 'paid' && hasSpecificPaymentMethod(payment.payment_method)) {
     return { success: true, status: 'paid' as const, paymentMethod: payment.payment_method }
   }
@@ -396,13 +332,7 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
   }
 
   const paymentMethod = await resolveXenditPaymentMethod(xenditData, authHeader) || payment.payment_method || 'xendit'
-  const { error: updateError } = await updatePaymentAsAdmin(payment.id, {
-    status: 'paid',
-    paid_at: new Date().toISOString(),
-    payment_method: paymentMethod,
-  })
-
-  if (updateError) return { error: updateError.message }
+  await markPaymentPaid(payment.id, { payment_method: paymentMethod })
 
   await Promise.all([
     sendRacepackEmailsForRegistration(payment.registration_id),

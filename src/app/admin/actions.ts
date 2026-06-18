@@ -1,12 +1,20 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import {
+  findCommunityByPhoneExcept,
+  findParticipantWithCommunityById,
+  markParticipantCheckedIn,
+  updateCommunity,
+  updateCommunityAuthPassword,
+  updateCommunityAuthPhone,
+  updateParticipantById,
+} from '@/lib/db'
 import { clearAdminSession, createAdminSession, getAdminSession, isAdminAuthenticated } from '@/lib/admin/auth'
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
+import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
 import { queryAdminLogs } from '@/lib/axiom/logs'
 import { readEditableEnvSnapshot, updateEditableEnvValues, writeAdminSettings } from '@/lib/admin/settings'
 import { clearRateLimit, rateLimit } from '@/lib/security/rate-limit'
-import { phoneToAuthEmail } from '@/lib/utils/phone-auth'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { revalidatePath } from 'next/cache'
 import type { AdminSettings } from '@/lib/admin/settings-schema'
@@ -61,14 +69,9 @@ export async function markRacepackPickedUp(scanValue: string) {
     return { error: 'QR tidak valid. Pastikan QR Race Pass peserta yang dipindai.' }
   }
 
-  const supabase = createAdminClient()
-  const { data: participant, error: findError } = await supabase
-    .from('participants')
-    .select('id, full_name, bib_name, email, phone, date_of_birth, gender, tshirt_size, blood_type, emergency_contact_name, emergency_contact_phone, participant_code, payment_status, checked_in, checked_in_at, community:communities(name, community_code)')
-    .eq('id', participantId)
-    .single()
+  const participant = await findParticipantWithCommunityById(participantId)
 
-  if (findError || !participant) {
+  if (!participant) {
     await ingestAdminLog({
       level: 'warning',
       source: 'admin',
@@ -108,24 +111,19 @@ export async function markRacepackPickedUp(scanValue: string) {
     }
   }
 
-  const pickedUpAt = new Date().toISOString()
-  const { data: updated, error: updateError } = await supabase
-    .from('participants')
-    .update({ checked_in: true, checked_in_at: pickedUpAt })
-    .eq('id', participantId)
-    .select('id, full_name, bib_name, email, phone, date_of_birth, gender, tshirt_size, blood_type, emergency_contact_name, emergency_contact_phone, participant_code, payment_status, checked_in, checked_in_at, community:communities(name, community_code)')
-    .single()
+  const pickedUpAt = await markParticipantCheckedIn(participantId)
+  const updated = await findParticipantWithCommunityById(participantId)
 
-  if (updateError || !updated) {
+  if (!updated) {
     await ingestAdminLog({
       level: 'error',
       source: 'admin',
       event: 'racepack_pickup_failed',
-      message: updateError?.message || 'Gagal menyimpan status pengambilan racepack.',
+      message: 'Gagal menyimpan status pengambilan racepack.',
       actor: session,
       data: { participantId, pickedUpAt },
     })
-    return { error: updateError?.message || 'Gagal menyimpan status pengambilan racepack.' }
+    return { error: 'Gagal menyimpan status pengambilan racepack.' }
   }
 
   await ingestAdminLog({
@@ -177,25 +175,19 @@ export async function updateAdminParticipant(participantId: string, values: Admi
   if (!phoneRegex.test(values.emergency_contact_phone)) return { error: 'Nomor kontak darurat tidak valid.' }
   if (!['male', 'female'].includes(values.gender)) return { error: 'Gender tidak valid.' }
 
-  const supabase = createAdminClient()
-  const { error } = await supabase
-    .from('participants')
-    .update({
-      full_name: values.full_name.trim(),
-      bib_name: values.bib_name.trim(),
-      email: values.email.trim(),
-      phone: values.phone.trim(),
-      date_of_birth: values.date_of_birth,
-      gender: values.gender,
-      tshirt_size: values.tshirt_size,
-      blood_type: values.blood_type,
-      medical_condition: values.medical_condition.trim() || null,
-      emergency_contact_name: values.emergency_contact_name.trim(),
-      emergency_contact_phone: values.emergency_contact_phone.trim(),
-    })
-    .eq('id', participantId)
-
-  if (error) return { error: error.message }
+  await updateParticipantById(participantId, {
+    full_name: values.full_name.trim(),
+    bib_name: values.bib_name.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+    date_of_birth: values.date_of_birth,
+    gender: values.gender,
+    tshirt_size: values.tshirt_size as 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL' | '4XL' | '5XL',
+    blood_type: values.blood_type as 'A' | 'B' | 'AB' | 'O',
+    medical_condition: values.medical_condition.trim() || null,
+    emergency_contact_name: values.emergency_contact_name.trim(),
+    emergency_contact_phone: values.emergency_contact_phone.trim(),
+  })
 
   revalidatePath('/admin')
   return { success: true }
@@ -223,46 +215,24 @@ export async function updateAdminCommunity(values: AdminCommunityUpdateValues) {
   if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP komunitas tidak valid.' }
   if (values.password && values.password.length < 6) return { error: 'Password minimal 6 karakter.' }
 
-  const supabase = createAdminClient()
-  const { data: duplicate } = await supabase
-    .from('communities')
-    .select('id')
-    .eq('phone', values.phone)
-    .neq('id', values.id)
-    .maybeSingle()
-
+  const duplicate = await findCommunityByPhoneExcept(values.phone, values.id)
   if (duplicate) return { error: 'Nomor HP sudah digunakan komunitas lain.' }
 
-  const { error } = await supabase
-    .from('communities')
-    .update({
-      name: values.name.trim(),
-      leader_name: values.leader_name.trim(),
-      email: values.email.trim(),
-      phone: values.phone.trim(),
-      provinsi: values.provinsi.trim() || null,
-      kota: values.kota.trim() || null,
-      kecamatan: values.kecamatan.trim() || null,
-    })
-    .eq('id', values.id)
-
-  if (error) return { error: error.message }
-
-  const { error: authError } = await supabase.auth.admin.updateUserById(values.id, {
-    email: phoneToAuthEmail(values.phone),
-    ...(values.password ? { password: values.password } : {}),
-    user_metadata: {
-      name: values.name.trim(),
-      leader_name: values.leader_name.trim(),
-      phone: values.phone.trim(),
-      contact_email: values.email.trim(),
-      provinsi: values.provinsi.trim() || null,
-      kota: values.kota.trim() || null,
-      kecamatan: values.kecamatan.trim() || null,
-    },
+  await updateCommunity(values.id, {
+    name: values.name.trim(),
+    leader_name: values.leader_name.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+    provinsi: values.provinsi.trim() || null,
+    kota: values.kota.trim() || null,
+    kecamatan: values.kecamatan.trim() || null,
   })
 
-  if (authError) return { error: authError.message }
+  await updateCommunityAuthPhone(values.id, values.phone)
+
+  if (values.password) {
+    await updateCommunityAuthPassword(values.id, createCommunityPasswordRecord(values.password))
+  }
 
   revalidatePath('/admin')
   return { success: true }

@@ -3,7 +3,7 @@ import 'server-only'
 import { createHmac, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getAppSetting, upsertAppSetting } from '@/lib/db'
 import type { AdminRole } from './auth'
 
 const ADMIN_ACCOUNTS_KEY = 'admin_accounts'
@@ -71,17 +71,10 @@ function normalizeStoredAccount(value: PersistedAdminAccount): StoredAdminAccoun
 }
 
 async function readAccountsFromDb() {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', ADMIN_ACCOUNTS_KEY)
-    .maybeSingle()
+  const value = await getAppSetting<PersistedAdminAccount[]>(ADMIN_ACCOUNTS_KEY)
+  if (!value) return [] as StoredAdminAccount[]
 
-  if (error) throw error
-  if (!data?.value) return [] as StoredAdminAccount[]
-
-  const rows = Array.isArray(data.value) ? data.value : []
+  const rows = Array.isArray(value) ? value : []
   return rows
     .map((row) => normalizeStoredAccount(row as PersistedAdminAccount))
     .filter((row): row is StoredAdminAccount => Boolean(row))
@@ -96,18 +89,7 @@ async function readAccountsFromFile() {
 }
 
 async function writeAccountsToDb(accounts: StoredAdminAccount[]) {
-  const supabase = createAdminClient()
-  const { error } = await supabase
-    .from('app_settings')
-    .upsert(
-      {
-        key: ADMIN_ACCOUNTS_KEY,
-        value: accounts,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'key' }
-    )
-  if (error) throw error
+  await upsertAppSetting(ADMIN_ACCOUNTS_KEY, accounts)
 }
 
 async function writeAccountsToFile(accounts: StoredAdminAccount[]) {

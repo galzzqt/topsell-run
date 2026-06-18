@@ -2,7 +2,7 @@ import 'server-only'
 
 import { promises as fs } from 'fs'
 import path from 'path'
-import { createAdminClient } from '@/lib/supabase/server'
+import { getAppSetting, upsertAppSetting } from '@/lib/db'
 import {
   DEFAULT_ADMIN_SETTINGS,
   EDITABLE_ENV_FIELDS,
@@ -105,19 +105,12 @@ function normalizeAdminSettings(value: Partial<AdminSettings> | undefined): Admi
 
 export async function readAdminSettings(): Promise<AdminSettings> {
   try {
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', FORM_SETTINGS_KEY)
-      .maybeSingle()
-
-    if (!error && data?.value) {
-      const parsed = data.value as Partial<AdminSettings>
-      return normalizeAdminSettings(parsed)
+    const value = await getAppSetting<Partial<AdminSettings>>(FORM_SETTINGS_KEY)
+    if (value) {
+      return normalizeAdminSettings(value)
     }
   } catch {
-    // Fall back to local JSON for development or before the migration is applied.
+    // Fall back to local JSON for development or before migration is applied.
   }
 
   try {
@@ -132,22 +125,13 @@ export async function readAdminSettings(): Promise<AdminSettings> {
 export async function writeAdminSettings(settings: AdminSettings) {
   const normalizedSettings = normalizeAdminSettings(settings)
 
-  const supabase = createAdminClient()
-  const { error } = await supabase
-    .from('app_settings')
-    .upsert(
-      {
-        key: FORM_SETTINGS_KEY,
-        value: normalizedSettings,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'key' }
-    )
-
-  if (!error) return
-
-  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    throw new Error(`Gagal menyimpan pengaturan form ke database: ${error.message}. Pastikan migration app_settings sudah dijalankan.`)
+  try {
+    await upsertAppSetting(FORM_SETTINGS_KEY, normalizedSettings)
+    return
+  } catch (error) {
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+      throw new Error(`Gagal menyimpan pengaturan form ke database: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true })

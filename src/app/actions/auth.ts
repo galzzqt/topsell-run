@@ -1,88 +1,23 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import {
+  clearCommunitySession,
+  createCommunitySession,
+  getCommunitySession,
+} from '@/lib/auth/community'
+import { createPasswordRecord, verifyPassword } from '@/lib/auth/password'
+import {
+  createCommunity,
+  deleteCommunity,
+  deleteCommunityAuth,
+  findCommunityAuthByPhone,
+  findCommunityByPhone,
+  insertParticipants,
+  saveCommunityAuth,
+  updateCommunity,
+} from '@/lib/db'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
-import { phoneToAuthEmail } from '@/lib/utils/phone-auth'
-
-function isAlreadyRegisteredAuthError(error: { message?: string; code?: string; status?: number } | null) {
-  if (!error) return false
-  const message = error.message?.toLowerCase() || ''
-  return error.status === 422 && message.includes('already') && message.includes('registered')
-}
-
-async function findAuthUserByEmail(adminClient: ReturnType<typeof createAdminClient>, email: string) {
-  const targetEmail = email.toLowerCase()
-  const perPage = 1000
-
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage })
-    if (error) return { error }
-
-    const user = data.users.find((item) => item.email?.toLowerCase() === targetEmail)
-    if (user) return { user }
-    if (data.users.length < perPage) return {}
-  }
-
-  return {}
-}
-
-async function createCommunityAuthUser(
-  adminClient: ReturnType<typeof createAdminClient>,
-  values: RegisterFormValues,
-  authEmail: string
-) {
-  const createPayload = {
-    email: authEmail,
-    password: values.password,
-    email_confirm: true,
-    user_metadata: {
-      name: values.name,
-      leader_name: values.leader_name,
-      phone: values.phone,
-      contact_email: values.email,
-      category: values.category,
-      provinsi: values.provinsi,
-      kota: values.kota,
-      kecamatan: values.kecamatan,
-    },
-  }
-
-  const result = await adminClient.auth.admin.createUser(createPayload)
-  if (!isAlreadyRegisteredAuthError(result.error)) return result
-
-  const existingAuthUser = await findAuthUserByEmail(adminClient, authEmail)
-  if (existingAuthUser.error) return result
-  if (!existingAuthUser.user) return result
-
-  const { data: existingCommunity, error: existingCommunityError } = await adminClient
-    .from('communities')
-    .select('id')
-    .eq('id', existingAuthUser.user.id)
-    .maybeSingle()
-
-  if (existingCommunityError) return result
-  if (existingCommunity) {
-    return {
-      data: { user: null },
-      error: {
-        message: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.',
-      },
-    }
-  }
-
-  const { error: deleteError } = await adminClient.auth.admin.deleteUser(existingAuthUser.user.id)
-  if (deleteError) {
-    return {
-      data: { user: null },
-      error: {
-        message: 'Nomor WhatsApp ini pernah tersimpan di Auth, tetapi profil komunitasnya tidak ditemukan. Hapus user yatim tersebut dari Supabase Auth lalu coba daftar lagi.',
-      },
-    }
-  }
-
-  return adminClient.auth.admin.createUser(createPayload)
-}
 
 export async function signUpCommunity(values: RegisterFormValues) {
   const validated = registerSchema.safeParse(values)
@@ -91,72 +26,74 @@ export async function signUpCommunity(values: RegisterFormValues) {
     return { error: errorMsg }
   }
 
-  const adminClient = createAdminClient()
-  const authEmail = phoneToAuthEmail(values.phone)
-
-  const existingCommunity = await adminClient
-    .from('communities')
-    .select('id')
-    .eq('phone', values.phone)
-    .maybeSingle()
-
-  if (existingCommunity.data) {
+  const existingCommunity = await findCommunityByPhone(values.phone)
+  if (existingCommunity) {
     return { error: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' }
   }
 
-  const { data, error } = await createCommunityAuthUser(adminClient, values, authEmail)
-
-  if (error) {
-    return { error: isAlreadyRegisteredAuthError(error) ? 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' : error.message }
+  let community
+  try {
+    community = await createCommunity({
+      name: values.name,
+      leader_name: values.leader_name,
+      email: values.email,
+      phone: values.phone,
+      category: values.category,
+      provinsi: values.provinsi,
+      kota: values.kota,
+      kecamatan: values.kecamatan,
+    })
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Gagal membuat profil komunitas.' }
   }
 
-  if (!data.user) {
-    return { error: 'Gagal membuat user' }
+  try {
+    await saveCommunityAuth(community.id, values.phone, createPasswordRecord(values.password))
+  } catch (error) {
+    await deleteCommunity(community.id)
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan akun komunitas.' }
   }
 
-  const { data: community, error: communityEmailError } = await adminClient
-    .from('communities')
-    .update({ email: values.email, category: values.category })
-    .eq('id', data.user.id)
-    .select('id')
-    .maybeSingle()
-
-  if (communityEmailError) {
-    await adminClient.auth.admin.deleteUser(data.user.id)
-    return { error: `Gagal menyimpan email komunitas: ${communityEmailError.message}` }
+  try {
+    await updateCommunity(community.id, { email: values.email, category: values.category })
+  } catch (error) {
+    await deleteCommunity(community.id)
+    return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil komunitas.' }
   }
 
-  if (!community) {
-    await adminClient.auth.admin.deleteUser(data.user.id)
-    return { error: 'Gagal membuat profil komunitas. Pastikan trigger on_auth_user_created sudah terpasang di Supabase.' }
-  }
-
-  const participantsData = values.participants.map((p) => ({
-    community_id: data.user!.id,
-    full_name: p.full_name,
-    bib_name: p.bib_name,
-    email: p.email,
-    phone: p.phone,
-    date_of_birth: p.date_of_birth,
-    gender: p.gender,
-    tshirt_size: p.tshirt_size,
-    blood_type: p.blood_type,
-    medical_condition: p.medical_condition || null,
-    emergency_contact_name: p.emergency_contact_name,
-    emergency_contact_phone: p.emergency_contact_phone,
-    provinsi: values.provinsi,
-    kota: values.kota,
-    kecamatan: values.kecamatan,
-    payment_status: 'pending',
-  }))
-
-  const { error: insertError } = await adminClient
-    .from('participants')
-    .insert(participantsData)
-
-  if (insertError) {
-    await adminClient.auth.admin.deleteUser(data.user.id)
-    return { error: `Gagal menyimpan data peserta: ${insertError.message}` }
+  try {
+    await insertParticipants(
+      values.participants.map((p) => ({
+        community_id: community.id,
+        registration_id: null,
+        full_name: p.full_name,
+        bib_name: p.bib_name,
+        email: p.email,
+        phone: p.phone,
+        date_of_birth: p.date_of_birth,
+        gender: p.gender,
+        tshirt_size: p.tshirt_size,
+        blood_type: p.blood_type,
+        medical_condition: p.medical_condition || null,
+        emergency_contact_name: p.emergency_contact_name,
+        emergency_contact_phone: p.emergency_contact_phone,
+        provinsi: values.provinsi,
+        kota: values.kota,
+        kecamatan: values.kecamatan,
+        participant_code: null,
+        qr_code_data: null,
+        payment_status: 'pending',
+        checked_in: false,
+        checked_in_at: null,
+        racepack_email_sent_at: null,
+        racepack_email_error: null,
+        racepack_whatsapp_sent_at: null,
+        racepack_whatsapp_error: null,
+      }))
+    )
+  } catch (error) {
+    await deleteCommunity(community.id)
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan data peserta.' }
   }
 
   try {
@@ -170,15 +107,11 @@ export async function signUpCommunity(values: RegisterFormValues) {
     console.error('Failed to send registration confirmation WhatsApp:', sendError)
   }
 
-  const supabase = await createClient()
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: authEmail,
-    password: values.password,
+  await createCommunitySession({
+    id: community.id,
+    phone: community.phone,
+    name: community.name,
   })
-
-  if (signInError) {
-    return { error: 'Pendaftaran berhasil, tetapi gagal masuk otomatis. Silakan login dengan nomor HP dan password.' }
-  }
 
   return { success: true, phone: values.phone }
 }
@@ -189,26 +122,33 @@ export async function signInCommunity(values: LoginFormValues) {
     return { error: 'Nomor HP atau password tidak valid' }
   }
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: phoneToAuthEmail(values.phone),
-    password: values.password,
-  })
-
-  if (error) {
+  const auth = await findCommunityAuthByPhone(values.phone)
+  if (!auth || !verifyPassword(values.password, auth)) {
     return { error: 'Nomor HP atau password salah' }
   }
 
-  return { success: true, user: data.user }
+  const community = await findCommunityByPhone(values.phone)
+  if (!community) {
+    return { error: 'Profil komunitas tidak ditemukan.' }
+  }
+
+  await createCommunitySession({
+    id: community.id,
+    phone: community.phone,
+    name: community.name,
+  })
+
+  return {
+    success: true,
+    user: {
+      id: community.id,
+      phone: community.phone,
+      name: community.name,
+    },
+  }
 }
 
 export async function signOutCommunity() {
-  const supabase = await createClient()
-  const { error } = await supabase.auth.signOut()
-  
-  if (error) {
-    return { error: error.message }
-  }
-
+  await clearCommunitySession()
   return { success: true }
 }

@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { KeyRound } from 'lucide-react'
 import { useAppStore } from '@/lib/store/useAppStore'
-import { createClient } from '@/lib/supabase/client'
 import { communityProfileSchema, CommunityProfileValues } from '@/lib/validations/community'
 import { updateCommunityProfile } from '@/app/actions/communities'
 import { Input } from '@/components/ui/input'
@@ -18,7 +17,6 @@ interface CommunityProfileModalProps {
 }
 
 export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModalProps) {
-  const supabase = createClient()
   const { user, community, fetchCommunityData } = useAppStore()
 
   const {
@@ -53,7 +51,7 @@ export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModal
     }
 
     if (user?.id) {
-      await fetchCommunityData(supabase, user.id)
+      await fetchCommunityData()
     }
     onClose()
   }

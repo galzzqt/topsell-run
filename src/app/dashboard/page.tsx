@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity, LogOut, Users, CreditCard, QrCode,
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useAppStore } from '@/lib/store/useAppStore'
-import { createClient } from '@/lib/supabase/client'
+import { getCommunitySessionAction } from '@/app/actions/dashboard'
 import { formatCurrency } from '@/lib/utils/format'
 import { signOutCommunity } from '@/app/actions/auth'
 import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus } from '@/app/actions/payments'
@@ -34,8 +34,6 @@ type CheckoutPayload = {
 function DashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [supabase] = useState(() => createClient())
-
   const { user, community, participants, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useAppStore()
 
   const [qrParticipant, setQrParticipant] = useState<Participant | null>(null)
@@ -49,15 +47,14 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid'>('all')
   const [hasCelebratedPayment, setHasCelebratedPayment] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
-  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Auth init
   useEffect(() => {
     const init = async () => {
-      const { data: { user: u } } = await supabase.auth.getUser()
-      if (u) {
-        setUser(u)
-        await fetchCommunityData(supabase, u.id)
+      const session = await getCommunitySessionAction()
+      if (session.user) {
+        setUser(session.user)
+        await fetchCommunityData()
       } else {
         router.push('/login')
       }
@@ -69,27 +66,12 @@ function DashboardContent() {
   useEffect(() => {
     if (!user?.id) return
 
-    const refreshSoon = () => {
-      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
-      refreshTimeoutRef.current = setTimeout(() => {
-        fetchCommunityData(supabase, user.id, true)
-      }, 400)
-    }
+    const interval = setInterval(() => {
+      fetchCommunityData(true)
+    }, 15000)
 
-    const channel = supabase
-      .channel(`community:${user.id}:participants`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'participants', filter: `community_id=eq.${user.id}` },
-        () => refreshSoon()
-      )
-      .subscribe()
-
-    return () => {
-      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
-      supabase.removeChannel(channel)
-    }
-  }, [fetchCommunityData, supabase, user?.id])
+    return () => clearInterval(interval)
+  }, [fetchCommunityData, user?.id])
 
   useEffect(() => {
     if (!user?.id || hasCelebratedPayment) return
@@ -116,7 +98,7 @@ function DashboardContent() {
       if (paymentRef) {
         await syncXenditPaymentStatus(paymentRef)
       }
-      await fetchCommunityData(supabase, user.id, true)
+      await fetchCommunityData(true)
 
       const { payments } = useAppStore.getState()
       const hasPaid = paymentRef
@@ -141,7 +123,7 @@ function DashboardContent() {
       cancelled = true
       clearInterval(intervalId)
     }
-  }, [fetchCommunityData, hasCelebratedPayment, router, searchParams, supabase, user?.id])
+  }, [fetchCommunityData, hasCelebratedPayment, router, searchParams, user?.id])
 
   const stats = getStats()
 
@@ -171,7 +153,7 @@ function DashboardContent() {
       const res = await simulatePaymentSuccess(checkoutPayload.paymentId)
       if (res.error) return alert(res.error)
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
-      if (user?.id) await fetchCommunityData(supabase, user.id)
+      if (user?.id) await fetchCommunityData()
       setCheckoutPayload(null)
       setHasOpenedCheckout(false)
       setPaymentSyncMessage('')
@@ -195,7 +177,7 @@ function DashboardContent() {
         return false
       }
 
-      await fetchCommunityData(supabase, user.id, true)
+      await fetchCommunityData(true)
       const { payments } = useAppStore.getState()
       const hasPaid = payments.some(
         (payment) => payment.payment_reference === checkoutPayload.reference && payment.status === 'paid'
@@ -219,7 +201,7 @@ function DashboardContent() {
     } finally {
       if (!silent) setPaymentSyncLoading(false)
     }
-  }, [checkoutPayload, fetchCommunityData, hasCelebratedPayment, supabase, user?.id])
+  }, [checkoutPayload, fetchCommunityData, hasCelebratedPayment, user?.id])
 
   useEffect(() => {
     if (!checkoutPayload || checkoutPayload.isDemoMode || !hasOpenedCheckout) return

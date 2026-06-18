@@ -1,24 +1,29 @@
 import { create } from 'zustand'
-import type { SupabaseClient, User } from '@supabase/supabase-js'
+import { fetchCommunityDashboardDataAction } from '@/app/actions/dashboard'
 import { Community, Participant, Registration, Payment, DashboardStats } from '../types'
 
+export type CommunityUser = {
+  id: string
+  phone: string
+  name: string
+}
+
 interface AppState {
-  user: User | null
+  user: CommunityUser | null
   community: Community | null
   participants: Participant[]
   registrations: Registration[]
   payments: Payment[]
   isLoading: boolean
 
-  setUser: (user: User | null) => void
+  setUser: (user: CommunityUser | null) => void
   setCommunity: (community: Community | null) => void
   setParticipants: (participants: Participant[]) => void
   setRegistrations: (registrations: Registration[]) => void
   setPayments: (payments: Payment[]) => void
   setLoading: (isLoading: boolean) => void
 
-  // Data fetching
-  fetchCommunityData: (supabase: SupabaseClient, userId: string, silent?: boolean) => Promise<void>
+  fetchCommunityData: (silent?: boolean) => Promise<void>
   getStats: () => DashboardStats
   clearStore: () => void
 }
@@ -38,56 +43,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPayments: (payments) => set({ payments }),
   setLoading: (isLoading) => set({ isLoading }),
 
-  fetchCommunityData: async (supabase, userId, silent = false) => {
+  fetchCommunityData: async (silent = false) => {
     if (!silent) set({ isLoading: true })
     try {
-      // 1. Fetch community profile
-      const { data: communityData } = await supabase
-        .from('communities')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (communityData) {
-        set({ community: communityData })
+      const result = await fetchCommunityDashboardDataAction()
+      if ('error' in result && result.error) {
+        console.error('Error fetching community data:', result.error)
+        return
       }
 
-      // 2. Fetch participants under this community
-      const { data: participantsData } = await supabase
-        .from('participants')
-        .select('*')
-        .eq('community_id', userId)
-        .order('created_at', { ascending: true })
-
-      if (participantsData) {
-        set({ participants: participantsData })
-      }
-
-      // 3. Fetch registrations (payment groups)
-      const { data: registrationsData } = await supabase
-        .from('registrations')
-        .select('*')
-        .eq('community_id', userId)
-        .order('created_at', { ascending: false })
-
-      if (registrationsData) {
-        set({ registrations: registrationsData })
-      }
-
-      // 4. Fetch payments linked to the community's registrations
-      if (registrationsData && registrationsData.length > 0) {
-        const regIds = registrationsData.map((r: Registration) => r.id)
-        const { data: paymentsData } = await supabase
-          .from('payments')
-          .select('*')
-          .in('registration_id', regIds)
-          .order('created_at', { ascending: false })
-
-        if (paymentsData) {
-          set({ payments: paymentsData })
-        }
-      } else {
-        set({ payments: [] })
+      if ('community' in result) {
+        set({
+          community: result.community,
+          participants: result.participants,
+          registrations: result.registrations,
+          payments: result.payments,
+        })
       }
     } catch (error) {
       console.error('Error fetching community data:', error)

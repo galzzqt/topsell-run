@@ -7,7 +7,6 @@ import { Pencil } from 'lucide-react'
 import { participantEditSchema, ParticipantFormValues } from '@/lib/validations/participant'
 import { updateParticipant } from '@/app/actions/participants'
 import { useAppStore } from '@/lib/store/useAppStore'
-import { createClient } from '@/lib/supabase/client'
 import { Participant } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -21,7 +20,6 @@ interface ParticipantFormModalProps {
 }
 
 export function ParticipantFormModal({ isOpen, onClose, editParticipant }: ParticipantFormModalProps) {
-  const supabase = createClient()
   const { user, fetchCommunityData } = useAppStore()
 
   const {
@@ -82,7 +80,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
     }
 
     if (user?.id) {
-      await fetchCommunityData(supabase, user.id)
+      await fetchCommunityData()
     }
 
     reset()

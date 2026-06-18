@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import {
+  markPaymentsPaidByReference,
+  markPaymentsPaidBySessionId,
+} from '@/lib/db'
 import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
 import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId } from '@/lib/utils/xendit'
@@ -155,23 +158,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing Xendit reference' }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
   const update = {
-    status: 'paid',
     paid_at: new Date().toISOString(),
     payment_method: await resolvePaymentMethod(payload),
   }
 
   for (const sessionId of sessionCandidates) {
-    const { data, error } = await supabase
-      .from('payments')
-      .update(update)
-      .eq('xendit_session_id', sessionId)
-      .select('id, registration_id')
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (data && data.length > 0) {
-      await Promise.all(data.flatMap((payment) => [
+    const payments = await markPaymentsPaidBySessionId(sessionId, update)
+    if (payments.length > 0) {
+      await Promise.all(payments.flatMap((payment) => [
         sendRacepackEmailsForRegistration(payment.registration_id),
         sendRacepackWhatsappsForRegistration(payment.registration_id),
       ]))
@@ -180,15 +175,9 @@ export async function POST(request: Request) {
   }
 
   for (const referenceId of referenceCandidates) {
-    const { data, error } = await supabase
-      .from('payments')
-      .update(update)
-      .eq('payment_reference', referenceId)
-      .select('id, registration_id')
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (data && data.length > 0) {
-      await Promise.all(data.flatMap((payment) => [
+    const payments = await markPaymentsPaidByReference(referenceId, update)
+    if (payments.length > 0) {
+      await Promise.all(payments.flatMap((payment) => [
         sendRacepackEmailsForRegistration(payment.registration_id),
         sendRacepackWhatsappsForRegistration(payment.registration_id),
       ]))

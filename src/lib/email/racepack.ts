@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer'
 import QRCode from 'qrcode'
-import { createAdminClient } from '@/lib/supabase/server'
+import {
+  findPaidParticipantsForRacepackEmail,
+  updateParticipantIds,
+} from '@/lib/db'
 
 type RacepackParticipant = {
   id: string
@@ -9,25 +12,6 @@ type RacepackParticipant = {
   participant_code: string | null
   qr_code_data: string | null
   racepack_email_sent_at?: string | null
-  community:
-    | {
-        name: string
-        community_code: string
-        email: string | null
-      }
-    | {
-        name: string
-        community_code: string
-        email: string | null
-      }[]
-    | null
-}
-
-function getCommunity(participant: RacepackParticipant) {
-  return Array.isArray(participant.community) ? participant.community[0] || null : participant.community
-}
-
-type NormalizedRacepackParticipant = Omit<RacepackParticipant, 'community'> & {
   community: {
     name: string
     community_code: string
@@ -82,7 +66,7 @@ function safeFilename(value: string | null | undefined) {
     .slice(0, 80) || 'peserta'
 }
 
-function renderCommunityEmail(communityNameValue: string, participants: NormalizedRacepackParticipant[]) {
+function renderCommunityEmail(communityNameValue: string, participants: RacepackParticipant[]) {
   const communityName = escapeHtml(communityNameValue || 'Komunitas TOPSELL RUN')
   const rows = participants.map((participant, index) => `
     <tr>
@@ -116,7 +100,7 @@ function renderCommunityEmail(communityNameValue: string, participants: Normaliz
   `
 }
 
-async function sendCommunityRacepackEmail(communityEmail: string, communityName: string, participants: NormalizedRacepackParticipant[]) {
+async function sendCommunityRacepackEmail(communityEmail: string, communityName: string, participants: RacepackParticipant[]) {
   const config = getSmtpConfig()
   const transporter = createTransporter()
   const attachments = await Promise.all(participants.map(async (participant) => {
@@ -155,23 +139,7 @@ export async function sendRacepackEmailsForRegistration(registrationId: string) 
     return { skipped: true, sent: 0, failed: 0 }
   }
 
-  const supabase = createAdminClient()
-  const { data: participants, error } = await supabase
-    .from('participants')
-    .select('id, full_name, bib_name, participant_code, qr_code_data, racepack_email_sent_at, community:communities(name, community_code, email)')
-    .eq('registration_id', registrationId)
-    .eq('payment_status', 'paid')
-    .is('racepack_email_sent_at', null)
-
-  if (error) {
-    console.error('Failed to load participants for racepack email:', error.message)
-    return { skipped: false, sent: 0, failed: 0 }
-  }
-
-  const normalizedParticipants = ((participants || []) as RacepackParticipant[]).map((participantRow) => ({
-    ...participantRow,
-    community: getCommunity(participantRow),
-  }))
+  const normalizedParticipants = await findPaidParticipantsForRacepackEmail(registrationId) as RacepackParticipant[]
 
   if (normalizedParticipants.length === 0) {
     return { skipped: false, sent: 0, failed: 0 }
@@ -183,26 +151,20 @@ export async function sendRacepackEmailsForRegistration(registrationId: string) 
 
   if (!communityEmail) {
     const message = 'Email komunitas belum tersedia.'
-    await supabase
-      .from('participants')
-      .update({ racepack_email_error: message })
-      .in('id', participantIds)
+    await updateParticipantIds(participantIds, { racepack_email_error: message })
     return { skipped: false, sent: 0, failed: normalizedParticipants.length }
   }
 
   try {
     await sendCommunityRacepackEmail(communityEmail, community?.name || 'Komunitas TOPSELL RUN', normalizedParticipants)
-    await supabase
-      .from('participants')
-      .update({ racepack_email_sent_at: new Date().toISOString(), racepack_email_error: null })
-      .in('id', participantIds)
+    await updateParticipantIds(participantIds, {
+      racepack_email_sent_at: new Date().toISOString(),
+      racepack_email_error: null,
+    })
     return { skipped: false, sent: normalizedParticipants.length, failed: 0 }
   } catch (sendError) {
     const message = sendError instanceof Error ? sendError.message : 'Gagal mengirim email ke komunitas'
-    await supabase
-      .from('participants')
-      .update({ racepack_email_error: message })
-      .in('id', participantIds)
+    await updateParticipantIds(participantIds, { racepack_email_error: message })
     return { skipped: false, sent: 0, failed: normalizedParticipants.length }
   }
 }

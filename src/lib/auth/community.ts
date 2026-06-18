@@ -1,14 +1,15 @@
+import 'server-only'
+
 import { createHmac, timingSafeEqual } from 'crypto'
 import { cookies } from 'next/headers'
+import { COMMUNITY_COOKIE, type CommunitySession } from './community-session'
 
-const ADMIN_COOKIE = 'topsell_admin_session'
-
-function getAdminSecret() {
-  return process.env.ADMIN_SESSION_SECRET || process.env.COMMUNITY_SESSION_SECRET || process.env.MONGODB_URI || ''
+function getCommunitySecret() {
+  return process.env.COMMUNITY_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || process.env.MONGODB_URI || ''
 }
 
 function sign(value: string) {
-  return createHmac('sha256', getAdminSecret()).update(value).digest('hex')
+  return createHmac('sha256', getCommunitySecret()).update(value).digest('hex')
 }
 
 function safeCompare(a: string, b: string) {
@@ -17,16 +18,7 @@ function safeCompare(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
-export type AdminRole = 'superadmin' | 'admin'
-
-export type AdminSession = {
-  id: string
-  username: string
-  name: string
-  role: AdminRole
-}
-
-type EncodedSession = AdminSession & {
+type EncodedSession = CommunitySession & {
   issuedAt: number
 }
 
@@ -38,8 +30,7 @@ function decode(raw: string) {
   try {
     const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Partial<EncodedSession>
     if (!parsed || typeof parsed !== 'object') return null
-    if (typeof parsed.id !== 'string' || typeof parsed.username !== 'string' || typeof parsed.name !== 'string') return null
-    if (parsed.role !== 'admin' && parsed.role !== 'superadmin') return null
+    if (typeof parsed.id !== 'string' || typeof parsed.phone !== 'string' || typeof parsed.name !== 'string') return null
     if (typeof parsed.issuedAt !== 'number' || !Number.isFinite(parsed.issuedAt)) return null
     return parsed as EncodedSession
   } catch {
@@ -47,7 +38,7 @@ function decode(raw: string) {
   }
 }
 
-export async function createAdminSession(session: AdminSession) {
+export async function createCommunitySession(session: CommunitySession) {
   const payload = encode({
     ...session,
     issuedAt: Date.now(),
@@ -55,52 +46,49 @@ export async function createAdminSession(session: AdminSession) {
   const token = `${payload}.${sign(payload)}`
   const cookieStore = await cookies()
 
-  cookieStore.set(ADMIN_COOKIE, token, {
+  cookieStore.set(COMMUNITY_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    path: '/admin',
-    maxAge: 60 * 60 * 8,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
   })
 }
 
-export async function clearAdminSession() {
+export async function clearCommunitySession() {
   const cookieStore = await cookies()
-  cookieStore.set(ADMIN_COOKIE, '', {
+  cookieStore.set(COMMUNITY_COOKIE, '', {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    path: '/admin',
+    path: '/',
     maxAge: 0,
   })
 }
 
-export async function getAdminSession(): Promise<AdminSession | null> {
+export async function getCommunitySession(): Promise<CommunitySession | null> {
   const cookieStore = await cookies()
-  const token = cookieStore.get(ADMIN_COOKIE)?.value
+  const token = cookieStore.get(COMMUNITY_COOKIE)?.value
   if (!token) return null
 
   const [encodedPayload, signature] = token.split('.')
   if (!encodedPayload || !signature) return null
 
-  if (!Boolean(getAdminSecret()) || !safeCompare(signature, sign(encodedPayload))) {
+  if (!getCommunitySecret() || !safeCompare(signature, sign(encodedPayload))) {
     return null
   }
 
   const payload = decode(encodedPayload)
   if (!payload) return null
 
-  const maxAgeMs = 1000 * 60 * 60 * 8
+  const maxAgeMs = 1000 * 60 * 60 * 24 * 7
   if (Date.now() - payload.issuedAt > maxAgeMs) return null
 
   return {
     id: payload.id,
-    username: payload.username,
+    phone: payload.phone,
     name: payload.name,
-    role: payload.role,
   }
 }
 
-export async function isAdminAuthenticated() {
-  return Boolean(await getAdminSession())
-}
+export type { CommunitySession }
