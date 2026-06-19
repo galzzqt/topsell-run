@@ -24,7 +24,7 @@ export function QRCodeModal({ participant, isOpen, onClose }: QRCodeModalProps) 
       margin: 2,
       color: {
         dark: '#0a0a0a',
-        light: '#FFFFFF',
+        light: '#FFFFFF', 
       },
     })
   }, [isOpen, participant])

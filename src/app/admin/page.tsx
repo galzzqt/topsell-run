@@ -89,16 +89,16 @@ export default async function AdminPage() {
     created_at: fp.created_at,
     community: fp.family
       ? {
-          id: fp.family.id,
-          name: fp.family.name,
-          leader_name: fp.family.leader_name,
-          email: fp.family.email,
-          phone: fp.family.phone,
-          community_code: fp.family.family_code,
-          provinsi: fp.family.provinsi,
-          kota: fp.family.kota,
-          kecamatan: fp.family.kecamatan,
-        }
+        id: fp.family.id,
+        name: fp.family.name,
+        leader_name: fp.family.leader_name,
+        email: fp.family.email,
+        phone: fp.family.phone,
+        community_code: fp.family.family_code,
+        provinsi: fp.family.provinsi,
+        kota: fp.family.kota,
+        kecamatan: fp.family.kecamatan,
+      }
       : null,
   })) as AdminParticipant[]
 
@@ -114,21 +114,21 @@ export default async function AdminPage() {
     created_at: fp.created_at,
     registration: fp.registration
       ? {
-          community_id: fp.registration.family_id,
-          community: fp.registration.family
-            ? {
-                id: fp.registration.family.id,
-                name: fp.registration.family.name,
-                leader_name: fp.registration.family.leader_name,
-                email: fp.registration.family.email,
-                phone: fp.registration.family.phone,
-                community_code: fp.registration.family.family_code,
-                provinsi: fp.registration.family.provinsi,
-                kota: fp.registration.family.kota,
-                kecamatan: fp.registration.family.kecamatan,
-              }
-            : null,
-        }
+        community_id: fp.registration.family_id,
+        community: fp.registration.family
+          ? {
+            id: fp.registration.family.id,
+            name: fp.registration.family.name,
+            leader_name: fp.registration.family.leader_name,
+            email: fp.registration.family.email,
+            phone: fp.registration.family.phone,
+            community_code: fp.registration.family.family_code,
+            provinsi: fp.registration.family.provinsi,
+            kota: fp.registration.family.kota,
+            kecamatan: fp.registration.family.kecamatan,
+          }
+          : null,
+      }
       : null,
   })) as AdminPayment[]
 
