@@ -211,7 +211,7 @@ export async function createFamilyPayment() {
           allowed_payment_channels: getXenditChannels(),
           description: `TOPSELL RUN 6K Family - ${participants.length} peserta`,
           customer: {
-            reference_id: toXenditReference(session.id),
+            reference_id: `${toXenditReference(session.id)}_${paymentRef}`,
             type: 'INDIVIDUAL',
             individual_detail: {
               given_names: toXenditName(family?.leader_name || family?.name),

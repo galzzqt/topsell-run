@@ -1,6 +1,7 @@
 'use client'
 
 import React, { Suspense, useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity, LogOut, Users, CreditCard, QrCode,
@@ -44,7 +45,7 @@ function DashboardContent() {
   const [paymentSyncMessage, setPaymentSyncMessage] = useState('')
   const [hasOpenedCheckout, setHasOpenedCheckout] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid'>('all')
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid' | 'expired'>('all')
   const [hasCelebratedPayment, setHasCelebratedPayment] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
 
@@ -55,6 +56,18 @@ function DashboardContent() {
       if (session.user) {
         setUser(session.user)
         await fetchFamilyData()
+        
+        // Auto-sync fallback: sync any pending payments with Xendit on load
+        try {
+          const { payments } = useFamilyStore.getState()
+          const pending = payments.filter((p) => p.status === 'pending' && p.payment_reference)
+          if (pending.length > 0) {
+            await Promise.all(pending.map((p) => syncXenditFamilyPaymentStatus(p.payment_reference)))
+            await fetchFamilyData(true)
+          }
+        } catch (err) {
+          console.error('Failed to auto-sync payments:', err)
+        }
       } else {
         router.push('/login')
       }
@@ -237,6 +250,8 @@ function DashboardContent() {
       ? participants.filter((p) => p.payment_status === 'pending')
       : activeTab === 'paid'
       ? participants.filter((p) => p.payment_status === 'paid')
+      : activeTab === 'expired'
+      ? participants.filter((p) => p.payment_status === 'expired' || p.payment_status === 'failed')
       : participants
 
   const pendingParticipants = participants.filter((p) => p.payment_status === 'pending')
@@ -268,12 +283,21 @@ function DashboardContent() {
             {family?.family_code && (
               <button
                 onClick={handleCopyCode}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-brand-gray border border-card-border rounded-lg text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-foreground cursor-pointer transition-colors"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-brand-gray border border-card-border rounded-lg text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-foreground cursor-pointer transition-colors"
               >
                 {codeCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                 {family.family_code}
               </button>
             )}
+            <Link
+              href="/#register-section"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white rounded-lg transition-all active:scale-95 shadow-md shadow-sport-purple/10 cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 100%)' }}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Daftarkan Anggota</span>
+              <span className="xs:hidden">Daftar</span>
+            </Link>
             <button
               onClick={() => setIsProfileModalOpen(true)}
               className="p-2 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded-lg transition-colors cursor-pointer"
@@ -370,7 +394,7 @@ function DashboardContent() {
           <div className="px-4 sm:px-6 py-4 border-b border-card-border flex flex-wrap gap-3 items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Tabs */}
-              {(['all', 'pending', 'paid'] as const).map((tab) => (
+              {(['all', 'pending', 'paid', 'expired'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -380,7 +404,13 @@ function DashboardContent() {
                       : 'text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  {tab === 'all' ? `Semua (${participants.length})` : tab === 'pending' ? `Pending (${stats.pendingParticipants})` : `Lunas (${stats.paidParticipants})`}
+                  {tab === 'all'
+                    ? `Semua (${participants.length})`
+                    : tab === 'pending'
+                    ? `Pending (${stats.pendingParticipants})`
+                    : tab === 'paid'
+                    ? `Lunas (${stats.paidParticipants})`
+                    : `Kadaluarsa (${participants.filter((p) => p.payment_status === 'expired' || p.payment_status === 'failed').length})`}
                 </button>
               ))}
             </div>

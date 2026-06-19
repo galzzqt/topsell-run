@@ -211,7 +211,7 @@ export async function createCommunityPayment() {
           allowed_payment_channels: getXenditChannels(),
           description: `TOPSELL RUN 6K - ${participants.length} peserta`,
           customer: {
-            reference_id: toXenditReference(session.id),
+            reference_id: `${toXenditReference(session.id)}_${paymentRef}`,
             type: 'INDIVIDUAL',
             individual_detail: {
               given_names: toXenditName(community?.leader_name || community?.name),

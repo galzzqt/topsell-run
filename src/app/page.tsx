@@ -8,7 +8,7 @@ import { useForm, useFieldArray, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Users, Trophy, CheckCircle, Calendar, MapPin,
-  Timer, ArrowRight, UserPlus, Plus, Trash2,
+  Timer, ArrowRight, UserPlus, Plus, Trash2, LayoutDashboard, ChevronDown, LogOut,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { registerFamilySchema, RegisterFamilyFormValues } from '@/lib/validations/auth'
@@ -18,6 +18,10 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
+import { getActiveSessionAction, type ActiveSession } from '@/app/actions/session-check'
+import { addFamilyParticipantsAction, addCommunityParticipantsAction, type AddParticipantsValues } from '@/app/actions/add-participants'
+import { signOutFamily } from '@/app/actions/family-auth'
+import { signOutCommunity } from '@/app/actions/auth'
 
 const defaultParticipant = {
   full_name: '',
@@ -122,11 +126,105 @@ function EventCountdown() {
   )
 }
 
+// ——— Nav User Widget Component ———
+function NavUserWidget({ session, onLogout }: { session: ActiveSession | undefined; onLogout: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  if (session === undefined) {
+    return <div className="h-8 w-32 bg-slate-100 rounded-lg animate-pulse" />
+  }
+
+  if (!session) {
+    return (
+      <div className="flex items-center gap-3">
+        <Link href="/login" className="text-xs font-bold text-brand-muted hover:text-foreground border border-card-border px-3 py-1.5 rounded-lg transition-colors">
+          Masuk
+        </Link>
+        <a
+          href="#register-section"
+          className="text-xs font-black text-white px-4 py-1.5 rounded-lg transition-all active:scale-95 cursor-pointer shadow-md shadow-sport-purple/10"
+          style={{ background: 'linear-gradient(90deg, #7c3aed, #ef4444, #f97316)' }}
+        >
+          Daftar
+        </a>
+      </div>
+    )
+  }
+
+  const initial = session.name.charAt(0).toUpperCase()
+  const label = session.type === 'community' ? 'Komunitas' : 'Keluarga'
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    try {
+      if (session.type === 'family') {
+        await signOutFamily()
+      } else {
+        await signOutCommunity()
+      }
+      setOpen(false)
+      onLogout()
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-card-border rounded-lg hover:border-sport-purple/40 transition-all text-xs font-bold text-slate-700 cursor-pointer"
+      >
+        <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0" style={{ background: 'linear-gradient(135deg, #7c3aed, #ef4444)' }}>
+          {initial}
+        </span>
+        <span className="max-w-[120px] truncate hidden sm:block">{session.name}</span>
+        <ChevronDown className={`w-3 h-3 text-brand-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-52 bg-white border border-card-border rounded-xl shadow-lg py-1 z-50">
+          <div className="px-3 py-2 border-b border-card-border">
+            <p className="text-[9px] font-black uppercase tracking-wider text-sport-orange">{label}</p>
+            <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{session.name}</p>
+          </div>
+          <Link
+            href={session.dashboardUrl}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 text-sport-purple" />
+            Dashboard
+          </Link>
+          <div className="border-t border-card-border mx-1 my-1" />
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            {loggingOut ? 'Keluar...' : 'Logout'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function LandingPage() {
   const router = useRouter()
   const isSuccess = false
   const [authError, setAuthError] = useState<string | null>(null)
   const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
+  const [activeSession, setActiveSession] = useState<ActiveSession | undefined>(undefined)
+  
+  // Check active session for navbar
+  useEffect(() => {
+    getActiveSessionAction().then(setActiveSession).catch(() => setActiveSession(null))
+  }, [])
   
   // Location states
   const [provinsiList, setProvinsiList] = useState<Array<{ value: string; label: string }>>([])
@@ -264,6 +362,13 @@ export default function LandingPage() {
     name: 'participants',
   })
 
+  // ——— STATE ———
+  const [addMode, setAddMode] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addSuccess, setAddSuccess] = useState<number | null>(null)
+  const [addLoading, setAddLoading] = useState(false)
+  const [addFields, setAddFields] = useState([{ ...defaultParticipant }, { ...defaultParticipant }, { ...defaultParticipant }])
+
   const onSubmit = async (values: RegisterFamilyFormValues) => {
     setAuthError(null)
     const result = await signUpFamily(values)
@@ -278,6 +383,25 @@ export default function LandingPage() {
       })
       router.refresh()
       router.push('/dashboard')
+    }
+  }
+
+  const onAddParticipantsSubmit = async () => {
+    setAddError(null)
+    setAddLoading(true)
+    try {
+      const values: AddParticipantsValues = { participants: addFields }
+      const result = activeSession?.type === 'family'
+        ? await addFamilyParticipantsAction(values)
+        : await addCommunityParticipantsAction(values)
+      if (result.error) {
+        setAddError(result.error)
+      } else {
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'] })
+        setAddSuccess(result.count ?? addFields.length)
+      }
+    } finally {
+      setAddLoading(false)
     }
   }
 
@@ -311,17 +435,7 @@ export default function LandingPage() {
               priority
             />
           </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="text-xs font-bold text-brand-muted hover:text-foreground border border-card-border px-3 py-1.5 rounded-lg transition-colors">Masuk</Link>
-            <a
-              href="#register-section"
-              onClick={handleScrollToRegister}
-              className="text-xs font-black text-white px-4 py-1.5 rounded-lg transition-all active:scale-95 cursor-pointer shadow-md shadow-sport-purple/10"
-              style={{ background: 'linear-gradient(90deg, #7c3aed, #ef4444, #f97316)' }}
-            >
-              Daftar
-            </a>
-          </div>
+          <NavUserWidget session={activeSession} onLogout={() => setActiveSession(null)} />
         </div>
       </nav>
 
@@ -380,7 +494,172 @@ export default function LandingPage() {
 
       {/* ——— FORM SECTION ——— */}
       <section id="register-section" className="px-4 py-8 z-10 relative max-w-3xl mx-auto scroll-mt-20">
-        {isSuccess ? (
+        {/* ——— LOGGED-IN: Add participants form ——— */}
+        {activeSession ? (
+          addSuccess !== null ? (
+            <div className="bg-white border border-card-border rounded-2xl p-8 flex flex-col items-center text-center gap-5 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
+              <div className="p-4 bg-green-50 border border-green-200 rounded-full text-green-500">
+                <CheckCircle className="w-10 h-10" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-sport-orange mb-1">Berhasil!</p>
+                <h2 className="text-xl font-black uppercase text-slate-900">{addSuccess} Anggota Ditambahkan</h2>
+                <p className="text-xs text-brand-muted mt-2 leading-relaxed">
+                  Anggota baru telah ditambahkan ke akun Anda. Lanjutkan ke dashboard untuk melakukan pembayaran.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => { setAddSuccess(null); setAddFields([{ ...defaultParticipant }, { ...defaultParticipant }, { ...defaultParticipant }]) }}
+                  className="flex-1 py-3 border border-card-border rounded-xl text-xs font-black text-brand-muted hover:text-foreground transition-colors"
+                >
+                  Tambah Lagi
+                </button>
+                <a
+                  href={activeSession.dashboardUrl}
+                  className="flex-1 py-3 rounded-xl text-xs font-black text-white text-center transition-all shadow-md"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
+                >
+                  Ke Dashboard →
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-card-border rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
+              <div className="flex flex-col gap-5">
+                {/* Header */}
+                <div className="flex flex-col items-center text-center gap-1.5 mb-2">
+                  <div className="p-3 rounded-xl mb-1 bg-linear-to-br from-sport-purple via-sport-red to-sport-orange">
+                    <UserPlus className="w-5 h-5 text-white" />
+                  </div>
+                  <h2 className="text-xl font-black uppercase text-slate-900">Tambah Anggota</h2>
+                  <p className="text-xs text-brand-muted font-medium">
+                    Masuk sebagai <span className="font-bold text-sport-purple">{activeSession.name}</span> · Daftarkan anggota baru ke {activeSession.type === 'family' ? 'keluarga' : 'komunitas'} Anda
+                  </p>
+                </div>
+
+                {/* Info strip */}
+                <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
+                  <Users className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
+                    <span className="text-slate-900 font-bold">Anda sudah login.</span> Tambahkan anggota baru, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
+                  </p>
+                </div>
+
+                {addError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-500">
+                    {addError}
+                  </div>
+                )}
+
+                {/* Participants list */}
+                <div className="flex flex-col gap-4">
+                  {addFields.map((field, index) => (
+                    <div key={index} className="p-4 border border-card-border rounded-xl bg-slate-50/50 flex flex-col gap-4">
+                      <div className="flex justify-between items-center pb-2 border-b border-card-border/50">
+                        <span className="text-[10px] font-black uppercase text-sport-purple tracking-wider">Peserta #{index + 1}</span>
+                        {addFields.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => setAddFields((f) => f.filter((_, i) => i !== index))}
+                            className="inline-flex items-center gap-0.5 text-[9px] font-black text-red-500 hover:text-red-700 uppercase tracking-wider transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-0.5" /> Hapus
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        {[
+                          { label: 'Nama Lengkap', key: 'full_name', placeholder: 'Nama sesuai KTP' },
+                          { label: 'Nama BIB', key: 'bib_name', placeholder: 'Maks 20 huruf' },
+                          { label: 'Email', key: 'email', placeholder: 'email@domain.com' },
+                          { label: 'No. WhatsApp', key: 'phone', placeholder: '08xxxxxxxxxx' },
+                          { label: 'Tgl. Lahir', key: 'date_of_birth', placeholder: '', type: 'date' },
+                        ].map(({ label, key, placeholder, type }) => (
+                          <div key={key} className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">{label}</label>
+                            <input
+                              type={type || 'text'}
+                              placeholder={placeholder}
+                              value={(field as Record<string, string>)[key] || ''}
+                              onChange={(e) => setAddFields((f) => f.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
+                              className="border border-card-border rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sport-purple/30 focus:border-sport-purple/50 bg-white"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {([
+                          { label: 'Gender', key: 'gender', options: [{ value: 'male', label: 'Laki-laki' }, { value: 'female', label: 'Perempuan' }] },
+                          { label: 'Ukuran Jersey', key: 'tshirt_size', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((v) => ({ value: v, label: v })) },
+                          { label: 'Gol. Darah', key: 'blood_type', options: ['A', 'B', 'AB', 'O'].map((v) => ({ value: v, label: v })) },
+                        ] as const).map(({ label, key, options }) => (
+                          <div key={key} className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">{label}</label>
+                            <select
+                              value={(field as Record<string, string>)[key] || ''}
+                              onChange={(e) => setAddFields((f) => f.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
+                              className="border border-card-border rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sport-purple/30 bg-white"
+                            >
+                              {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { label: 'Nama Kontak Darurat', key: 'emergency_contact_name', placeholder: 'Nama lengkap' },
+                          { label: 'No. Kontak Darurat', key: 'emergency_contact_phone', placeholder: '08xxxxxxxxxx' },
+                        ].map(({ label, key, placeholder }) => (
+                          <div key={key} className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">{label}</label>
+                            <input
+                              type="text"
+                              placeholder={placeholder}
+                              value={(field as Record<string, string>)[key] || ''}
+                              onChange={(e) => setAddFields((f) => f.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
+                              className="border border-card-border rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sport-purple/30 focus:border-sport-purple/50 bg-white"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAddFields((f) => [...f, { ...defaultParticipant }])}
+                  className="inline-flex items-center justify-center gap-1 px-4 py-2 bg-sport-purple/10 border border-sport-purple/20 text-sport-purple hover:bg-sport-purple/20 transition-all rounded-lg text-xs font-black uppercase cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Tambah Peserta
+                </button>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="w-full py-4 text-xs font-black mt-2 shadow-md shadow-sport-purple/10"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
+                  isLoading={addLoading}
+                  onClick={onAddParticipantsSubmit}
+                >
+                  <Trophy className="w-4 h-4 mr-2" />Simpan & Daftarkan Anggota
+                </Button>
+
+                <p className="text-xs text-center text-brand-muted">
+                  Ingin ke dashboard?{' '}
+                  <a href={activeSession.dashboardUrl} className="font-bold hover:underline text-sport-purple">Klik di sini</a>
+                </p>
+              </div>
+            </div>
+          )
+        ) : isSuccess ? (
           /* ——— Success State ——— */
           <div className="sports-glass-glow rounded-2xl p-8 flex flex-col items-center text-center gap-5 border border-green-500/30 shadow-2xl relative overflow-hidden bg-white">
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-green-500" />
@@ -401,8 +680,23 @@ export default function LandingPage() {
             </Link>
           </div>
         ) : (
-          /* ——— Form State ——— */
-          <div className="bg-white border border-card-border rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+          /* ——— Form State (guest) ——— */
+          <>
+            {/* Login prompt above form */}
+            <div className="mb-4 flex items-center justify-between gap-3 bg-white border border-card-border rounded-xl px-4 py-3 shadow-sm">
+              <p className="text-xs text-brand-muted font-medium">
+                Sudah punya akun?
+              </p>
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 text-xs font-black text-white px-4 py-1.5 rounded-lg transition-all active:scale-95 shadow-sm"
+                style={{ background: 'linear-gradient(90deg, #7c3aed, #ef4444, #f97316)' }}
+              >
+                Login Sekarang →
+              </Link>
+            </div>
+
+            <div className="bg-white border border-card-border rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
             {/* Header Gradient line */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
 
@@ -826,7 +1120,8 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
-        )}
+        </>
+      )}
       </section>
 
       {/* ——— FOOTER ——— */}
