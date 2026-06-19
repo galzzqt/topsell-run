@@ -62,6 +62,20 @@ export async function markPaymentFailed(paymentId: string) {
   return findPaymentById(paymentId)
 }
 
+async function expireRegistrationParticipants(registrationId: string) {
+  await updateRegistration(registrationId, { status: 'expired' })
+  await updateParticipants({ registration_id: registrationId }, { payment_status: 'expired' })
+}
+
+export async function markPaymentExpired(paymentId: string) {
+  const payment = await findPaymentById(paymentId)
+  if (!payment || payment.status === 'expired') return payment
+
+  await updatePayment(paymentId, { status: 'expired' })
+  await expireRegistrationParticipants(payment.registration_id)
+  return findPaymentById(paymentId)
+}
+
 export async function markPaymentsPaidBySessionId(sessionId: string, values: Partial<Payment>) {
   const { updatePaymentsBySessionId } = await import('./payments')
   const payments = await updatePaymentsBySessionId(sessionId, {

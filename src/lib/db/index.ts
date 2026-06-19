@@ -59,6 +59,7 @@ export { getAppSetting, upsertAppSetting } from './app-settings'
 export {
   markPaymentPaid,
   markPaymentFailed,
+  markPaymentExpired,
   markPaymentsPaidBySessionId,
   markPaymentsPaidByReference,
 } from './payment-sync'
@@ -122,6 +123,7 @@ export {
 export {
   markFamilyPaymentPaid,
   markFamilyPaymentFailed,
+  markFamilyPaymentExpired,
   markFamilyPaymentsPaidBySessionId,
   markFamilyPaymentsPaidByReference,
 } from './family-payment-sync'

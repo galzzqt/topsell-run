@@ -82,7 +82,7 @@ export type AdminParticipant = {
   emergency_contact_phone: string | null
   participant_code: string | null
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
   checked_in: boolean
   checked_in_at: string | null
   created_at: string
@@ -108,7 +108,7 @@ export type AdminPayment = {
   amount: number
   payment_method: string | null
   payment_reference: string
-  status: 'pending' | 'paid' | 'failed'
+  status: 'pending' | 'paid' | 'failed' | 'expired'
   paid_at: string | null
   created_at: string
   registration: Relation<RegistrationInfo>
@@ -177,7 +177,7 @@ type ScannedParticipant = {
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
   participant_code: string | null
-  payment_status: 'pending' | 'paid' | 'failed'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
   checked_in: boolean
   checked_in_at: string | null
   community: Relation<CommunityInfo>
@@ -265,6 +265,7 @@ export function AdminDashboardClient({
   const [envSnapshots, setEnvSnapshots] = useState<AdminEnvSnapshot[]>(editableEnv)
   const [envForm, setEnvForm] = useState<Record<string, string>>({})
   const [selectedExportCommunities, setSelectedExportCommunities] = useState<Set<string> | null>(null)
+  const [exportPaymentFilter, setExportPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
   const [settingsMessage, setSettingsMessage] = useState('')
   const [adminCreateForm, setAdminCreateForm] = useState<{ name: string; username: string; password: string; role: 'admin' | 'superadmin' }>({
     name: '',
@@ -508,6 +509,12 @@ export function AdminDashboardClient({
     }
   })
 
+  const applyParticipantFilter = (rows: AdminParticipant[]) => {
+    if (exportPaymentFilter === 'paid') return rows.filter((p) => p.payment_status === 'paid')
+    if (exportPaymentFilter === 'unpaid') return rows.filter((p) => p.payment_status !== 'paid')
+    return rows
+  }
+
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
     const XLSX = await import('xlsx')
     const today = new Date().toISOString().slice(0, 10)
@@ -522,6 +529,7 @@ export function AdminDashboardClient({
 
     const targetParticipants = packageType === 'community' ? participants : familyParticipants
     const targetPayments = packageType === 'community' ? payments : familyPayments
+    const filterSuffix = exportPaymentFilter === 'paid' ? '-paid' : exportPaymentFilter === 'unpaid' ? '-unpaid' : ''
 
     if (combineFiles) {
       const workbook = XLSX.utils.book_new()
@@ -529,9 +537,11 @@ export function AdminDashboardClient({
       const allPaymentsRows: Array<Record<string, unknown>> = []
 
       for (const community of selectedCommunities) {
-        const communityParticipants = targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
+        const communityParticipants = applyParticipantFilter(
+          targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
+        )
         const communityPayments = targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
-        
+
         allParticipantsRows.push(...buildParticipantExportRows(communityParticipants))
         allPaymentsRows.push(...buildPaymentExportRows(communityPayments))
       }
@@ -545,10 +555,12 @@ export function AdminDashboardClient({
       }
 
       const segmentName = packageType === 'community' ? 'komunitas' : 'keluarga'
-      XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}-${today}.xlsx`)
+      XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}-${today}.xlsx`)
     } else {
       for (const community of selectedCommunities) {
-        const communityParticipants = targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
+        const communityParticipants = applyParticipantFilter(
+          targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
+        )
         const communityPayments = targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
         const workbook = XLSX.utils.book_new()
 
@@ -559,7 +571,7 @@ export function AdminDashboardClient({
         if (type === 'payments' || type === 'all') {
           XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPaymentExportRows(communityPayments)), 'Pembayaran')
         }
-        XLSX.writeFile(workbook, `topsell-run-${slugify(community.community_code)}-${slugify(community.name)}-${type}-${today}.xlsx`)
+        XLSX.writeFile(workbook, `topsell-run-${slugify(community.community_code)}-${slugify(community.name)}-${type}${filterSuffix}-${today}.xlsx`)
       }
     }
   }
@@ -1201,7 +1213,7 @@ export function AdminDashboardClient({
                           { label: 'Email', value: scanResult.participant.email },
                           { label: 'Komunitas', value: firstRelation(scanResult.participant.community)?.name || '-' },
                           { label: 'Kode Komunitas', value: firstRelation(scanResult.participant.community)?.community_code || '-' },
-                          { label: 'Status Bayar', value: scanResult.participant.payment_status === 'paid' ? 'Lunas' : scanResult.participant.payment_status },
+                          { label: 'Status Bayar', value: scanResult.participant.payment_status === 'paid' ? 'Paid' : scanResult.participant.payment_status === 'failed' ? 'Failed' : scanResult.participant.payment_status === 'expired' ? 'Expired' : 'Pending' },
                           { label: 'Racepack', value: scanResult.participant.checked_in ? 'Sudah diambil' : 'Belum diambil' },
                           { label: 'Waktu Ambil', value: formatDateTime(scanResult.participant.checked_in_at) },
                         ].map((item) => (
@@ -1337,8 +1349,24 @@ export function AdminDashboardClient({
                                       <p className="text-[10px] text-brand-muted">{participant.bib_name}</p>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <Badge variant={participant.payment_status === 'paid' ? 'success' : 'warning'}>
-                                        {participant.payment_status === 'paid' ? 'Lunas' : 'Pending'}
+                                      <Badge
+                                        variant={
+                                          participant.payment_status === 'paid'
+                                            ? 'success'
+                                            : participant.payment_status === 'failed'
+                                            ? 'danger'
+                                            : participant.payment_status === 'expired'
+                                            ? 'neutral'
+                                            : 'warning'
+                                        }
+                                      >
+                                        {participant.payment_status === 'paid'
+                                          ? 'Paid'
+                                          : participant.payment_status === 'failed'
+                                          ? 'Failed'
+                                          : participant.payment_status === 'expired'
+                                          ? 'Expired'
+                                          : 'Pending'}
                                       </Badge>
                                     </td>
                                     <td className="px-4 py-3">
@@ -1421,7 +1449,25 @@ export function AdminDashboardClient({
                           <td className="px-4 py-3 text-xs font-black text-foreground">{formatCurrency(payment.amount)}</td>
                           <td className="px-4 py-3 text-xs font-bold text-brand-muted">{payment.payment_method || '-'}</td>
                           <td className="px-4 py-3">
-                            <Badge variant={payment.status === 'paid' ? 'success' : 'warning'}>{payment.status}</Badge>
+                             <Badge
+                               variant={
+                                 payment.status === 'paid'
+                                   ? 'success'
+                                   : payment.status === 'failed'
+                                   ? 'danger'
+                                   : payment.status === 'expired'
+                                   ? 'neutral'
+                                   : 'warning'
+                               }
+                             >
+                               {payment.status === 'paid'
+                                 ? 'Success'
+                                 : payment.status === 'failed'
+                                 ? 'Failed'
+                                 : payment.status === 'expired'
+                                 ? 'Expired'
+                                 : 'Pending'}
+                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-xs text-brand-muted">{formatDateTime(payment.paid_at || payment.created_at)}</td>
                         </tr>
@@ -1862,6 +1908,28 @@ export function AdminDashboardClient({
                     Pilih semua {packageType === 'community' ? 'komunitas' : 'keluarga'}
                   </label>
                 </div>
+              {activeTab === 'export_participants' && (
+                <div className="flex items-center gap-1.5 bg-brand-gray/30 border border-card-border rounded-lg px-3 py-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted mr-2">Filter Status:</span>
+                  {(['all', 'paid', 'unpaid'] as const).map((opt) => (
+                    <label key={opt} className="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="exportPaymentFilter"
+                        value={opt}
+                        checked={exportPaymentFilter === opt}
+                        onChange={() => setExportPaymentFilter(opt)}
+                        className="accent-sport-orange"
+                      />
+                      <span className={`text-[10px] font-black uppercase tracking-wide ${
+                        exportPaymentFilter === opt ? 'text-sport-orange' : 'text-brand-muted'
+                      }`}>
+                        {opt === 'all' ? 'Semua' : opt === 'paid' ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
                 {(packageType === 'community' ? communities : families).map((community) => (

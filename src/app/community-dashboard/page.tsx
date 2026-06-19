@@ -453,8 +453,24 @@ function DashboardContent() {
                           </p>
                         </td>
                         <td className="px-4 py-3.5 text-center">
-                          <Badge variant={p.payment_status === 'paid' ? 'success' : 'warning'}>
-                            {p.payment_status === 'paid' ? 'LUNAS' : 'PENDING'}
+                          <Badge
+                            variant={
+                              p.payment_status === 'paid'
+                                ? 'success'
+                                : p.payment_status === 'failed'
+                                ? 'danger'
+                                : p.payment_status === 'expired'
+                                ? 'neutral'
+                                : 'warning'
+                            }
+                          >
+                            {p.payment_status === 'paid'
+                              ? 'PAID'
+                              : p.payment_status === 'failed'
+                              ? 'FAILED'
+                              : p.payment_status === 'expired'
+                              ? 'EXPIRED'
+                              : 'PENDING'}
                           </Badge>
                         </td>
                         <td className="px-4 py-3.5 text-center">

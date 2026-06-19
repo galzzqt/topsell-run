@@ -83,7 +83,7 @@ export default async function AdminPage() {
     emergency_contact_phone: fp.emergency_contact_phone,
     participant_code: fp.participant_code,
     qr_code_data: fp.qr_code_data,
-    payment_status: fp.payment_status as 'pending' | 'paid' | 'failed',
+    payment_status: fp.payment_status as 'pending' | 'paid' | 'failed' | 'expired',
     checked_in: fp.checked_in,
     checked_in_at: fp.checked_in_at,
     created_at: fp.created_at,
@@ -109,7 +109,7 @@ export default async function AdminPage() {
     amount: fp.amount,
     payment_method: fp.payment_method,
     payment_reference: fp.payment_reference,
-    status: fp.status as 'pending' | 'paid' | 'failed',
+    status: fp.status as 'pending' | 'paid' | 'failed' | 'expired',
     paid_at: fp.paid_at,
     created_at: fp.created_at,
     registration: fp.registration

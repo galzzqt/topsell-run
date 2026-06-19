@@ -21,6 +21,7 @@ import {
   markFamilyPaymentPaid,
   updateFamilyPayment,
   markFamilyPaymentFailed,
+  markFamilyPaymentExpired,
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
@@ -359,7 +360,11 @@ export async function syncXenditFamilyPaymentStatus(paymentReference: string) {
   if (!isXenditPaidStatus(xenditData?.status)) {
     const status = (xenditData?.status || '').toUpperCase()
     if (status === 'EXPIRED' || status === 'FAILED') {
-      await markFamilyPaymentFailed(payment.id)
+      if (status === 'EXPIRED') {
+        await markFamilyPaymentExpired(payment.id)
+      } else {
+        await markFamilyPaymentFailed(payment.id)
+      }
       try {
         await ingestAdminLog({
           level: 'warning',

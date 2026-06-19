@@ -5,7 +5,9 @@ import {
   markFamilyPaymentsPaidByReference,
   markFamilyPaymentsPaidBySessionId,
   markPaymentFailed,
+  markPaymentExpired,
   markFamilyPaymentFailed,
+  markFamilyPaymentExpired,
 } from '@/lib/db'
 import {
   sendRacepackEmailsForRegistration,
@@ -182,7 +184,11 @@ export async function POST(request: Request) {
         // Update community payments
         const communityPayments = await db.collection('payments').find({ $or: orQuery }).toArray()
         for (const p of communityPayments) {
-          await markPaymentFailed(p.id)
+          if (isExpired) {
+            await markPaymentExpired(p.id)
+          } else {
+            await markPaymentFailed(p.id)
+          }
           await ingestAdminLog({
             level: 'warning',
             source: 'payment',
@@ -196,7 +202,11 @@ export async function POST(request: Request) {
         // Update family payments
         const familyPayments = await db.collection('family_payments').find({ $or: orQuery }).toArray()
         for (const p of familyPayments) {
-          await markFamilyPaymentFailed(p.id)
+          if (isExpired) {
+            await markFamilyPaymentExpired(p.id)
+          } else {
+            await markFamilyPaymentFailed(p.id)
+          }
           await ingestAdminLog({
             level: 'warning',
             source: 'payment',

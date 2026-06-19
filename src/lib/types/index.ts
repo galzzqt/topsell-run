@@ -37,7 +37,7 @@ export interface Participant {
   kecamatan: string | null
   participant_code: string | null // e.g. TSR-6K-10023 (assigned after payment)
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
   checked_in: boolean
   checked_in_at: string | null
   racepack_email_sent_at: string | null
@@ -71,7 +71,7 @@ export interface Registration {
   community_id: string
   total_participants: number
   total_amount: number
-  status: 'pending' | 'paid' | 'failed'
+  status: 'pending' | 'paid' | 'failed' | 'expired'
   created_at: string
   updated_at: string
 }
@@ -86,7 +86,7 @@ export interface Payment {
   provider: string | null
   xendit_session_id: string | null
   checkout_url: string | null
-  status: 'pending' | 'paid' | 'failed'
+  status: 'pending' | 'paid' | 'failed' | 'expired'
   paid_at: string | null
   created_at: string
   updated_at: string
@@ -147,7 +147,7 @@ export interface FamilyParticipant {
   kecamatan: string | null
   participant_code: string | null
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
   checked_in: boolean
   checked_in_at: string | null
   racepack_email_sent_at: string | null
@@ -163,7 +163,7 @@ export interface FamilyRegistration {
   family_id: string
   total_participants: number
   total_amount: number
-  status: 'pending' | 'paid' | 'failed'
+  status: 'pending' | 'paid' | 'failed' | 'expired'
   created_at: string
   updated_at: string
 }
@@ -178,7 +178,7 @@ export interface FamilyPayment {
   provider: string | null
   xendit_session_id: string | null
   checkout_url: string | null
-  status: 'pending' | 'paid' | 'failed'
+  status: 'pending' | 'paid' | 'failed' | 'expired'
   paid_at: string | null
   created_at: string
   updated_at: string
