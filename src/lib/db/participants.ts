@@ -34,6 +34,35 @@ export async function countParticipantsWithCode() {
   return db.collection('participants').countDocuments({ participant_code: { $ne: null } })
 }
 
+export async function findDuplicateParticipants(email: string, phone: string) {
+  const db = await getDb()
+  const doc = await db.collection<ParticipantDoc>('participants').findOne({
+    $or: [
+      { email: email.toLowerCase() },
+      { phone: phone },
+    ]
+  })
+  return stripMongoId(doc) as Participant | null
+}
+
+export async function findActiveParticipants(email: string, phone: string) {
+  const db = await getDb()
+  const doc = await db.collection<ParticipantDoc>('participants').findOne({
+    $and: [
+      {
+        $or: [
+          { email: email.toLowerCase() },
+          { phone: phone },
+        ]
+      },
+      {
+        payment_status: { $in: ['pending', 'paid'] }  // Only active participants
+      }
+    ]
+  })
+  return stripMongoId(doc) as Participant | null
+}
+
 export async function listParticipantsWithCommunity() {
   const db = await getDb()
   const participants = await db.collection<ParticipantDoc>('participants').find({}).toArray()

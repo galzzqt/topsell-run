@@ -3,7 +3,16 @@
 import { z } from 'zod'
 import { getFamilySession } from '@/lib/auth/family'
 import { getCommunitySession } from '@/lib/auth/community'
-import { insertFamilyParticipants, insertParticipants } from '@/lib/db'
+import { 
+  insertFamilyParticipants, 
+  insertParticipants, 
+  findDuplicateParticipants,
+  findDuplicateFamilyParticipants,
+  findActiveParticipants,
+  findActiveFamilyParticipants,
+  findParticipantsByCommunityId,
+  findFamilyParticipantsByFamilyId,
+} from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
 const participantInput = z.object({
@@ -23,6 +32,21 @@ const participantInput = z.object({
 const addParticipantsSchema = z.object({
   participants: z.array(participantInput).min(1, 'Minimal 1 peserta'),
 })
+.refine((data) => {
+  // Check for duplicate participants within the same submission (same email OR same phone)
+  const emailPhonePairs = new Set<string>()
+  for (const participant of data.participants) {
+    const pair = `${participant.email.toLowerCase()}|${participant.phone}`
+    if (emailPhonePairs.has(pair)) {
+      return false
+    }
+    emailPhonePairs.add(pair)
+  }
+  return true
+}, {
+  message: 'Ada peserta dengan email atau nomor HP yang sama dalam form. Setiap peserta harus memiliki email dan nomor HP yang unik.',
+  path: ['participants'],
+})
 
 export type AddParticipantsValues = z.infer<typeof addParticipantsSchema>
 
@@ -37,6 +61,33 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
 
   const session = await getFamilySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
+
+  // BUSINESS LOGIC: Check for ACTIVE participants only (pending/paid status)
+  // Allow duplicates if existing participant has failed/expired payment status
+  for (const participant of validated.data.participants) {
+    const activeParticipant = await findActiveFamilyParticipants(participant.email, participant.phone)
+    if (activeParticipant) {
+      return {
+        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+      }
+    }
+  }
+
+  // Check for duplicates within existing family participants (same family)
+  const existingParticipants = await findFamilyParticipantsByFamilyId(session.id)
+  for (const participant of validated.data.participants) {
+    // Only check against active participants in same family
+    const existingDuplicate = existingParticipants.find(existing => 
+      (existing.email.toLowerCase() === participant.email.toLowerCase() || 
+       existing.phone === participant.phone) &&
+      (existing.payment_status === 'pending' || existing.payment_status === 'paid')
+    )
+    if (existingDuplicate) {
+      return {
+        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} atau nomor HP ${participant.phone} sudah ada aktif di keluarga Anda (status: ${existingDuplicate.payment_status}). Silakan gunakan email atau nomor HP yang berbeda.`
+      }
+    }
+  }
 
   try {
     await insertFamilyParticipants(
@@ -98,6 +149,33 @@ export async function addCommunityParticipantsAction(values: AddParticipantsValu
 
   const session = await getCommunitySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
+
+  // BUSINESS LOGIC: Check for ACTIVE participants only (pending/paid status)
+  // Allow duplicates if existing participant has failed/expired payment status
+  for (const participant of validated.data.participants) {
+    const activeParticipant = await findActiveParticipants(participant.email, participant.phone)
+    if (activeParticipant) {
+      return {
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+      }
+    }
+  }
+
+  // Check for duplicates within existing community participants (same community)
+  const existingParticipants = await findParticipantsByCommunityId(session.id)
+  for (const participant of validated.data.participants) {
+    // Only check against active participants in same community
+    const existingDuplicate = existingParticipants.find(existing => 
+      (existing.email.toLowerCase() === participant.email.toLowerCase() || 
+       existing.phone === participant.phone) &&
+      (existing.payment_status === 'pending' || existing.payment_status === 'paid')
+    )
+    if (existingDuplicate) {
+      return {
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} atau nomor HP ${participant.phone} sudah ada aktif di komunitas Anda (status: ${existingDuplicate.payment_status}). Silakan gunakan email atau nomor HP yang berbeda.`
+      }
+    }
+  }
 
   try {
     await insertParticipants(

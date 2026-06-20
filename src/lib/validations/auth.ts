@@ -83,6 +83,21 @@ export const registerSchema = z
     message: 'Konfirmasi password tidak cocok',
     path: ['confirmPassword'],
   })
+  .refine((data) => {
+    // Check for duplicate participants within the same registration (same email OR same phone)
+    const emailPhonePairs = new Set<string>()
+    for (const participant of data.participants) {
+      const pair = `${participant.email.toLowerCase()}|${participant.phone}`
+      if (emailPhonePairs.has(pair)) {
+        return false
+      }
+      emailPhonePairs.add(pair)
+    }
+    return true
+  }, {
+    message: 'Ada peserta dengan email atau nomor HP yang sama. Setiap peserta harus memiliki email dan nomor HP yang unik.',
+    path: ['participants'],
+  })
 
 export const registerFamilySchema = z
   .object({
@@ -113,6 +128,21 @@ export const registerFamilySchema = z
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Konfirmasi password tidak cocok',
     path: ['confirmPassword'],
+  })
+  .refine((data) => {
+    // Check for duplicate participants within the same registration (same email OR same phone)
+    const emailPhonePairs = new Set<string>()
+    for (const participant of data.participants) {
+      const pair = `${participant.email.toLowerCase()}|${participant.phone}`
+      if (emailPhonePairs.has(pair)) {
+        return false
+      }
+      emailPhonePairs.add(pair)
+    }
+    return true
+  }, {
+    message: 'Ada peserta dengan email atau nomor HP yang sama. Setiap peserta harus memiliki email dan nomor HP yang unik.',
+    path: ['participants'],
   })
 
 export type LoginFormValues = z.infer<typeof loginSchema>

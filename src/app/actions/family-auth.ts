@@ -15,6 +15,9 @@ import {
   insertFamilyParticipants,
   saveFamilyAuth,
   updateFamily,
+  findDuplicateFamilyParticipants,
+  findActiveFamilyParticipants,
+  findFamilyParticipantsByFamilyId,
 } from '@/lib/db'
 import { registerFamilySchema, loginSchema, RegisterFamilyFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendFamilyRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
@@ -30,6 +33,18 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
   const existingFamily = await findFamilyByPhone(values.phone)
   if (existingFamily) {
     return { error: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' }
+  }
+
+  // Check for duplicate participants based on email and phone
+  // BUSINESS RULE: Only block if existing participant has active status (pending/paid)
+  // Allow registration if existing participant has failed/expired status
+  for (const participant of values.participants) {
+    const activeParticipant = await findActiveFamilyParticipants(participant.email, participant.phone)
+    if (activeParticipant) {
+      return {
+        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+      }
+    }
   }
 
   let family
@@ -162,6 +177,28 @@ export async function signInFamily(values: LoginFormValues) {
 
   if (!family || !auth || !verifyPassword(values.password, auth)) {
     return { error: 'Nomor HP/Email atau password salah' }
+  }
+
+  // Check if any family participants are already registered in the system
+  const familyParticipants = await findFamilyParticipantsByFamilyId(family.id)
+  const duplicates: Array<{ name: string; email: string; phone: string }> = []
+  
+  for (const participant of familyParticipants) {
+    const otherParticipant = await findDuplicateFamilyParticipants(participant.email, participant.phone)
+    if (otherParticipant && otherParticipant.id !== participant.id && otherParticipant.family_id !== family.id) {
+      duplicates.push({
+        name: participant.full_name,
+        email: participant.email,
+        phone: participant.phone,
+      })
+    }
+  }
+
+  if (duplicates.length > 0) {
+    const duplicateList = duplicates.map(d => `${d.name} (${d.email}, ${d.phone})`).join('; ')
+    return {
+      error: `Anggota keluarga berikut sudah terdaftar di keluarga lain: ${duplicateList}. Silakan hubungi admin.`
+    }
   }
 
   await createFamilySession({

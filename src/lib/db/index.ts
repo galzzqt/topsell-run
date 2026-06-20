@@ -30,6 +30,8 @@ export {
   findPaidParticipantsForRacepackEmail,
   findParticipantWithCommunityById,
   markParticipantCheckedIn,
+  findDuplicateParticipants,
+  findActiveParticipants,
 } from './participants'
 
 export {
@@ -96,6 +98,8 @@ export {
   findPaidFamilyParticipantsForRacepackEmail,
   findFamilyParticipantWithFamilyById,
   markFamilyParticipantCheckedIn,
+  findDuplicateFamilyParticipants,
+  findActiveFamilyParticipants,
 } from './family-participants'
 
 export {

@@ -15,6 +15,8 @@ import {
   insertParticipants,
   saveCommunityAuth,
   updateCommunity,
+  findDuplicateParticipants,
+  findActiveParticipants,
 } from '@/lib/db'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
@@ -30,6 +32,18 @@ export async function signUpCommunity(values: RegisterFormValues) {
   const existingCommunity = await findCommunityByPhone(values.phone)
   if (existingCommunity) {
     return { error: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' }
+  }
+
+  // Check for duplicate participants based on email and phone
+  // BUSINESS RULE: Only block if existing participant has active status (pending/paid)
+  // Allow registration if existing participant has failed/expired status
+  for (const participant of values.participants) {
+    const activeParticipant = await findActiveParticipants(participant.email, participant.phone)
+    if (activeParticipant) {
+      return {
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+      }
+    }
   }
 
   let community
@@ -162,6 +176,28 @@ export async function signInCommunity(values: LoginFormValues) {
 
   if (!community || !auth || !verifyPassword(values.password, auth)) {
     return { error: 'Nomor HP/Email atau password salah' }
+  }
+
+  // Check if any participants are already registered in the system
+  const communityParticipants = await import('@/lib/db').then(m => m.findParticipantsByCommunityId(community.id))
+  const duplicates: Array<{ name: string; email: string; phone: string }> = []
+  
+  for (const participant of communityParticipants) {
+    const otherParticipant = await findDuplicateParticipants(participant.email, participant.phone)
+    if (otherParticipant && otherParticipant.id !== participant.id && otherParticipant.community_id !== community.id) {
+      duplicates.push({
+        name: participant.full_name,
+        email: participant.email,
+        phone: participant.phone,
+      })
+    }
+  }
+
+  if (duplicates.length > 0) {
+    const duplicateList = duplicates.map(d => `${d.name} (${d.email}, ${d.phone})`).join('; ')
+    return {
+      error: `Peserta berikut sudah terdaftar di komunitas lain: ${duplicateList}. Silakan hubungi admin.`
+    }
   }
 
   await createCommunitySession({
