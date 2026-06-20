@@ -10,6 +10,8 @@ import {
   findDuplicateFamilyParticipants,
   findActiveParticipants,
   findActiveFamilyParticipants,
+  findActiveCrossParticipant,
+  findActiveCrossFamilyParticipant,
   findParticipantsByCommunityId,
   findFamilyParticipantsByFamilyId,
 } from '@/lib/db'
@@ -64,11 +66,12 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
 
   // BUSINESS LOGIC: Check for ACTIVE participants only (pending/paid status)
   // Allow duplicates if existing participant has failed/expired payment status
+  // CRITICAL FIX: Check ACROSS BOTH community and family participants
   for (const participant of validated.data.participants) {
-    const activeParticipant = await findActiveFamilyParticipants(participant.email, participant.phone)
-    if (activeParticipant) {
+    const crossParticipant = await findActiveCrossFamilyParticipant(participant.email, participant.phone)
+    if (crossParticipant && crossParticipant.participant) {
       return {
-        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
       }
     }
   }
@@ -152,11 +155,12 @@ export async function addCommunityParticipantsAction(values: AddParticipantsValu
 
   // BUSINESS LOGIC: Check for ACTIVE participants only (pending/paid status)
   // Allow duplicates if existing participant has failed/expired payment status
+  // CRITICAL FIX: Check ACROSS BOTH community and family participants
   for (const participant of validated.data.participants) {
-    const activeParticipant = await findActiveParticipants(participant.email, participant.phone)
-    if (activeParticipant) {
+    const crossParticipant = await findActiveCrossParticipant(participant.email, participant.phone)
+    if (crossParticipant && crossParticipant.participant) {
       return {
-        error: `Peserta "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
       }
     }
   }

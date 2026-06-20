@@ -32,6 +32,7 @@ export {
   markParticipantCheckedIn,
   findDuplicateParticipants,
   findActiveParticipants,
+  findActiveCrossParticipant,
 } from './participants'
 
 export {
@@ -100,6 +101,7 @@ export {
   markFamilyParticipantCheckedIn,
   findDuplicateFamilyParticipants,
   findActiveFamilyParticipants,
+  findActiveCrossFamilyParticipant,
 } from './family-participants'
 
 export {

@@ -63,6 +63,48 @@ export async function findActiveParticipants(email: string, phone: string) {
   return stripMongoId(doc) as Participant | null
 }
 
+export async function findActiveCrossParticipant(email: string, phone: string) {
+  const db = await getDb()
+  // Check BOTH community and family participants - return whichever is found active
+  const communityDoc = await db.collection<ParticipantDoc>('participants').findOne({
+    $and: [
+      {
+        $or: [
+          { email: email.toLowerCase() },
+          { phone: phone },
+        ]
+      },
+      {
+        payment_status: { $in: ['pending', 'paid'] }
+      }
+    ]
+  })
+  
+  if (communityDoc) {
+    return { type: 'community' as const, participant: stripMongoId(communityDoc) as Participant }
+  }
+
+  const familyDoc = await db.collection('family_participants').findOne({
+    $and: [
+      {
+        $or: [
+          { email: email.toLowerCase() },
+          { phone: phone },
+        ]
+      },
+      {
+        payment_status: { $in: ['pending', 'paid'] }
+      }
+    ]
+  })
+
+  if (familyDoc) {
+    return { type: 'family' as const, participant: stripMongoId(familyDoc) }
+  }
+
+  return null
+}
+
 export async function listParticipantsWithCommunity() {
   const db = await getDb()
   const participants = await db.collection<ParticipantDoc>('participants').find({}).toArray()

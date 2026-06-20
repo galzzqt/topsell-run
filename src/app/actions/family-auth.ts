@@ -16,7 +16,7 @@ import {
   saveFamilyAuth,
   updateFamily,
   findDuplicateFamilyParticipants,
-  findActiveFamilyParticipants,
+  findActiveCrossFamilyParticipant,
   findFamilyParticipantsByFamilyId,
 } from '@/lib/db'
 import { registerFamilySchema, loginSchema, RegisterFamilyFormValues, LoginFormValues } from '@/lib/validations/auth'
@@ -38,11 +38,12 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
   // Check for duplicate participants based on email and phone
   // BUSINESS RULE: Only block if existing participant has active status (pending/paid)
   // Allow registration if existing participant has failed/expired status
+  // CRITICAL FIX: Check ACROSS BOTH community and family participants
   for (const participant of values.participants) {
-    const activeParticipant = await findActiveFamilyParticipants(participant.email, participant.phone)
-    if (activeParticipant) {
+    const crossParticipant = await findActiveCrossFamilyParticipant(participant.email, participant.phone)
+    if (crossParticipant && crossParticipant.participant) {
       return {
-        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (status: ${activeParticipant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
       }
     }
   }
