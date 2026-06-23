@@ -18,10 +18,19 @@ import {
   findDuplicateFamilyParticipants,
   findActiveCrossFamilyParticipant,
   findFamilyParticipantsByFamilyId,
+  createFamilyRegistration,
+  createFamilyPayment,
+  linkFamilyParticipantsToRegistration,
 } from '@/lib/db'
 import { registerFamilySchema, loginSchema, RegisterFamilyFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendFamilyRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
+import { TOPSELL_RUN_EVENT } from '@/lib/types'
+import { generateRandomReference } from '@/lib/utils/format'
+
+function toXenditReference(value: string) {
+  return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
+}
 
 export async function signUpFamily(values: RegisterFamilyFormValues) {
   const validated = registerFamilySchema.safeParse(values)
@@ -43,7 +52,7 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
     const crossParticipant = await findActiveCrossFamilyParticipant(participant.email, participant.phone)
     if (crossParticipant && crossParticipant.participant) {
       return {
-        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
       }
     }
   }
@@ -61,25 +70,26 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
       kecamatan: values.kecamatan,
     })
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Gagal membuat profil keluarga.' }
+    return { error: error instanceof Error ? error.message : 'Gagal membuat profil Brother & Sister Package.' }
   }
 
   try {
     await saveFamilyAuth(family.id, values.phone, createPasswordRecord(values.password))
   } catch (error) {
     await deleteFamily(family.id)
-    return { error: error instanceof Error ? error.message : 'Gagal menyimpan akun keluarga.' }
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan akun Brother & Sister Package.' }
   }
 
   try {
     await updateFamily(family.id, { email: values.email, category: values.category })
   } catch (error) {
     await deleteFamily(family.id)
-    return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil keluarga.' }
+    return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil Brother & Sister Package.' }
   }
 
+  let participantIds: string[] = []
   try {
-    await insertFamilyParticipants(
+    const insertedParticipants = await insertFamilyParticipants(
       values.participants.map((p) => ({
         family_id: family.id,
         registration_id: null,
@@ -108,9 +118,37 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
         racepack_whatsapp_error: null,
       }))
     )
+    participantIds = insertedParticipants.map(p => p.id)
   } catch (error) {
     await deleteFamily(family.id)
-    return { error: error instanceof Error ? error.message : 'Gagal menyimpan data anggota keluarga.' }
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan data anggota.' }
+  }
+
+  // Auto-create registration and payment record with status "pending"
+  const totalAmount = values.participants.length * TOPSELL_RUN_EVENT.price_per_participant
+  const paymentRefRaw = generateRandomReference('FAM')
+  const paymentRef = toXenditReference(paymentRefRaw)
+
+  try {
+    const registration = await createFamilyRegistration({
+      family_id: family.id,
+      total_participants: values.participants.length,
+      total_amount: totalAmount,
+      status: 'pending',
+    })
+
+    await linkFamilyParticipantsToRegistration(participantIds, registration.id)
+
+    await createFamilyPayment({
+      registration_id: registration.id,
+      amount: totalAmount,
+      payment_reference: paymentRef,
+      status: 'pending',
+    })
+  } catch (error) {
+    console.error('Failed to create auto-payment record:', error)
+    // Don't fail the registration if payment creation fails
+    // Admin can manually create payment later
   }
 
   try {
@@ -135,7 +173,7 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
       level: 'info',
       source: 'auth',
       event: 'family_signup',
-      message: `Pendaftaran keluarga baru: ${values.name} (Perwakilan: ${values.leader_name}, HP: ${values.phone}, Jumlah Anggota: ${values.participants.length}).`,
+      message: `Pendaftaran Brother & Sister Package baru: ${values.name} (Perwakilan: ${values.leader_name}, HP: ${values.phone}, Jumlah Anggota: ${values.participants.length}).`,
       data: {
         familyId: family.id,
         name: values.name,
@@ -198,7 +236,7 @@ export async function signInFamily(values: LoginFormValues) {
   if (duplicates.length > 0) {
     const duplicateList = duplicates.map(d => `${d.name} (${d.email}, ${d.phone})`).join('; ')
     return {
-      error: `Anggota keluarga berikut sudah terdaftar di keluarga lain: ${duplicateList}. Silakan hubungi admin.`
+      error: `Peserta berikut sudah terdaftar di grup Brother & Sister lain: ${duplicateList}. Silakan hubungi admin.`
     }
   }
 
@@ -213,7 +251,7 @@ export async function signInFamily(values: LoginFormValues) {
       level: 'info',
       source: 'auth',
       event: 'family_signin',
-      message: `Keluarga login berhasil: ${family.name} (HP: ${family.phone}).`,
+      message: `Brother & Sister Package login berhasil: ${family.name} (HP: ${family.phone}).`,
       data: {
         familyId: family.id,
         name: family.name,

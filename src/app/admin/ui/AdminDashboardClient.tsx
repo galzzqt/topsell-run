@@ -34,16 +34,20 @@ import {
   refreshAxiomLogs,
   saveEditableEnvValues,
   saveRegistrationFormSettings,
+  saveWebhookSettings,
   updateManagedAdmin,
   updateAdminCommunity,
   updateAdminFamily,
   updateAdminParticipant,
+  updateAdminPaymentStatus,
   type AdminCommunityUpdateValues,
   type AdminParticipantUpdateValues,
+  type UpdatePaymentStatusValues,
 } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
+import { DateInput } from '@/components/ui/date-input'
 import { formatCurrency } from '@/lib/utils/format'
 import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, FormInputConfig, FormSelectConfig } from '@/lib/admin/settings-schema'
 import type { AdminLogEntry } from '@/lib/axiom/logs'
@@ -278,6 +282,7 @@ export function AdminDashboardClient({
   const [logs, setLogs] = useState<AdminLogEntry[]>(axiomLogs)
   const [logsMessage, setLogsMessage] = useState(axiomLogsError || '')
   const [isPending, startTransition] = useTransition()
+  const [paymentStatusChanges, setPaymentStatusChanges] = useState<Map<string, 'pending' | 'paid' | 'failed' | 'expired'>>(new Map())
 
   const resolvedSelection = useMemo(() => {
     return selectedExportCommunities ?? new Set((packageType === 'community' ? communities : families).map((c) => c.id))
@@ -330,7 +335,7 @@ export function AdminDashboardClient({
     for (const participant of filteredParticipants) {
       const community = getParticipantCommunity(participant)
       const code = community?.community_code || 'TANPA-KODE'
-      const name = community?.name || (packageType === 'community' ? 'Tanpa Komunitas' : 'Tanpa Keluarga')
+      const name = community?.name || (packageType === 'community' ? 'Tanpa Komunitas' : 'Tanpa Grup')
       const key = `${code}:${name}`
       const current = groups.get(key)
 
@@ -523,7 +528,7 @@ export function AdminDashboardClient({
     const selectedCommunities = targetCommunities.filter((community) => selectedIds.has(community.id))
 
     if (mode === 'selected' && selectedCommunities.length === 0) {
-      alert(`Pilih minimal satu ${packageType === 'community' ? 'komunitas' : 'keluarga'} untuk diekspor.`)
+      alert(`Pilih minimal satu ${packageType === 'community' ? 'komunitas' : 'grup Brother & Sister'} untuk diekspor.`)
       return
     }
 
@@ -554,7 +559,7 @@ export function AdminDashboardClient({
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allPaymentsRows), 'Pembayaran')
       }
 
-      const segmentName = packageType === 'community' ? 'komunitas' : 'keluarga'
+      const segmentName = packageType === 'community' ? 'komunitas' : 'brother-sister'
       XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}-${today}.xlsx`)
     } else {
       for (const community of selectedCommunities) {
@@ -583,6 +588,70 @@ export function AdminDashboardClient({
   const handleLogout = () => {
     startTransition(async () => {
       await logoutAdmin()
+      router.refresh()
+    })
+  }
+
+  const handlePaymentStatusChange = (paymentId: string, newStatus: 'pending' | 'paid' | 'failed' | 'expired') => {
+    // Just update the local state, don't trigger API yet
+    setPaymentStatusChanges((prev) => {
+      const next = new Map(prev)
+      next.set(paymentId, newStatus)
+      return next
+    })
+  }
+
+  const handleCancelPaymentStatusChange = (paymentId: string) => {
+    setPaymentStatusChanges((prev) => {
+      const next = new Map(prev)
+      next.delete(paymentId)
+      return next
+    })
+  }
+
+  const handleSavePaymentStatus = (paymentId: string) => {
+    const newStatus = paymentStatusChanges.get(paymentId)
+    if (!newStatus) return
+
+    const payment = packageType === 'community' 
+      ? payments.find(p => p.id === paymentId)
+      : familyPayments.find(p => p.id === paymentId)
+    
+    if (!payment) return
+    
+    const statusLabels = {
+      pending: 'PENDING',
+      paid: 'PAID (Lunas)',
+      failed: 'FAILED (Gagal)',
+      expired: 'EXPIRED (Kadaluarsa)'
+    }
+    
+    const confirmMessage = `Ubah status pembayaran dari ${statusLabels[payment.status as keyof typeof statusLabels]} menjadi ${statusLabels[newStatus]}?\n\nRef: ${payment.payment_reference}\n\n${newStatus === 'paid' ? '⚠️ Mengubah ke PAID akan:\n- Mengaktifkan semua peserta\n- Menggenerate QR Code\n- Mengirim email racepack\n- Mengirim notifikasi WhatsApp' : ''}`
+    
+    if (!window.confirm(confirmMessage)) {
+      return
+    }
+    
+    startTransition(async () => {
+      const result = await updateAdminPaymentStatus({
+        paymentId,
+        packageType,
+        status: newStatus,
+        paymentMethod: newStatus === 'paid' ? 'manual_admin' : undefined,
+      })
+      
+      if (result.error) {
+        alert(`Gagal mengubah status: ${result.error}`)
+      } else {
+        alert(result.message || 'Status pembayaran berhasil diubah')
+        // Clear the change from state
+        setPaymentStatusChanges((prev) => {
+          const next = new Map(prev)
+          next.delete(paymentId)
+          return next
+        })
+      }
+      
       router.refresh()
     })
   }
@@ -740,6 +809,58 @@ export function AdminDashboardClient({
     }))
   }
 
+  const updateCommunityEmailTemplate = (key: keyof AdminSettings['emailTemplates']['community'], value: string) => {
+    setSettingsForm((current) => ({
+      ...current,
+      emailTemplates: {
+        ...current.emailTemplates,
+        community: {
+          ...current.emailTemplates.community,
+          [key]: value,
+        },
+      },
+    }))
+  }
+
+  const updateFamilyEmailTemplate = (key: keyof AdminSettings['emailTemplates']['family'], value: string) => {
+    setSettingsForm((current) => ({
+      ...current,
+      emailTemplates: {
+        ...current.emailTemplates,
+        family: {
+          ...current.emailTemplates.family,
+          [key]: value,
+        },
+      },
+    }))
+  }
+
+  const updateWebhookRegistration = (key: 'url' | 'token', value: string) => {
+    setSettingsForm((current) => ({
+      ...current,
+      webhookSettings: {
+        ...current.webhookSettings,
+        registration: {
+          ...current.webhookSettings.registration,
+          [key]: value,
+        },
+      },
+    }))
+  }
+
+  const updateWebhookPayment = (key: 'url' | 'token', value: string) => {
+    setSettingsForm((current) => ({
+      ...current,
+      webhookSettings: {
+        ...current.webhookSettings,
+        payment: {
+          ...current.webhookSettings.payment,
+          [key]: value,
+        },
+      },
+    }))
+  }
+
   const saveSettings = () => {
     setSettingsMessage('')
     startTransition(async () => {
@@ -749,6 +870,19 @@ export function AdminDashboardClient({
         return
       }
       setSettingsMessage('Pengaturan form pendaftaran berhasil disimpan.')
+      router.refresh()
+    })
+  }
+
+  const saveWebhooks = () => {
+    setSettingsMessage('')
+    startTransition(async () => {
+      const result = await saveWebhookSettings(settingsForm.webhookSettings)
+      if (result.error) {
+        alert(result.error)
+        return
+      }
+      setSettingsMessage(result.message || 'Pengaturan webhook berhasil disimpan.')
       router.refresh()
     })
   }
@@ -1251,16 +1385,16 @@ export function AdminDashboardClient({
                       : 'border-transparent text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  Family Package
+                  Brother & Sister Package
                 </button>
               </div>
               <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
-                    {packageType === 'community' ? 'Komunitas' : 'Keluarga'}
+                    {packageType === 'community' ? 'Komunitas' : 'Brother & Sister'}
                   </p>
                   <p className="text-xs font-bold text-foreground">
-                    {groupedParticipants.length} {packageType === 'community' ? 'komunitas' : 'keluarga'} ditemukan
+                    {groupedParticipants.length} {packageType === 'community' ? 'komunitas' : 'grup'} ditemukan
                   </p>
                 </div>
                 <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
@@ -1317,7 +1451,7 @@ export function AdminDashboardClient({
                                 onClick={() => openCommunityEditor(editableCommunity)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
                               >
-                                <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : 'Keluarga'}
+                                <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : 'Grup'}
                               </button>
                             )}
                             <button
@@ -1424,14 +1558,14 @@ export function AdminDashboardClient({
                       : 'border-transparent text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  Family Package
+                  Brother & Sister Package
                 </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-brand-dark/30 border-b border-card-border">
                     <tr>
-                      {['Referensi', packageType === 'community' ? 'Komunitas' : 'Keluarga', 'Nominal', 'Metode', 'Status', 'Tanggal'].map((heading) => (
+                      {['Referensi', packageType === 'community' ? 'Komunitas' : 'Grup', 'Nominal', 'Metode', 'Status', 'Tanggal', 'Aksi'].map((heading) => (
                         <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
                       ))}
                     </tr>
@@ -1439,8 +1573,10 @@ export function AdminDashboardClient({
                   <tbody>
                     {filteredPayments.map((payment) => {
                       const community = getPaymentCommunity(payment)
+                      const hasChange = paymentStatusChanges.has(payment.id)
+                      const newStatus = paymentStatusChanges.get(payment.id) || payment.status
                       return (
-                        <tr key={payment.id} className="border-b border-card-border hover:bg-brand-gray/20">
+                        <tr key={payment.id} className={`border-b border-card-border hover:bg-brand-gray/20 ${hasChange ? 'bg-yellow-50' : ''}`}>
                           <td className="px-4 py-3 text-xs font-bold text-foreground">{payment.payment_reference}</td>
                           <td className="px-4 py-3">
                             <p className="text-xs font-bold text-foreground">{community?.name || '-'}</p>
@@ -1449,33 +1585,54 @@ export function AdminDashboardClient({
                           <td className="px-4 py-3 text-xs font-black text-foreground">{formatCurrency(payment.amount)}</td>
                           <td className="px-4 py-3 text-xs font-bold text-brand-muted">{payment.payment_method || '-'}</td>
                           <td className="px-4 py-3">
-                             <Badge
-                               variant={
-                                 payment.status === 'paid'
-                                   ? 'success'
-                                   : payment.status === 'failed'
-                                   ? 'danger'
-                                   : payment.status === 'expired'
-                                   ? 'neutral'
-                                   : 'warning'
-                               }
+                             <select
+                               value={newStatus}
+                               onChange={(e) => handlePaymentStatusChange(payment.id, e.target.value as 'pending' | 'paid' | 'failed' | 'expired')}
+                               className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${
+                                 newStatus === 'paid'
+                                   ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                                   : newStatus === 'failed'
+                                   ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                                   : newStatus === 'expired'
+                                   ? 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                                   : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                               }`}
                              >
-                               {payment.status === 'paid'
-                                 ? 'Success'
-                                 : payment.status === 'failed'
-                                 ? 'Failed'
-                                 : payment.status === 'expired'
-                                 ? 'Expired'
-                                 : 'Pending'}
-                             </Badge>
+                               <option value="pending">Pending</option>
+                               <option value="paid">Success</option>
+                               <option value="failed">Failed</option>
+                               <option value="expired">Expired</option>
+                             </select>
                           </td>
                           <td className="px-4 py-3 text-xs text-brand-muted">{formatDateTime(payment.paid_at || payment.created_at)}</td>
+                          <td className="px-4 py-3">
+                            {hasChange ? (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleSavePaymentStatus(payment.id)}
+                                  disabled={isPending}
+                                  className="px-3 py-1.5 text-xs font-bold text-white bg-sport-orange rounded-lg hover:bg-sport-orange/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => handleCancelPaymentStatusChange(payment.id)}
+                                  disabled={isPending}
+                                  className="px-3 py-1.5 text-xs font-bold text-brand-muted bg-white border border-card-border rounded-lg hover:bg-brand-gray/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-brand-muted">-</span>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
                     {filteredPayments.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
+                        <td colSpan={7} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
                           Tidak ada pembayaran yang cocok dengan pencarian.
                         </td>
                       </tr>
@@ -1854,6 +2011,128 @@ export function AdminDashboardClient({
                   {settingsMessage && <p className="text-xs font-bold text-green-300">{settingsMessage}</p>}
                 </div>
               </section>
+
+              {/* Email Template Settings */}
+              <section className="bg-card-bg border border-card-border rounded-lg p-4">
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-sm font-black uppercase text-sport-orange mb-1">Template Email Racepack</h3>
+                    <p className="text-[10px] text-brand-muted">
+                      Atur wording email yang dikirim otomatis setelah pembayaran diterima
+                    </p>
+                  </div>
+
+                  {/* Info Box dengan Available Variables */}
+                  <div className="bg-brand-dark/40 border border-card-border rounded-lg p-3">
+                    <p className="text-[10px] font-black uppercase text-brand-muted mb-2">Variabel yang tersedia:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] text-brand-muted">
+                      <div><code className="text-sport-orange">{'{communityName}'}</code> - Nama komunitas</div>
+                      <div><code className="text-sport-orange">{'{familyName}'}</code> - Nama keluarga/Brother & Sister</div>
+                      <div><code className="text-sport-orange">{'{leaderName}'}</code> - Nama ketua/perwakilan</div>
+                      <div><code className="text-sport-orange">{'{participantCount}'}</code> - Jumlah peserta</div>
+                    </div>
+                  </div>
+
+                  {/* Community Email Template */}
+                  <div className="border border-card-border rounded-lg p-4 bg-brand-gray/10">
+                    <h4 className="text-xs font-black uppercase text-foreground mb-3">Email Community Package</h4>
+                    <div className="flex flex-col gap-3">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Subject</span>
+                        <input
+                          type="text"
+                          value={settingsForm.emailTemplates.community.subject}
+                          onChange={(e) => updateCommunityEmailTemplate('subject', e.target.value)}
+                          placeholder="Subject email"
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Greeting (Salam Pembuka)</span>
+                        <input
+                          type="text"
+                          value={settingsForm.emailTemplates.community.greeting}
+                          onChange={(e) => updateCommunityEmailTemplate('greeting', e.target.value)}
+                          placeholder="Contoh: Halo {leaderName},"
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Body Intro (Kalimat Pembuka)</span>
+                        <textarea
+                          value={settingsForm.emailTemplates.community.bodyIntro}
+                          onChange={(e) => updateCommunityEmailTemplate('bodyIntro', e.target.value)}
+                          placeholder="Pembayaran komunitas {communityName} untuk TOPSELL RUN 2026 sudah kami terima..."
+                          rows={3}
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground resize-none"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Body Outro (Kalimat Penutup)</span>
+                        <textarea
+                          value={settingsForm.emailTemplates.community.bodyOutro}
+                          onChange={(e) => updateCommunityEmailTemplate('bodyOutro', e.target.value)}
+                          placeholder="Terima kasih sudah mendaftar! Sampai jumpa di start line..."
+                          rows={2}
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground resize-none"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Family Email Template */}
+                  <div className="border border-card-border rounded-lg p-4 bg-brand-gray/10">
+                    <h4 className="text-xs font-black uppercase text-foreground mb-3">Email Brother & Sister Package</h4>
+                    <div className="flex flex-col gap-3">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Subject</span>
+                        <input
+                          type="text"
+                          value={settingsForm.emailTemplates.family.subject}
+                          onChange={(e) => updateFamilyEmailTemplate('subject', e.target.value)}
+                          placeholder="Subject email"
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Greeting (Salam Pembuka)</span>
+                        <input
+                          type="text"
+                          value={settingsForm.emailTemplates.family.greeting}
+                          onChange={(e) => updateFamilyEmailTemplate('greeting', e.target.value)}
+                          placeholder="Contoh: Halo {leaderName},"
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Body Intro (Kalimat Pembuka)</span>
+                        <textarea
+                          value={settingsForm.emailTemplates.family.bodyIntro}
+                          onChange={(e) => updateFamilyEmailTemplate('bodyIntro', e.target.value)}
+                          placeholder="Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima..."
+                          rows={3}
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground resize-none"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-[10px] font-black uppercase text-brand-muted">Body Outro (Kalimat Penutup)</span>
+                        <textarea
+                          value={settingsForm.emailTemplates.family.bodyOutro}
+                          onChange={(e) => updateFamilyEmailTemplate('bodyOutro', e.target.value)}
+                          placeholder="Terima kasih sudah mendaftar! Sampai jumpa di start line..."
+                          rows={2}
+                          className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground resize-none"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <Button type="button" onClick={saveSettings} isLoading={isPending}>
+                    Simpan Template Email
+                  </Button>
+                  {settingsMessage && <p className="text-xs font-bold text-green-300">{settingsMessage}</p>}
+                </div>
+              </section>
             </div>
           )}
 
@@ -1878,7 +2157,7 @@ export function AdminDashboardClient({
                       : 'border-transparent text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  Family Package
+                  Brother & Sister Package
                 </button>
               </div>
               <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
@@ -1887,7 +2166,7 @@ export function AdminDashboardClient({
                     {activeTab === 'export_participants' ? 'Export Peserta' : 'Export Pembayaran'}
                   </p>
                   <p className="text-xs font-bold text-brand-muted">
-                    Pilih {packageType === 'community' ? 'komunitas' : 'keluarga'}, lalu sistem membuat {combineFiles ? '1 file Excel gabungan' : `1 file Excel untuk tiap ${packageType === 'community' ? 'komunitas' : 'keluarga'}`}.
+                    Pilih {packageType === 'community' ? 'komunitas' : 'grup Brother & Sister'}, lalu sistem membuat {combineFiles ? '1 file Excel gabungan' : `1 file Excel untuk tiap ${packageType === 'community' ? 'komunitas' : 'grup'}`}.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
@@ -1905,7 +2184,7 @@ export function AdminDashboardClient({
                       checked={resolvedSelection.size === (packageType === 'community' ? communities : families).length && (packageType === 'community' ? communities : families).length > 0}
                       onChange={(event) => setAllExportCommunities(event.target.checked)}
                     />
-                    Pilih semua {packageType === 'community' ? 'komunitas' : 'keluarga'}
+                    Pilih semua {packageType === 'community' ? 'komunitas' : 'grup Brother & Sister'}
                   </label>
                 </div>
               {activeTab === 'export_participants' && (
@@ -1982,7 +2261,6 @@ export function AdminDashboardClient({
               ['bib_name', 'Nama BIB'],
               ['email', 'Email'],
               ['phone', 'WhatsApp'],
-              ['date_of_birth', 'Tanggal Lahir'],
               ['medical_condition', 'Penyakit Bawaan'],
               ['emergency_contact_name', 'Nama Kontak Darurat'],
               ['emergency_contact_phone', 'No. Kontak Darurat'],
@@ -1990,7 +2268,7 @@ export function AdminDashboardClient({
               <label key={key} className="flex flex-col gap-1.5">
                 <span className="text-[10px] font-black uppercase text-brand-muted">{label}</span>
                 <input
-                  type={key === 'date_of_birth' ? 'date' : 'text'}
+                  type="text"
                   value={String(participantForm[key as keyof AdminParticipantUpdateValues] || '')}
                   onChange={(event) => setParticipantForm({ ...participantForm, [key]: event.target.value })}
                   className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
@@ -1998,6 +2276,13 @@ export function AdminDashboardClient({
               </label>
             ))}
             <label className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black uppercase text-brand-muted">Tanggal Lahir</span>
+              <DateInput
+                value={String(participantForm.date_of_birth || '')}
+                onChange={(value) => setParticipantForm({ ...participantForm, date_of_birth: value })}
+                className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
+              />
+            </label>            <label className="flex flex-col gap-1.5">
               <span className="text-[10px] font-black uppercase text-brand-muted">Gender</span>
               <select
                 value={participantForm.gender}
@@ -2042,14 +2327,14 @@ export function AdminDashboardClient({
           setCommunityEditing(null)
           setCommunityForm(null)
         }}
-        title="Edit Data Komunitas"
+        title={packageType === 'community' ? 'Edit Data Komunitas' : 'Edit Data Brother & Sister Package'}
         className="max-w-2xl"
       >
         {communityForm && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
-              ['name', 'Nama Komunitas'],
-              ['leader_name', 'Nama Ketua'],
+              ['name', packageType === 'community' ? 'Nama Komunitas' : 'Nama Grup'],
+              ['leader_name', packageType === 'community' ? 'Nama Ketua' : 'Nama Perwakilan'],
               ['email', 'Email'],
               ['phone', 'WhatsApp'],
               ['provinsi', 'Provinsi'],

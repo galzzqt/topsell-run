@@ -13,6 +13,32 @@ export type FormSelectConfig = FormInputConfig & {
   options: FormSelectOptionConfig[]
 }
 
+export type EmailTemplateSettings = {
+  community: {
+    subject: string
+    greeting: string
+    bodyIntro: string
+    bodyOutro: string
+  }
+  family: {
+    subject: string
+    greeting: string
+    bodyIntro: string
+    bodyOutro: string
+  }
+}
+
+export type WebhookSettings = {
+  registration: {
+    url: string
+    token: string
+  }
+  payment: {
+    url: string
+    token: string
+  }
+}
+
 export type RegistrationFormSettings = {
   community: {
     name: FormInputConfig
@@ -55,6 +81,8 @@ export type AdminEnvSnapshot = AdminEditableEnvField & {
 
 export type AdminSettings = {
   registrationForm: RegistrationFormSettings
+  emailTemplates: EmailTemplateSettings
+  webhookSettings: WebhookSettings
   envFields: AdminEditableEnvField[]
 }
 
@@ -83,7 +111,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
     bib_name: { label: 'Nama BIB', placeholder: 'Nama di BIB', visible: true },
     email: { label: 'Email', placeholder: 'email@peserta.com', visible: true },
     phone: { label: 'No. WhatsApp', placeholder: '08xxxxxxxxxx', visible: true },
-    date_of_birth: { label: 'Tanggal Lahir', placeholder: 'Pilih tanggal lahir', visible: true },
+    date_of_birth: { label: 'Tanggal Lahir', placeholder: 'DD/MM/YYYY', visible: true },
     gender: {
       label: 'Jenis Kelamin',
       placeholder: '',
@@ -106,13 +134,41 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       options: ['A', 'B', 'AB', 'O'].map((type) => ({ value: type, label: type })),
     },
     medical_condition: { label: 'Penyakit Bawaan', placeholder: 'Isi jika ada, contoh: asma', visible: true },
-    emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Nama keluarga/kerabat yang bisa dihubungi', visible: true },
+    emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Nama kontak darurat', visible: true },
     emergency_contact_phone: { label: 'No. Kontak Darurat', placeholder: '08xxxxxxxxxx', visible: true },
+  },
+}
+
+export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
+  community: {
+    subject: 'QR Race Pass TOPSELL RUN 2026 - {communityName}',
+    greeting: 'Halo {leaderName},',
+    bodyIntro: 'Pembayaran komunitas {communityName} untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.',
+    bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
+  },
+  family: {
+    subject: 'QR Race Pass TOPSELL RUN 2026 - {familyName}',
+    greeting: 'Halo {leaderName},',
+    bodyIntro: 'Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.',
+    bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
+  },
+}
+
+export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
+  registration: {
+    url: '',
+    token: '',
+  },
+  payment: {
+    url: '',
+    token: '',
   },
 }
 
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   registrationForm: DEFAULT_REGISTRATION_FORM_SETTINGS,
+  emailTemplates: DEFAULT_EMAIL_TEMPLATE_SETTINGS,
+  webhookSettings: DEFAULT_WEBHOOK_SETTINGS,
   envFields: [],
 }
 

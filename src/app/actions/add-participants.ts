@@ -71,7 +71,7 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
     const crossParticipant = await findActiveCrossFamilyParticipant(participant.email, participant.phone)
     if (crossParticipant && crossParticipant.participant) {
       return {
-        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} dan nomor HP ${participant.phone} sudah terdaftar aktif di sistem (${crossParticipant.type} - status: ${crossParticipant.participant.payment_status}). Peserta dengan status pembayaran pending/paid tidak dapat didaftarkan ulang.`
       }
     }
   }
@@ -87,7 +87,7 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
     )
     if (existingDuplicate) {
       return {
-        error: `Anggota keluarga "${participant.full_name}" dengan email ${participant.email} atau nomor HP ${participant.phone} sudah ada aktif di keluarga Anda (status: ${existingDuplicate.payment_status}). Silakan gunakan email atau nomor HP yang berbeda.`
+        error: `Peserta "${participant.full_name}" dengan email ${participant.email} atau nomor HP ${participant.phone} sudah ada aktif di grup Anda (status: ${existingDuplicate.payment_status}). Silakan gunakan email atau nomor HP yang berbeda.`
       }
     }
   }
@@ -131,7 +131,7 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
       level: 'info',
       source: 'family',
       event: 'family_participants_added',
-      message: `${validated.data.participants.length} anggota baru ditambahkan ke keluarga: ${session.name}.`,
+      message: `${validated.data.participants.length} anggota baru ditambahkan ke Brother & Sister Package: ${session.name}.`,
       data: { familyId: session.id, name: session.name, count: validated.data.participants.length },
     })
   } catch {

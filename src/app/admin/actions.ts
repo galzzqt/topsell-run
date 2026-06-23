@@ -23,7 +23,7 @@ import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/ad
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
 import { queryAdminLogs } from '@/lib/axiom/logs'
-import { readEditableEnvSnapshot, updateEditableEnvValues, writeAdminSettings } from '@/lib/admin/settings'
+import { readEditableEnvSnapshot, updateEditableEnvValues, updateWebhookSettings, writeAdminSettings } from '@/lib/admin/settings'
 import { clearRateLimit, rateLimit } from '@/lib/security/rate-limit'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { revalidatePath } from 'next/cache'
@@ -269,7 +269,7 @@ export async function updateAdminParticipant(participantId: string, values: Admi
       level: 'info',
       source: 'admin',
       event: 'admin_participant_updated',
-      message: `Admin ${session.name} memperbarui data peserta: ${payload.full_name} (BIB: ${payload.bib_name}, HP: ${payload.phone}, Tipe: ${existingCommunity ? 'Komunitas' : 'Keluarga'}).`,
+      message: `Admin ${session.name} memperbarui data peserta: ${payload.full_name} (BIB: ${payload.bib_name}, HP: ${payload.phone}, Tipe: ${existingCommunity ? 'Komunitas' : 'Brother & Sister'}).`,
       actor: session,
       data: {
         participantId,
@@ -306,13 +306,13 @@ export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
-  if (!values.name.trim() || !values.leader_name.trim()) return { error: 'Nama keluarga dan penanggung jawab wajib diisi.' }
-  if (!emailRegex.test(values.email)) return { error: 'Email keluarga tidak valid.' }
-  if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP keluarga tidak valid.' }
+  if (!values.name.trim() || !values.leader_name.trim()) return { error: 'Nama grup dan penanggung jawab wajib diisi.' }
+  if (!emailRegex.test(values.email)) return { error: 'Email perwakilan tidak valid.' }
+  if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP perwakilan tidak valid.' }
   if (values.password && values.password.length < 6) return { error: 'Password minimal 6 karakter.' }
 
   const duplicate = await findFamilyByPhoneExcept(values.phone, values.id)
-  if (duplicate) return { error: 'Nomor HP sudah digunakan keluarga lain.' }
+  if (duplicate) return { error: 'Nomor HP sudah digunakan grup Brother & Sister lain.' }
 
   await updateFamily(values.id, {
     name: values.name.trim(),
@@ -335,7 +335,7 @@ export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
       level: 'info',
       source: 'admin',
       event: 'admin_family_updated',
-      message: `Admin ${session.name} memperbarui data keluarga: ${values.name} (Penanggung Jawab: ${values.leader_name}, HP: ${values.phone}).`,
+      message: `Admin ${session.name} memperbarui data Brother & Sister Package: ${values.name} (Penanggung Jawab: ${values.leader_name}, HP: ${values.phone}).`,
       actor: session,
       data: {
         familyId: values.id,
@@ -432,6 +432,29 @@ export async function saveRegistrationFormSettings(settings: AdminSettings) {
   revalidatePath('/admin')
   revalidatePath('/')
   return { success: true }
+}
+
+export async function saveWebhookSettings(webhookSettings: AdminSettings['webhookSettings']) {
+  const session = await getAdminSession()
+  if (!session) return { error: 'Sesi admin habis. Silakan login ulang.' }
+  if (session.role !== 'superadmin') return { error: 'Akses ditolak. Fitur ini hanya untuk superadmin.' }
+
+  try {
+    await updateWebhookSettings(webhookSettings)
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'webhook_settings_updated',
+      message: `Admin ${session.name} memperbarui pengaturan webhook.`,
+      actor: session,
+      data: webhookSettings,
+    })
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan pengaturan webhook.' }
+  }
+
+  revalidatePath('/admin')
+  return { success: true, message: 'Pengaturan webhook berhasil disimpan.' }
 }
 
 export async function saveEditableEnvValues(values: Record<string, string>) {
@@ -589,5 +612,193 @@ export async function refreshAxiomLogs() {
   return {
     error: result.error,
     logs: result.logs,
+  }
+}
+
+export type UpdatePaymentStatusValues = {
+  paymentId: string
+  packageType: 'community' | 'family'
+  status: 'pending' | 'paid' | 'failed' | 'expired'
+  paymentMethod?: string
+}
+
+export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  const { paymentId, packageType, status, paymentMethod } = values
+
+  if (!['pending', 'paid', 'failed', 'expired'].includes(status)) {
+    return { error: 'Status pembayaran tidak valid.' }
+  }
+
+  try {
+    // Dynamic imports to avoid circular dependencies
+    const {
+      findPaymentById,
+      markPaymentPaid,
+      markPaymentFailed,
+      markPaymentExpired,
+      updatePayment,
+      // Family functions
+      findFamilyPaymentById,
+      markFamilyPaymentPaid,
+      markFamilyPaymentFailed,
+      markFamilyPaymentExpired,
+      updateFamilyPayment,
+    } = await import('@/lib/db')
+
+    // Get payment data
+    const payment = packageType === 'community'
+      ? await findPaymentById(paymentId)
+      : await findFamilyPaymentById(paymentId)
+
+    if (!payment) {
+      return { error: 'Pembayaran tidak ditemukan.' }
+    }
+
+    const oldStatus = payment.status
+    const packageName = packageType === 'community' ? 'komunitas' : 'Brother & Sister Package'
+
+    // Handle status change
+    if (status === 'paid') {
+      // Mark as paid - this will trigger participant activation and generate QR codes
+      const updateValues = {
+        payment_method: paymentMethod || payment.payment_method || 'manual_admin',
+        paid_at: new Date().toISOString(),
+      }
+
+      if (packageType === 'community') {
+        await markPaymentPaid(paymentId, updateValues)
+      } else {
+        await markFamilyPaymentPaid(paymentId, updateValues)
+      }
+
+      // Send email and WhatsApp notifications
+      if (oldStatus !== 'paid') {
+        const {
+          sendRacepackEmailsForRegistration,
+          sendFamilyRacepackEmailsForRegistration,
+        } = await import('@/lib/email/racepack')
+
+        const {
+          sendRacepackWhatsappsForRegistration,
+          sendFamilyRacepackWhatsappsForRegistration,
+        } = await import('@/lib/whatsapp/racepack')
+
+        try {
+          if (packageType === 'community') {
+            await Promise.all([
+              sendRacepackEmailsForRegistration(payment.registration_id),
+              sendRacepackWhatsappsForRegistration(payment.registration_id),
+            ])
+          } else {
+            await Promise.all([
+              sendFamilyRacepackEmailsForRegistration(payment.registration_id),
+              sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+            ])
+          }
+        } catch (notifError) {
+          console.error('Failed to send notifications:', notifError)
+          // Don't fail the whole operation if notifications fail
+        }
+      }
+
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: packageType === 'community' ? 'admin_payment_marked_paid' : 'admin_family_payment_marked_paid',
+        message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi PAID (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
+        actor: session,
+        data: {
+          paymentId,
+          packageType,
+          reference: payment.payment_reference,
+          oldStatus,
+          newStatus: 'paid',
+          paymentMethod: paymentMethod || 'manual_admin',
+        }
+      })
+    } else if (status === 'failed') {
+      if (packageType === 'community') {
+        await markPaymentFailed(paymentId)
+      } else {
+        await markFamilyPaymentFailed(paymentId)
+      }
+
+      await ingestAdminLog({
+        level: 'warning',
+        source: 'payment',
+        event: packageType === 'community' ? 'admin_payment_marked_failed' : 'admin_family_payment_marked_failed',
+        message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi FAILED (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
+        actor: session,
+        data: {
+          paymentId,
+          packageType,
+          reference: payment.payment_reference,
+          oldStatus,
+          newStatus: 'failed',
+        }
+      })
+    } else if (status === 'expired') {
+      if (packageType === 'community') {
+        await markPaymentExpired(paymentId)
+      } else {
+        await markFamilyPaymentExpired(paymentId)
+      }
+
+      await ingestAdminLog({
+        level: 'warning',
+        source: 'payment',
+        event: packageType === 'community' ? 'admin_payment_marked_expired' : 'admin_family_payment_marked_expired',
+        message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi EXPIRED (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
+        actor: session,
+        data: {
+          paymentId,
+          packageType,
+          reference: payment.payment_reference,
+          oldStatus,
+          newStatus: 'expired',
+        }
+      })
+    } else if (status === 'pending') {
+      // Just update to pending without triggering any side effects
+      if (packageType === 'community') {
+        await updatePayment(paymentId, { status: 'pending' })
+      } else {
+        await updateFamilyPayment(paymentId, { status: 'pending' })
+      }
+
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: packageType === 'community' ? 'admin_payment_marked_pending' : 'admin_family_payment_marked_pending',
+        message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi PENDING (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
+        actor: session,
+        data: {
+          paymentId,
+          packageType,
+          reference: payment.payment_reference,
+          oldStatus,
+          newStatus: 'pending',
+        }
+      })
+    }
+
+    revalidatePath('/admin')
+    return { success: true, message: `Status pembayaran berhasil diubah menjadi ${status.toUpperCase()}` }
+  } catch (error) {
+    console.error('Failed to update payment status:', error)
+    await ingestAdminLog({
+      level: 'error',
+      source: 'payment',
+      event: 'admin_payment_update_failed',
+      message: `Admin ${session.name} gagal mengubah status pembayaran: ${error instanceof Error ? error.message : 'Unknown error'}.`,
+      actor: session,
+      data: { paymentId, packageType, status, error: error instanceof Error ? error.message : 'Unknown error' }
+    })
+    return { error: 'Gagal mengubah status pembayaran. Silakan coba lagi.' }
   }
 }

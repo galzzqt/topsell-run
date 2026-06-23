@@ -44,7 +44,7 @@ export async function createUniqueFamilyCode() {
     const existing = await db.collection('families').findOne({ family_code: code })
     if (!existing) return code
   }
-  throw new Error('Gagal membuat kode keluarga unik.')
+  throw new Error('Gagal membuat kode grup unik.')
 }
 
 export async function createFamily(input: {

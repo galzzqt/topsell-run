@@ -24,7 +24,7 @@ export async function updateFamilyProfile(values: FamilyProfileValues) {
   }
 
   const existing = await findFamilyByPhoneExcept(values.phone, session.id)
-  if (existing) return { error: 'Nomor HP sudah digunakan keluarga lain.' }
+  if (existing) return { error: 'Nomor HP sudah digunakan grup Brother & Sister lain.' }
 
   await updateFamily(session.id, {
     phone: values.phone,
@@ -42,7 +42,7 @@ export async function updateFamilyProfile(values: FamilyProfileValues) {
       level: 'info',
       source: 'family',
       event: 'family_profile_updated',
-      message: `Profil keluarga diperbarui sendiri oleh pengguna: ${session.name} (HP Baru: ${values.phone}, Email Baru: ${values.email}).`,
+      message: `Profil Brother & Sister Package diperbarui sendiri oleh pengguna: ${session.name} (HP Baru: ${values.phone}, Email Baru: ${values.email}).`,
       data: {
         familyId: session.id,
         name: session.name,

@@ -70,7 +70,7 @@ function toXenditReference(value: string) {
 }
 
 function toXenditName(value: string | null | undefined) {
-  return (value || 'Keluarga').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50) || 'Keluarga'
+  return (value || 'Brother Sister').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50) || 'Brother Sister'
 }
 
 function isDemoSession(payment: { payment_method: string | null; xendit_session_id: string | null }) {
@@ -140,7 +140,7 @@ export async function createFamilyPayment() {
 
   const participants = await findPendingFamilyParticipantsWithoutRegistration(session.id)
   if (participants.length === 0) {
-    return { error: 'Tidak ada anggota keluarga baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
+    return { error: 'Tidak ada anggota baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
   }
 
   const participantIds = participants.map((participant) => participant.id)
@@ -266,7 +266,7 @@ export async function createFamilyPayment() {
       level: 'info',
       source: 'payment',
       event: 'family_payment_created',
-      message: `Invoice checkout pendaftaran keluarga baru dibuat: ${session.name} (Ref: ${paymentRef}, Jumlah Anggota: ${participants.length}, Total: IDR ${totalAmount.toLocaleString('id-ID')}).`,
+      message: `Invoice checkout pendaftaran Brother & Sister Package dibuat: ${session.name} (Ref: ${paymentRef}, Jumlah Anggota: ${participants.length}, Total: IDR ${totalAmount.toLocaleString('id-ID')}).`,
       data: {
         familyId: session.id,
         paymentId: payment.id,
@@ -317,7 +317,7 @@ export async function simulateFamilyPaymentSuccess(paymentId: string) {
       level: 'info',
       source: 'payment',
       event: 'family_payment_simulated',
-      message: `Simulasi pembayaran keluarga sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      message: `Simulasi pembayaran Brother & Sister Package sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
       data: { paymentId, reference: payment.payment_reference, amount: payment.amount }
     })
   } catch (logError) {
@@ -370,7 +370,7 @@ export async function syncXenditFamilyPaymentStatus(paymentReference: string) {
           level: 'warning',
           source: 'payment',
           event: status === 'EXPIRED' ? 'family_payment_synced_expired' : 'family_payment_synced_failed',
-          message: `Sinkronisasi pembayaran keluarga: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+          message: `Sinkronisasi pembayaran Brother & Sister Package: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
           data: { paymentId: payment.id, reference: paymentReference, status }
         })
       } catch (logError) {
@@ -385,7 +385,7 @@ export async function syncXenditFamilyPaymentStatus(paymentReference: string) {
         level: 'info',
         source: 'payment',
         event: 'family_payment_synced_pending',
-        message: `Sinkronisasi pembayaran keluarga: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+        message: `Sinkronisasi pembayaran Brother & Sister Package: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
         data: { paymentId: payment.id, reference: paymentReference, status }
       })
     } catch (logError) {
@@ -408,7 +408,7 @@ export async function syncXenditFamilyPaymentStatus(paymentReference: string) {
       level: 'info',
       source: 'payment',
       event: 'family_payment_synced_paid',
-      message: `Sinkronisasi pembayaran keluarga: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      message: `Sinkronisasi pembayaran Brother & Sister Package: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
       data: { paymentId: payment.id, reference: paymentReference, paymentMethod }
     })
   } catch (logError) {

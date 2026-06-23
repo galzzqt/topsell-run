@@ -10,9 +10,18 @@ const emailSchema = z
 const dateOfBirthSchema = z
   .string()
   .min(1, 'Tanggal lahir wajib diisi')
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid')
+  .regex(/^\d{2}\/\d{2}\/\d{4}$|^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid (gunakan DD/MM/YYYY)')
   .refine((value) => {
-    const date = new Date(`${value}T00:00:00`)
+    // Support both DD/MM/YYYY and YYYY-MM-DD formats
+    let date: Date
+    if (value.includes('/')) {
+      // DD/MM/YYYY format
+      const [day, month, year] = value.split('/')
+      date = new Date(`${year}-${month}-${day}T00:00:00`)
+    } else {
+      // YYYY-MM-DD format (ISO)
+      date = new Date(`${value}T00:00:00`)
+    }
     const today = new Date()
     return !Number.isNaN(date.getTime()) && date < today
   }, 'Tanggal lahir tidak valid')
@@ -101,8 +110,8 @@ export const registerSchema = z
 
 export const registerFamilySchema = z
   .object({
-    name: z.string().min(3, 'Nama keluarga minimal 3 karakter').max(50, 'Nama keluarga maksimal 50 karakter'),
-    leader_name: z.string().min(3, 'Nama perwakilan keluarga minimal 3 karakter').max(50, 'Nama perwakilan keluarga maksimal 50 karakter'),
+    name: z.string().min(3, 'Nama grup minimal 3 karakter').max(50, 'Nama grup maksimal 50 karakter'),
+    leader_name: z.string().min(3, 'Nama perwakilan minimal 3 karakter').max(50, 'Nama perwakilan maksimal 50 karakter'),
     phone: z
       .string()
       .min(1, 'Nomor HP wajib diisi')

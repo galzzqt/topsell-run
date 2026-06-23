@@ -62,27 +62,27 @@ export function FamilyProfileModal({ isOpen, onClose }: FamilyProfileModalProps)
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Akun Keluarga">
+    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Akun Brother & Sister Package">
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <KeyRound className="w-4 h-4 text-sport-orange shrink-0" />
           <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-            Keluarga hanya dapat mengubah nomor HP, email, dan password akun. Data peserta dikelola oleh admin.
+            Perwakilan hanya dapat mengubah nomor HP, email, dan password akun. Data peserta dikelola oleh admin.
           </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <Input
-            label="No. HP / WhatsApp Keluarga"
+            label="No. HP / WhatsApp Perwakilan"
             placeholder="08xxxxxxxxxx"
             error={errors.phone?.message}
             disabled={isSubmitting}
             {...register('phone')}
           />
           <Input
-            label="Email Keluarga"
+            label="Email Perwakilan"
             type="email"
-            placeholder="email@keluarga.com"
+            placeholder="email@example.com"
             error={errors.email?.message}
             disabled={isSubmitting}
             {...register('email')}

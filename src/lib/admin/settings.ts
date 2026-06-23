@@ -5,6 +5,7 @@ import path from 'path'
 import { getAppSetting, upsertAppSetting } from '@/lib/db'
 import {
   DEFAULT_ADMIN_SETTINGS,
+  DEFAULT_EMAIL_TEMPLATE_SETTINGS,
   EDITABLE_ENV_FIELDS,
   type AdminEnvSnapshot,
   type AdminEditableEnvField,
@@ -99,6 +100,17 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
 function normalizeAdminSettings(value: Partial<AdminSettings> | undefined): AdminSettings {
   return {
     registrationForm: normalizeRegistrationFormSettings(value?.registrationForm),
+    emailTemplates: value?.emailTemplates || DEFAULT_EMAIL_TEMPLATE_SETTINGS,
+    webhookSettings: value?.webhookSettings || {
+      registration: {
+        url: process.env.GHL_REGISTRATION_WEBHOOK_URL || '',
+        token: process.env.GHL_REGISTRATION_WEBHOOK_TOKEN || '',
+      },
+      payment: {
+        url: process.env.GHL_QR_WEBHOOK_URL || '',
+        token: process.env.GHL_QR_WEBHOOK_TOKEN || '',
+      },
+    },
     envFields: normalizeEnvFields(value?.envFields),
   }
 }
@@ -227,4 +239,26 @@ export async function updateEditableEnvValues(values: Record<string, string>) {
 
   await fs.writeFile(ENV_PATH, `${lines.join('\n').replace(/\n*$/, '')}\n`, 'utf8')
   return { updatedKeys: updates.map(([key]) => key) }
+}
+
+export async function updateWebhookSettings(webhookSettings: AdminSettings['webhookSettings']) {
+  // Update both database and env file
+  const currentSettings = await readAdminSettings()
+  const updatedSettings = {
+    ...currentSettings,
+    webhookSettings,
+  }
+  
+  // Save to database/JSON
+  await writeAdminSettings(updatedSettings)
+  
+  // Also update .env.local for immediate use
+  await updateEditableEnvValues({
+    GHL_REGISTRATION_WEBHOOK_URL: webhookSettings.registration.url,
+    GHL_REGISTRATION_WEBHOOK_TOKEN: webhookSettings.registration.token,
+    GHL_QR_WEBHOOK_URL: webhookSettings.payment.url,
+    GHL_QR_WEBHOOK_TOKEN: webhookSettings.payment.token,
+  })
+  
+  return { success: true }
 }

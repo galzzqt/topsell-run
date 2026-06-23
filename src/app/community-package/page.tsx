@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useForm, useFieldArray, useWatch } from 'react-hook-form'
+import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Users, Trophy, CheckCircle, Calendar, MapPin,
@@ -15,6 +15,7 @@ import { registerSchema, RegisterFormValues } from '@/lib/validations/auth'
 import { signUpCommunity } from '@/app/actions/auth'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
@@ -648,13 +649,19 @@ export default function LandingPage() {
                           <input type="hidden" value={participantFallbacks(index).phone} {...register(`participants.${index}.phone` as const)} />
                         )}
                         {formSettings.participants.date_of_birth.visible ? (
-                          <Input
-                            label={formSettings.participants.date_of_birth.label}
-                            type="date"
-                            placeholder={formSettings.participants.date_of_birth.placeholder}
-                            error={errors.participants?.[index]?.date_of_birth?.message}
-                            disabled={isSubmitting}
-                            {...register(`participants.${index}.date_of_birth` as const)}
+                          <Controller
+                            name={`participants.${index}.date_of_birth` as const}
+                            control={control}
+                            render={({ field }) => (
+                              <DateInput
+                                label={formSettings.participants.date_of_birth.label}
+                                placeholder={formSettings.participants.date_of_birth.placeholder}
+                                error={errors.participants?.[index]?.date_of_birth?.message}
+                                disabled={isSubmitting}
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            )}
                           />
                         ) : (
                           <input type="hidden" value={participantFallbacks(index).date_of_birth} {...register(`participants.${index}.date_of_birth` as const)} />

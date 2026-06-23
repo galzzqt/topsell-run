@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useForm, useFieldArray, useWatch } from 'react-hook-form'
+import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Users, Trophy, CheckCircle, Calendar, MapPin,
@@ -15,6 +15,7 @@ import { registerFamilySchema, RegisterFamilyFormValues } from '@/lib/validation
 import { signUpFamily } from '@/app/actions/family-auth'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
@@ -153,7 +154,7 @@ function NavUserWidget({ session, onLogout }: { session: ActiveSession | undefin
   }
 
   const initial = session.name.charAt(0).toUpperCase()
-  const label = session.type === 'community' ? 'Komunitas' : 'Keluarga'
+  const label = session.type === 'community' ? 'Komunitas' : 'Brother & Sister'
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -257,8 +258,8 @@ export default function LandingPage() {
   const selectedProvinsi = useWatch({ control, name: 'provinsi' })
   const selectedKota = useWatch({ control, name: 'kota' })
   const familyFallbacks = {
-    name: 'Keluarga Topsell',
-    leader_name: 'Kepala / Perwakilan Keluarga',
+    name: 'Brother & Sister Topsell',
+    leader_name: 'Perwakilan Brother & Sister',
     phone: '081234567890',
     email: 'presentasi@topsell-run.com',
     category: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000',
@@ -445,7 +446,7 @@ export default function LandingPage() {
           {/* Event badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 border border-card-border rounded-full backdrop-blur-sm shadow-sm">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Pendaftaran Family Package Dibuka</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Pendaftaran Brother & Sister Package Dibuka</span>
           </div>
 
           {/* Main title */}
@@ -483,7 +484,7 @@ export default function LandingPage() {
             className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-xs font-black text-white uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-sport-purple/20 cursor-pointer"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
           >
-            Daftarkan Keluarga <ArrowRight className="w-4 h-4" />
+            Daftar Brother & Sister Package <ArrowRight className="w-4 h-4" />
           </a>
 
           <p className="text-[10px] text-brand-muted font-bold uppercase tracking-wider mt-1">
@@ -537,7 +538,7 @@ export default function LandingPage() {
                   </div>
                   <h2 className="text-xl font-black uppercase text-slate-900">Tambah Anggota</h2>
                   <p className="text-xs text-brand-muted font-medium">
-                    Masuk sebagai <span className="font-bold text-sport-purple">{activeSession.name}</span> · Daftarkan anggota baru ke {activeSession.type === 'family' ? 'keluarga' : 'komunitas'} Anda
+                    Masuk sebagai <span className="font-bold text-sport-purple">{activeSession.name}</span> · Daftarkan anggota baru ke {activeSession.type === 'family' ? 'grup Brother & Sister' : 'komunitas'} Anda
                   </p>
                 </div>
 
@@ -578,12 +579,11 @@ export default function LandingPage() {
                           { label: 'Nama BIB', key: 'bib_name', placeholder: 'Maks 20 huruf' },
                           { label: 'Email', key: 'email', placeholder: 'email@domain.com' },
                           { label: 'No. WhatsApp', key: 'phone', placeholder: '08xxxxxxxxxx' },
-                          { label: 'Tgl. Lahir', key: 'date_of_birth', placeholder: '', type: 'date' },
-                        ].map(({ label, key, placeholder, type }) => (
+                        ].map(({ label, key, placeholder }) => (
                           <div key={key} className="flex flex-col gap-1">
                             <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">{label}</label>
                             <input
-                              type={type || 'text'}
+                              type="text"
                               placeholder={placeholder}
                               value={(field as Record<string, string>)[key] || ''}
                               onChange={(e) => setAddFields((f) => f.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
@@ -591,6 +591,14 @@ export default function LandingPage() {
                             />
                           </div>
                         ))}
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">Tgl. Lahir</label>
+                          <DateInput
+                            value={(field as Record<string, string>)['date_of_birth'] || ''}
+                            onChange={(value) => setAddFields((f) => f.map((item, i) => i === index ? { ...item, date_of_birth: value } : item))}
+                            className="border border-card-border rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sport-purple/30 focus:border-sport-purple/50 bg-white"
+                          />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -668,14 +676,14 @@ export default function LandingPage() {
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-sport-orange mb-1">Registrasi Berhasil!</p>
-              <h2 className="text-xl font-black uppercase text-slate-900">Keluarga Terdaftar</h2>
+              <h2 className="text-xl font-black uppercase text-slate-900">Brother & Sister Package Terdaftar</h2>
               <p className="text-xs text-brand-muted mt-2 leading-relaxed">
-                Akun keluarga Anda telah berhasil dibuat. Silakan lanjut ke dashboard untuk melakukan pembayaran.
+                Akun Brother & Sister Package Anda telah berhasil dibuat. Silakan lanjut ke dashboard untuk melakukan pembayaran.
               </p>
             </div>
             <Link href="/login" className="w-full">
               <Button variant="primary" className="w-full py-4 text-xs font-black" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}>
-                Masuk ke Dashboard Keluarga →
+                Masuk ke Dashboard →
               </Button>
             </Link>
           </div>
@@ -705,15 +713,15 @@ export default function LandingPage() {
                 <div className="p-3 rounded-xl mb-1 bg-linear-to-br from-sport-purple via-sport-red to-sport-orange">
                   <UserPlus className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-xl font-black uppercase text-slate-900">Daftar Family Package</h2>
-                <p className="text-xs text-brand-muted font-medium">Buat akun untuk mendaftarkan peserta lari keluarga Anda</p>
+                <h2 className="text-xl font-black uppercase text-slate-900">Daftar Brother & Sister Package</h2>
+                <p className="text-xs text-brand-muted font-medium">Buat akun untuk mendaftarkan peserta lari bersama saudara Anda</p>
               </div>
 
               {/* Info strip */}
               <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
                 <Users className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
                 <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-                  <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data keluarga, input semua nama anggota keluarga, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
+                  <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data grup, input semua nama peserta Brother & Sister, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
                 </p>
               </div>
 
@@ -726,8 +734,8 @@ export default function LandingPage() {
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 {formSettings.community.name.visible ? (
                   <Input
-                    label="Nama Keluarga"
-                    placeholder="Contoh: Keluarga Budi, Keluarga Sanjaya"
+                    label="Nama Grup"
+                    placeholder="Contoh: Sibling Runners, Budi & Sani"
                     error={errors.name?.message}
                     disabled={isSubmitting}
                     {...register('name')}
@@ -739,8 +747,8 @@ export default function LandingPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {formSettings.community.leader_name.visible ? (
                     <Input
-                      label="Nama Perwakilan / Kepala Keluarga"
-                      placeholder="Nama lengkap kepala keluarga atau perwakilan"
+                      label="Nama Perwakilan"
+                      placeholder="Nama lengkap perwakilan grup"
                       error={errors.leader_name?.message}
                       disabled={isSubmitting}
                       {...register('leader_name')}
@@ -765,7 +773,7 @@ export default function LandingPage() {
                   <Input
                     label="Email Perwakilan"
                     type="email"
-                    placeholder="email@keluarga.com"
+                    placeholder="email@example.com"
                     error={errors.email?.message}
                     disabled={isSubmitting}
                     {...register('email')}
@@ -862,9 +870,9 @@ export default function LandingPage() {
                     <div>
                       <h3 className="text-sm font-black uppercase text-slate-900 flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-sport-purple" />
-                        Daftar Anggota Keluarga
+                        Daftar Peserta Brother & Sister
                       </h3>
-                      <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 3 peserta untuk keluarga Anda</p>
+                      <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 3 peserta untuk grup Anda</p>
                     </div>
                     <button
                       type="button"
@@ -942,13 +950,19 @@ export default function LandingPage() {
                           <input type="hidden" value={participantFallbacks(index).phone} {...register(`participants.${index}.phone` as const)} />
                         )}
                         {formSettings.participants.date_of_birth.visible ? (
-                          <Input
-                            label={formSettings.participants.date_of_birth.label}
-                            type="date"
-                            placeholder={formSettings.participants.date_of_birth.placeholder}
-                            error={errors.participants?.[index]?.date_of_birth?.message}
-                            disabled={isSubmitting}
-                            {...register(`participants.${index}.date_of_birth` as const)}
+                          <Controller
+                            name={`participants.${index}.date_of_birth` as const}
+                            control={control}
+                            render={({ field }) => (
+                              <DateInput
+                                label={formSettings.participants.date_of_birth.label}
+                                placeholder={formSettings.participants.date_of_birth.placeholder}
+                                error={errors.participants?.[index]?.date_of_birth?.message}
+                                disabled={isSubmitting}
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            )}
                           />
                         ) : (
                           <input type="hidden" value={participantFallbacks(index).date_of_birth} {...register(`participants.${index}.date_of_birth` as const)} />
@@ -1110,7 +1124,7 @@ export default function LandingPage() {
                   style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
                   isLoading={isSubmitting}
                 >
-                  <Trophy className="w-4 h-4 mr-2" />Daftarkan Keluarga Sekarang
+                  <Trophy className="w-4 h-4 mr-2" />Daftar Brother & Sister Package Sekarang
                 </Button>
               </form>
 

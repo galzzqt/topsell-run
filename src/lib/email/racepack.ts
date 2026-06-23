@@ -1,11 +1,12 @@
 import nodemailer from 'nodemailer'
-import QRCode from 'qrcode'
 import {
   findPaidParticipantsForRacepackEmail,
   updateParticipantIds,
   findPaidFamilyParticipantsForRacepackEmail,
   updateFamilyParticipantIds,
 } from '@/lib/db'
+import { readAdminSettings } from '@/lib/admin/settings'
+import { DEFAULT_EMAIL_TEMPLATE_SETTINGS, type EmailTemplateSettings } from '@/lib/admin/settings-schema'
 
 type RacepackParticipant = {
   id: string
@@ -16,6 +17,7 @@ type RacepackParticipant = {
   racepack_email_sent_at?: string | null
   community: {
     name: string
+    leader_name?: string
     community_code: string
     email: string | null
   } | null
@@ -30,6 +32,7 @@ type RacepackFamilyParticipant = {
   racepack_email_sent_at?: string | null
   family: {
     name: string
+    leader_name?: string
     family_code: string
     email: string | null
   } | null
@@ -49,6 +52,23 @@ function getSmtpConfig() {
 function isEmailConfigured() {
   const config = getSmtpConfig()
   return Boolean(config.host && config.port && config.user && config.pass && config.from)
+}
+
+async function getEmailTemplateSettings(): Promise<EmailTemplateSettings> {
+  try {
+    const settings = await readAdminSettings()
+    return settings.emailTemplates || DEFAULT_EMAIL_TEMPLATE_SETTINGS
+  } catch {
+    return DEFAULT_EMAIL_TEMPLATE_SETTINGS
+  }
+}
+
+function applyEmailVariables(template: string, variables: Record<string, string>): string {
+  let result = template
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+  }
+  return result
 }
 
 function createTransporter() {
@@ -82,8 +102,20 @@ function safeFilename(value: string | null | undefined) {
     .slice(0, 80) || 'peserta'
 }
 
-function renderCommunityEmail(communityNameValue: string, participants: RacepackParticipant[]) {
+function renderCommunityEmail(communityNameValue: string, leaderName: string, participants: RacepackParticipant[], template?: EmailTemplateSettings['community']) {
   const communityName = escapeHtml(communityNameValue || 'Komunitas TOPSELL RUN')
+  const leader = escapeHtml(leaderName || communityNameValue || 'Komunitas')
+  
+  const variables = {
+    communityName: communityName,
+    leaderName: leader,
+    participantCount: String(participants.length),
+  }
+  
+  const greeting = template ? applyEmailVariables(template.greeting, variables) : `Halo <strong>${communityName}</strong>,`
+  const bodyIntro = template ? applyEmailVariables(template.bodyIntro, variables) : 'Pembayaran komunitas untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.'
+  const bodyOutro = template ? applyEmailVariables(template.bodyOutro, variables) : 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️'
+  
   const rows = participants.map((participant, index) => `
     <tr>
       <td style="padding:6px 12px 6px 0;color:#6b7280">${index + 1}</td>
@@ -96,9 +128,8 @@ function renderCommunityEmail(communityNameValue: string, participants: Racepack
   return `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
       <h2 style="margin:0 0 12px;color:#f97316">Pembayaran TOPSELL RUN 2026 Diterima</h2>
-      <p>Halo <strong>${communityName}</strong>,</p>
-      <p>Pembayaran komunitas untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.</p>
-      <p>QR Code untuk pengambilan racepack terlampir di email ini. Setiap file QR dinamai sesuai nama peserta dan nomor BIB.</p>
+      <p>${greeting}</p>
+      <p>${bodyIntro}</p>
       <table style="border-collapse:collapse;margin:16px 0;width:100%">
         <thead>
           <tr>
@@ -110,42 +141,30 @@ function renderCommunityEmail(communityNameValue: string, participants: Racepack
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      <p>Silakan distribusikan QR Code ke masing-masing peserta sesuai nama file.</p>
-      <p style="font-size:12px;color:#6b7280">Email ini dikirim otomatis oleh sistem TOPSELL RUN 2026.</p>
+      <p>${bodyOutro}</p>
+      <p style="font-size:12px;color:#6b7280;margin-top:16px">Email ini dikirim otomatis oleh sistem TOPSELL RUN 2026.</p>
     </div>
   `
 }
 
-async function sendCommunityRacepackEmail(communityEmail: string, communityName: string, participants: RacepackParticipant[]) {
+async function sendCommunityRacepackEmail(communityEmail: string, communityName: string, leaderName: string, participants: RacepackParticipant[]) {
   const config = getSmtpConfig()
   const transporter = createTransporter()
-  const attachments = await Promise.all(participants.map(async (participant) => {
-    if (!participant.qr_code_data) {
-      throw new Error(`QR peserta ${participant.full_name} belum tersedia.`)
-    }
-
-    const qrPng = await QRCode.toBuffer(participant.qr_code_data, {
-      type: 'png',
-      width: 360,
-      margin: 2,
-    })
-
-    const code = safeFilename(participant.participant_code || participant.id)
-    const name = safeFilename(participant.full_name)
-
-    return {
-      filename: `${name}-${code}.png`,
-      content: qrPng,
-      contentType: 'image/png',
-    }
-  }))
+  const emailSettings = await getEmailTemplateSettings()
+  
+  const variables = {
+    communityName: escapeHtml(communityName),
+    leaderName: escapeHtml(leaderName),
+    participantCount: String(participants.length),
+  }
+  
+  const subject = applyEmailVariables(emailSettings.community.subject, variables)
 
   await transporter.sendMail({
     from: config.from,
     to: communityEmail,
-    subject: `Pembayaran Diterima - QR Racepack ${communityName}`,
-    html: renderCommunityEmail(communityName, participants),
-    attachments,
+    subject,
+    html: renderCommunityEmail(communityName, leaderName, participants, emailSettings.community),
   })
 }
 
@@ -172,7 +191,12 @@ export async function sendRacepackEmailsForRegistration(registrationId: string) 
   }
 
   try {
-    await sendCommunityRacepackEmail(communityEmail, community?.name || 'Komunitas TOPSELL RUN', normalizedParticipants)
+    await sendCommunityRacepackEmail(
+      communityEmail, 
+      community?.name || 'Komunitas TOPSELL RUN', 
+      community?.leader_name || community?.name || 'Ketua Komunitas',
+      normalizedParticipants
+    )
     await updateParticipantIds(participantIds, {
       racepack_email_sent_at: new Date().toISOString(),
       racepack_email_error: null,
@@ -185,8 +209,20 @@ export async function sendRacepackEmailsForRegistration(registrationId: string) 
   }
 }
 
-function renderFamilyEmail(familyNameValue: string, participants: RacepackFamilyParticipant[]) {
-  const familyName = escapeHtml(familyNameValue || 'Keluarga TOPSELL RUN')
+function renderFamilyEmail(familyNameValue: string, leaderName: string, participants: RacepackFamilyParticipant[], template?: EmailTemplateSettings['family']) {
+  const familyName = escapeHtml(familyNameValue || 'Brother & Sister TOPSELL RUN')
+  const leader = escapeHtml(leaderName || familyNameValue || 'Keluarga')
+  
+  const variables = {
+    familyName: familyName,
+    leaderName: leader,
+    participantCount: String(participants.length),
+  }
+  
+  const greeting = template ? applyEmailVariables(template.greeting, variables) : `Halo <strong>${familyName}</strong>,`
+  const bodyIntro = template ? applyEmailVariables(template.bodyIntro, variables) : 'Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.'
+  const bodyOutro = template ? applyEmailVariables(template.bodyOutro, variables) : 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️'
+  
   const rows = participants.map((participant, index) => `
     <tr>
       <td style="padding:6px 12px 6px 0;color:#6b7280">${index + 1}</td>
@@ -199,9 +235,8 @@ function renderFamilyEmail(familyNameValue: string, participants: RacepackFamily
   return `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
       <h2 style="margin:0 0 12px;color:#f97316">Pembayaran TOPSELL RUN 2026 Diterima</h2>
-      <p>Halo <strong>${familyName}</strong>,</p>
-      <p>Pembayaran Family Package untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.</p>
-      <p>QR Code untuk pengambilan racepack terlampir di email ini. Setiap file QR dinamai sesuai nama peserta dan nomor BIB.</p>
+      <p>${greeting}</p>
+      <p>${bodyIntro}</p>
       <table style="border-collapse:collapse;margin:16px 0;width:100%">
         <thead>
           <tr>
@@ -213,42 +248,30 @@ function renderFamilyEmail(familyNameValue: string, participants: RacepackFamily
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      <p>Silakan distribusikan QR Code ke masing-masing anggota keluarga sesuai nama file.</p>
-      <p style="font-size:12px;color:#6b7280">Email ini dikirim otomatis oleh sistem TOPSELL RUN 2026.</p>
+      <p>${bodyOutro}</p>
+      <p style="font-size:12px;color:#6b7280;margin-top:16px">Email ini dikirim otomatis oleh sistem TOPSELL RUN 2026.</p>
     </div>
   `
 }
 
-async function sendFamilyRacepackEmail(familyEmail: string, familyName: string, participants: RacepackFamilyParticipant[]) {
+async function sendFamilyRacepackEmail(familyEmail: string, familyName: string, leaderName: string, participants: RacepackFamilyParticipant[]) {
   const config = getSmtpConfig()
   const transporter = createTransporter()
-  const attachments = await Promise.all(participants.map(async (participant) => {
-    if (!participant.qr_code_data) {
-      throw new Error(`QR peserta ${participant.full_name} belum tersedia.`)
-    }
-
-    const qrPng = await QRCode.toBuffer(participant.qr_code_data, {
-      type: 'png',
-      width: 360,
-      margin: 2,
-    })
-
-    const code = safeFilename(participant.participant_code || participant.id)
-    const name = safeFilename(participant.full_name)
-
-    return {
-      filename: `${name}-${code}.png`,
-      content: qrPng,
-      contentType: 'image/png',
-    }
-  }))
+  const emailSettings = await getEmailTemplateSettings()
+  
+  const variables = {
+    familyName: escapeHtml(familyName),
+    leaderName: escapeHtml(leaderName),
+    participantCount: String(participants.length),
+  }
+  
+  const subject = applyEmailVariables(emailSettings.family.subject, variables)
 
   await transporter.sendMail({
     from: config.from,
     to: familyEmail,
-    subject: `Pembayaran Diterima - QR Racepack ${familyName}`,
-    html: renderFamilyEmail(familyName, participants),
-    attachments,
+    subject,
+    html: renderFamilyEmail(familyName, leaderName, participants, emailSettings.family),
   })
 }
 
@@ -269,20 +292,25 @@ export async function sendFamilyRacepackEmailsForRegistration(registrationId: st
   const participantIds = normalizedParticipants.map((participant) => participant.id)
 
   if (!familyEmail) {
-    const message = 'Email keluarga belum tersedia.'
+    const message = 'Email perwakilan belum tersedia.'
     await updateFamilyParticipantIds(participantIds, { racepack_email_error: message })
     return { skipped: false, sent: 0, failed: normalizedParticipants.length }
   }
 
   try {
-    await sendFamilyRacepackEmail(familyEmail, family?.name || 'Keluarga TOPSELL RUN', normalizedParticipants)
+    await sendFamilyRacepackEmail(
+      familyEmail, 
+      family?.name || 'Brother & Sister TOPSELL RUN', 
+      family?.leader_name || family?.name || 'Perwakilan',
+      normalizedParticipants
+    )
     await updateFamilyParticipantIds(participantIds, {
       racepack_email_sent_at: new Date().toISOString(),
       racepack_email_error: null,
     })
     return { skipped: false, sent: normalizedParticipants.length, failed: 0 }
   } catch (sendError) {
-    const message = sendError instanceof Error ? sendError.message : 'Gagal mengirim email ke keluarga'
+    const message = sendError instanceof Error ? sendError.message : 'Gagal mengirim email ke perwakilan'
     await updateFamilyParticipantIds(participantIds, { racepack_email_error: message })
     return { skipped: false, sent: 0, failed: normalizedParticipants.length }
   }

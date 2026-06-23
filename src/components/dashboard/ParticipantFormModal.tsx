@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Pencil } from 'lucide-react'
 import { participantEditSchema, ParticipantFormValues } from '@/lib/validations/participant'
@@ -9,6 +9,7 @@ import { updateParticipant } from '@/app/actions/participants'
 import { useCommunityStore } from '@/lib/store/useCommunityStore'
 import { Participant } from '@/lib/types'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
@@ -27,6 +28,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<ParticipantFormValues>({
     resolver: zodResolver(participantEditSchema),
@@ -134,12 +136,18 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
               disabled={isSubmitting}
               {...register('phone')}
             />
-            <Input
-              label="Tanggal Lahir"
-              type="date"
-              error={errors.date_of_birth?.message}
-              disabled={isSubmitting}
-              {...register('date_of_birth')}
+            <Controller
+              name="date_of_birth"
+              control={control}
+              render={({ field }) => (
+                <DateInput
+                  label="Tanggal Lahir"
+                  error={errors.date_of_birth?.message}
+                  disabled={isSubmitting}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
           </div>
 
@@ -196,7 +204,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Nama Kontak Darurat"
-              placeholder="Nama keluarga/kerabat"
+              placeholder="Nama kontak darurat"
               error={errors.emergency_contact_name?.message}
               disabled={isSubmitting}
               {...register('emergency_contact_name')}

@@ -273,7 +273,7 @@ function DashboardContent() {
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
               <p className="text-xs font-black uppercase tracking-wide text-foreground hidden sm:block">
-                {family?.name || 'Dashboard Keluarga'}
+                {family?.name || 'Dashboard Brother & Sister Package'}
               </p>
             </div>
           </div>
@@ -344,7 +344,7 @@ function DashboardContent() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Event Aktif</p>
               <p className="text-sm font-black uppercase text-foreground">{TOPSELL_RUN_EVENT.name}</p>
               <p className="text-[10px] text-brand-muted font-medium">
-                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Kategori Keluarga / {TOPSELL_RUN_EVENT.category}
+                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Brother & Sister Package / {TOPSELL_RUN_EVENT.category}
               </p>
             </div>
           </div>
@@ -361,12 +361,12 @@ function DashboardContent() {
               <CreditCard className="w-4 h-4 text-sport-orange" />
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Keluarga</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Brother & Sister Package</p>
               <p className="text-sm font-black uppercase text-foreground">Bayar semua anggota sekaligus</p>
               <p className="text-[10px] text-brand-muted font-medium mt-1">
                 {pendingParticipants.length > 0
                   ? `${pendingParticipants.length} anggota pending akan dibayar dalam satu checkout Xendit VA / QRIS.`
-                  : 'Semua anggota keluarga sudah lunas atau belum ada anggota pending.'}
+                  : 'Semua anggota sudah lunas atau belum ada anggota pending.'}
               </p>
             </div>
           </div>
@@ -416,7 +416,7 @@ function DashboardContent() {
             </div>
 
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
-              Pembayaran dilakukan kolektif oleh keluarga
+              Pembayaran dilakukan kolektif oleh grup Brother & Sister
             </p>
           </div>
 
@@ -544,7 +544,7 @@ function DashboardContent() {
           setHasOpenedCheckout(false)
           setPaymentSyncMessage('')
         }}
-        title="Pembayaran Keluarga"
+        title="Pembayaran Brother & Sister Package"
         className="max-w-md"
       >
         {checkoutPayload && (
@@ -566,7 +566,7 @@ function DashboardContent() {
             <div className="flex flex-col gap-3 border-y border-card-border py-4">
               {[
                 { label: 'Referensi', value: checkoutPayload.reference },
-                { label: 'Keluarga', value: family?.name },
+                { label: 'Grup', value: family?.name },
                 { label: 'Jumlah Anggota', value: `${checkoutPayload.participantCount} orang` },
                 { label: 'Kategori', value: 'TOPSELL RUN 6K' },
                 { label: 'Metode', value: 'Xendit VA / QRIS' },

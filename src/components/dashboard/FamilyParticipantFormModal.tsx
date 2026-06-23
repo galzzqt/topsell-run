@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Pencil } from 'lucide-react'
 import { participantEditSchema, ParticipantFormValues } from '@/lib/validations/participant'
 import { FamilyParticipant } from '@/lib/types'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
@@ -24,6 +25,7 @@ export function FamilyParticipantFormModal({ isOpen, onClose, editParticipant }:
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<ParticipantFormValues>({
     resolver: zodResolver(participantEditSchema),
@@ -77,7 +79,7 @@ export function FamilyParticipantFormModal({ isOpen, onClose, editParticipant }:
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Data Anggota Keluarga">
+    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Data Anggota">
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <Pencil className="w-4 h-4 text-sport-orange shrink-0" />
@@ -118,12 +120,18 @@ export function FamilyParticipantFormModal({ isOpen, onClose, editParticipant }:
               disabled={true}
               {...register('phone')}
             />
-            <Input
-              label="Tanggal Lahir"
-              type="date"
-              error={errors.date_of_birth?.message}
-              disabled={true}
-              {...register('date_of_birth')}
+            <Controller
+              name="date_of_birth"
+              control={control}
+              render={({ field }) => (
+                <DateInput
+                  label="Tanggal Lahir"
+                  error={errors.date_of_birth?.message}
+                  disabled={true}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
           </div>
 
@@ -180,7 +188,7 @@ export function FamilyParticipantFormModal({ isOpen, onClose, editParticipant }:
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Nama Kontak Darurat"
-              placeholder="Nama keluarga/kerabat"
+              placeholder="Nama kontak darurat"
               error={errors.emergency_contact_name?.message}
               disabled={true}
               {...register('emergency_contact_name')}

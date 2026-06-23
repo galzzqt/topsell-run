@@ -10,9 +10,18 @@ const emailSchema = z
 const dateOfBirthSchema = z
   .string()
   .min(1, 'Tanggal lahir wajib diisi')
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid')
+  .regex(/^\d{2}\/\d{2}\/\d{4}$|^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid (gunakan DD/MM/YYYY)')
   .refine((value) => {
-    const date = new Date(`${value}T00:00:00`)
+    // Support both DD/MM/YYYY and YYYY-MM-DD formats
+    let date: Date
+    if (value.includes('/')) {
+      // DD/MM/YYYY format
+      const [day, month, year] = value.split('/')
+      date = new Date(`${year}-${month}-${day}T00:00:00`)
+    } else {
+      // YYYY-MM-DD format (ISO)
+      date = new Date(`${value}T00:00:00`)
+    }
     const today = new Date()
     return !Number.isNaN(date.getTime()) && date < today
   }, 'Tanggal lahir tidak valid')

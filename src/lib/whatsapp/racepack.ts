@@ -87,7 +87,7 @@ export async function sendFamilyRacepackWhatsappsForRegistration(registrationId:
   } catch (sendError) {
     await updateFamilyParticipants(
       { registration_id: registrationId, payment_status: 'paid' },
-      { racepack_whatsapp_error: sendError instanceof Error ? sendError.message : 'Gagal mengirim WhatsApp ke keluarga' }
+      { racepack_whatsapp_error: sendError instanceof Error ? sendError.message : 'Gagal mengirim WhatsApp ke perwakilan' }
     )
 
     return { skipped: false, sent: 0, failed: 1 }
