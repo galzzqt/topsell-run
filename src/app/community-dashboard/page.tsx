@@ -7,17 +7,19 @@ import {
   Activity, LogOut, Users, CreditCard, QrCode,
   Trophy, Clock, CheckCircle, AlertCircle,
   TrendingUp, Copy, Check, ExternalLink, Settings,
+  Receipt,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useCommunityStore } from '@/lib/store/useCommunityStore'
 import { getCommunitySessionAction } from '@/app/actions/dashboard'
-import { formatCurrency } from '@/lib/utils/format'
+import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { signOutCommunity } from '@/app/actions/auth'
 import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus } from '@/app/actions/payments'
-import { Participant, TOPSELL_RUN_EVENT } from '@/lib/types'
+import { Participant, Payment, TOPSELL_RUN_EVENT } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
+import { EReceiptModal } from '@/components/dashboard/EReceiptModal'
 import { Dialog } from '@/components/ui/dialog'
 import { CommunityProfileModal } from '@/components/dashboard/CommunityProfileModal'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
@@ -36,9 +38,13 @@ type CheckoutPayload = {
 function DashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, community, participants, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useCommunityStore()
+  const { user, community, participants, payments, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useCommunityStore()
 
   const [qrParticipant, setQrParticipant] = useState<Participant | null>(null)
+  const [receiptData, setReceiptData] = useState<{
+    payment: Payment
+    participants: Participant[]
+  } | null>(null)
   const [checkoutPayload, setCheckoutPayload] = useState<CheckoutPayload | null>(null)
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
   const [paymentSimLoading, setPaymentSimLoading] = useState(false)
@@ -516,6 +522,70 @@ function DashboardContent() {
             </div>
           )}
         </div>
+
+        {/* PAYMENT HISTORY */}
+        {payments.length > 0 && (
+          <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden shadow-lg flex flex-col">
+            <div className="px-4 sm:px-6 py-4 border-b border-card-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500/10 border border-green-500/20 rounded-lg shrink-0">
+                  <CreditCard className="w-4 h-4 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Riwayat Pembayaran</p>
+                  <p className="text-sm font-black uppercase text-foreground">Semua transaksi komunitas</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-card-border">
+              {payments.map((payment) => {
+                const paymentParticipants = participants.filter(p => p.registration_id === payment.registration_id)
+                return (
+                  <div key={payment.id} className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-brand-gray/10">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            payment.status === 'paid'
+                              ? 'success'
+                              : payment.status === 'failed'
+                              ? 'danger'
+                              : payment.status === 'expired'
+                              ? 'neutral'
+                              : 'warning'
+                          }
+                        >
+                          {payment.status.toUpperCase()}
+                        </Badge>
+                        <p className="text-[10px] font-black text-brand-muted uppercase">Ref: {payment.payment_reference}</p>
+                      </div>
+                      <p className="text-sm font-black text-foreground">{paymentParticipants.length} Peserta</p>
+                      <p className="text-[10px] text-brand-muted">{formatDate(payment.created_at)}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <p className="text-lg font-black text-sport-orange">{formatCurrency(payment.amount)}</p>
+                      {payment.status === 'paid' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-[10px]"
+                          onClick={() => setReceiptData({
+                            payment,
+                            participants: paymentParticipants
+                          })}
+                        >
+                          <Receipt className="w-3 h-3 mr-1.5" />E-Receipt
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* MODALS */}
@@ -524,6 +594,17 @@ function DashboardContent() {
         isOpen={!!qrParticipant}
         onClose={() => setQrParticipant(null)}
       />
+      
+      {receiptData && (
+        <EReceiptModal
+          isOpen={true}
+          onClose={() => setReceiptData(null)}
+          payment={receiptData.payment}
+          participants={receiptData.participants}
+          payer={community!}
+          type="community"
+        />
+      )}
       
       <CommunityProfileModal
         isOpen={isProfileModalOpen}

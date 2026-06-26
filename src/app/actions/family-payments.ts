@@ -4,6 +4,7 @@ import { getFamilySession } from '@/lib/auth/family'
 import { generateRandomReference } from '@/lib/utils/format'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
 import { sendFamilyRacepackEmailsForRegistration } from '@/lib/email/racepack'
+import { sendFamilyReceiptEmail } from '@/lib/email/receipt'
 import { sendFamilyRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
@@ -308,6 +309,7 @@ export async function simulateFamilyPaymentSuccess(paymentId: string) {
   })
 
   await Promise.all([
+    sendFamilyReceiptEmail(payment.registration_id),
     sendFamilyRacepackEmailsForRegistration(payment.registration_id),
     sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
   ])
@@ -399,6 +401,7 @@ export async function syncXenditFamilyPaymentStatus(paymentReference: string) {
   await markFamilyPaymentPaid(payment.id, { payment_method: paymentMethod })
 
   await Promise.all([
+    sendFamilyReceiptEmail(payment.registration_id),
     sendFamilyRacepackEmailsForRegistration(payment.registration_id),
     sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
   ])

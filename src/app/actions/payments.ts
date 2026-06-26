@@ -4,6 +4,7 @@ import { getCommunitySession } from '@/lib/auth/community'
 import { generateRandomReference } from '@/lib/utils/format'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
 import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
+import { sendCommunityReceiptEmail } from '@/lib/email/receipt'
 import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
@@ -312,6 +313,7 @@ export async function simulatePaymentSuccess(paymentId: string) {
   })
 
   await Promise.all([
+    sendCommunityReceiptEmail(payment.registration_id),
     sendRacepackEmailsForRegistration(payment.registration_id),
     sendRacepackWhatsappsForRegistration(payment.registration_id),
   ])
@@ -403,6 +405,7 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
   await markPaymentPaid(payment.id, { payment_method: paymentMethod })
 
   await Promise.all([
+    sendCommunityReceiptEmail(payment.registration_id),
     sendRacepackEmailsForRegistration(payment.registration_id),
     sendRacepackWhatsappsForRegistration(payment.registration_id),
   ])

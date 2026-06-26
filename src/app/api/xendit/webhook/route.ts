@@ -14,6 +14,10 @@ import {
   sendFamilyRacepackEmailsForRegistration,
 } from '@/lib/email/racepack'
 import {
+  sendCommunityReceiptEmail,
+  sendFamilyReceiptEmail,
+} from '@/lib/email/receipt'
+import {
   sendRacepackWhatsappsForRegistration,
   sendFamilyRacepackWhatsappsForRegistration,
 } from '@/lib/whatsapp/racepack'
@@ -242,6 +246,7 @@ export async function POST(request: Request) {
       await Promise.all(payments.flatMap((payment) => [
         sendRacepackEmailsForRegistration(payment.registration_id),
         sendRacepackWhatsappsForRegistration(payment.registration_id),
+        sendCommunityReceiptEmail(payment.registration_id),
       ]))
       await ingestAdminLog({
         level: 'info',
@@ -259,6 +264,7 @@ export async function POST(request: Request) {
       await Promise.all(familyPayments.flatMap((payment) => [
         sendFamilyRacepackEmailsForRegistration(payment.registration_id),
         sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+        sendFamilyReceiptEmail(payment.registration_id),
       ]))
       await ingestAdminLog({
         level: 'info',
@@ -278,6 +284,7 @@ export async function POST(request: Request) {
       await Promise.all(payments.flatMap((payment) => [
         sendRacepackEmailsForRegistration(payment.registration_id),
         sendRacepackWhatsappsForRegistration(payment.registration_id),
+        sendCommunityReceiptEmail(payment.registration_id),
       ]))
       await ingestAdminLog({
         level: 'info',
@@ -295,6 +302,7 @@ export async function POST(request: Request) {
       await Promise.all(familyPayments.flatMap((payment) => [
         sendFamilyRacepackEmailsForRegistration(payment.registration_id),
         sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+        sendFamilyReceiptEmail(payment.registration_id),
       ]))
       await ingestAdminLog({
         level: 'info',

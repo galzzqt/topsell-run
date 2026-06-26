@@ -691,6 +691,11 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
         } = await import('@/lib/email/racepack')
 
         const {
+          sendCommunityReceiptEmail,
+          sendFamilyReceiptEmail,
+        } = await import('@/lib/email/receipt')
+
+        const {
           sendRacepackWhatsappsForRegistration,
           sendFamilyRacepackWhatsappsForRegistration,
         } = await import('@/lib/whatsapp/racepack')
@@ -700,11 +705,13 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
             await Promise.all([
               sendRacepackEmailsForRegistration(payment.registration_id),
               sendRacepackWhatsappsForRegistration(payment.registration_id),
+              sendCommunityReceiptEmail(payment.registration_id),
             ])
           } else {
             await Promise.all([
               sendFamilyRacepackEmailsForRegistration(payment.registration_id),
               sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+              sendFamilyReceiptEmail(payment.registration_id),
             ])
           }
         } catch (notifError) {
