@@ -59,6 +59,8 @@ export {
 
 export { getAppSetting, upsertAppSetting } from './app-settings'
 
+export { findAuthEmailOwner } from './auth-emails'
+
 export {
   markPaymentPaid,
   markPaymentFailed,
@@ -82,6 +84,10 @@ export {
   updateFamilyAuthPhone,
   updateFamilyAuthPassword,
   deleteFamilyAuth,
+  setFamilyVerificationToken,
+  findFamilyByVerificationToken,
+  verifyFamilyEmail,
+  clearFamilyVerificationToken,
 } from './families'
 
 export {

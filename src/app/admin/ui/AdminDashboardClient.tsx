@@ -34,7 +34,6 @@ import {
   refreshAxiomLogs,
   saveEditableEnvValues,
   saveRegistrationFormSettings,
-  saveWebhookSettings,
   updateManagedAdmin,
   updateAdminCommunity,
   updateAdminFamily,
@@ -42,7 +41,6 @@ import {
   updateAdminPaymentStatus,
   type AdminCommunityUpdateValues,
   type AdminParticipantUpdateValues,
-  type UpdatePaymentStatusValues,
 } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -835,32 +833,6 @@ export function AdminDashboardClient({
     }))
   }
 
-  const updateWebhookRegistration = (key: 'url' | 'token', value: string) => {
-    setSettingsForm((current) => ({
-      ...current,
-      webhookSettings: {
-        ...current.webhookSettings,
-        registration: {
-          ...current.webhookSettings.registration,
-          [key]: value,
-        },
-      },
-    }))
-  }
-
-  const updateWebhookPayment = (key: 'url' | 'token', value: string) => {
-    setSettingsForm((current) => ({
-      ...current,
-      webhookSettings: {
-        ...current.webhookSettings,
-        payment: {
-          ...current.webhookSettings.payment,
-          [key]: value,
-        },
-      },
-    }))
-  }
-
   const saveSettings = () => {
     setSettingsMessage('')
     startTransition(async () => {
@@ -870,19 +842,6 @@ export function AdminDashboardClient({
         return
       }
       setSettingsMessage('Pengaturan form pendaftaran berhasil disimpan.')
-      router.refresh()
-    })
-  }
-
-  const saveWebhooks = () => {
-    setSettingsMessage('')
-    startTransition(async () => {
-      const result = await saveWebhookSettings(settingsForm.webhookSettings)
-      if (result.error) {
-        alert(result.error)
-        return
-      }
-      setSettingsMessage(result.message || 'Pengaturan webhook berhasil disimpan.')
       router.refresh()
     })
   }

@@ -75,36 +75,30 @@ export async function getFamilySession(): Promise<FamilySession | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(FAMILY_COOKIE)?.value
   if (!token) {
-    console.log('[DEBUG] No FAMILY_COOKIE token found')
     return null
   }
 
   const [encodedPayload, signature] = token.split('.')
   if (!encodedPayload || !signature) {
-    console.log('[DEBUG] Token split failed')
     return null
   }
 
   if (!getFamilySecret()) {
-    console.log('[DEBUG] getFamilySecret() returned empty')
     return null
   }
 
   const expectedSignature = sign(encodedPayload)
   if (!safeCompare(signature, expectedSignature)) {
-    console.log('[DEBUG] Signature safeCompare failed')
     return null
   }
 
   const payload = decode(encodedPayload)
   if (!payload) {
-    console.log('[DEBUG] Decode encodedPayload failed')
     return null
   }
 
   const maxAgeMs = 1000 * 60 * 60 * 24 * 7
   if (Date.now() - payload.issuedAt > maxAgeMs) {
-    console.log('[DEBUG] Session expired')
     return null
   }
 

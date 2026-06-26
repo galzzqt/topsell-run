@@ -8,7 +8,7 @@ import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Users, Trophy, CheckCircle, Calendar, MapPin,
-  Timer, ArrowRight, UserPlus, Plus, Trash2, LayoutDashboard, ChevronDown, LogOut,
+  Timer, ArrowRight, UserPlus, Plus, Trash2, LayoutDashboard, ChevronDown, LogOut, Mail,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { registerFamilySchema, RegisterFamilyFormValues } from '@/lib/validations/auth'
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { DateInput } from '@/components/ui/date-input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Dialog } from '@/components/ui/dialog'
 import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
 import { getActiveSessionAction, type ActiveSession } from '@/app/actions/session-check'
 import { addFamilyParticipantsAction, addCommunityParticipantsAction, type AddParticipantsValues } from '@/app/actions/add-participants'
@@ -217,7 +218,8 @@ function NavUserWidget({ session, onLogout }: { session: ActiveSession | undefin
 
 export default function LandingPage() {
   const router = useRouter()
-  const isSuccess = false
+  const [isSuccess, setIsSuccess] = useState(false)
+  const [registeredEmail, setRegisteredEmail] = useState<string>('')
   const [authError, setAuthError] = useState<string | null>(null)
   const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
   const [activeSession, setActiveSession] = useState<ActiveSession | undefined>(undefined)
@@ -364,7 +366,6 @@ export default function LandingPage() {
   })
 
   // ——— STATE ———
-  const [addMode, setAddMode] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [addSuccess, setAddSuccess] = useState<number | null>(null)
   const [addLoading, setAddLoading] = useState(false)
@@ -382,8 +383,9 @@ export default function LandingPage() {
         origin: { y: 0.6 },
         colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
       })
-      router.refresh()
-      router.push('/dashboard')
+      // Store email and show success modal
+      setRegisteredEmail(values.email)
+      setIsSuccess(true)
     }
   }
 
@@ -416,6 +418,82 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden relative">
+      {/* Email Verification Success Modal */}
+      <Dialog
+        isOpen={isSuccess}
+        onClose={() => {
+          setIsSuccess(false)
+          router.push('/login')
+        }}
+        title="✅ REGISTRASI BERHASIL"
+      >
+        <div className="flex flex-col items-center text-center gap-6">
+          {/* Success Icon */}
+          <div className="p-5 bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 rounded-full shadow-xl animate-pulse">
+            <CheckCircle className="w-12 h-12 text-white" strokeWidth={2.5} />
+          </div>
+
+          {/* Main Message */}
+          <div>
+            <h3 className="text-2xl font-black uppercase text-slate-900 mb-2">
+              Brother & Sister Package Terdaftar!
+            </h3>
+            <p className="text-sm text-brand-muted leading-relaxed">
+              Akun Anda telah berhasil dibuat dengan email:
+            </p>
+            <p className="text-sm font-bold text-sport-purple mt-2 break-all">
+              {registeredEmail}
+            </p>
+          </div>
+
+          {/* Email Verification Notice */}
+          <div className="w-full bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-5 text-left shadow-md">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                <Mail className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-amber-900 mb-3 uppercase tracking-wide">
+                  📧 Aktivasi Email Diperlukan
+                </p>
+                <p className="text-xs text-amber-800 leading-relaxed mb-2">
+                  Kami telah mengirim <strong>link aktivasi</strong> ke email Anda. 
+                </p>
+                <p className="text-xs text-amber-800 leading-relaxed mb-3">
+                  Silakan buka email dan <strong>klik link untuk mengaktifkan akun</strong> sebelum login ke dashboard.
+                </p>
+                <div className="flex items-center gap-2 bg-amber-100 rounded-lg px-3 py-2">
+                  <Timer className="w-4 h-4 text-amber-700" />
+                  <p className="text-xs text-amber-700 font-semibold">
+                    Link aktivasi berlaku selama 24 jam
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="w-full flex flex-col gap-3 mt-2">
+            <Button
+              onClick={() => {
+                setIsSuccess(false)
+                router.push('/login')
+              }}
+              variant="primary"
+              className="w-full py-4 text-sm font-black shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
+            >
+              <ArrowRight className="w-5 h-5 mr-2" />
+              Login Setelah Aktivasi
+            </Button>
+            
+            <p className="text-xs text-center text-brand-muted leading-relaxed px-4">
+              Tidak menerima email? <strong>Cek folder spam</strong> atau minta kirim ulang dari halaman login
+            </p>
+          </div>
+        </div>
+      </Dialog>
+
       {/* Background noise grid */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-size-[4rem_4rem] opacity-[0.4] pointer-events-none" />
 
@@ -667,26 +745,6 @@ export default function LandingPage() {
               </div>
             </div>
           )
-        ) : isSuccess ? (
-          /* ——— Success State ——— */
-          <div className="sports-glass-glow rounded-2xl p-8 flex flex-col items-center text-center gap-5 border border-green-500/30 shadow-2xl relative overflow-hidden bg-white">
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-green-500" />
-            <div className="p-4 bg-green-50 border border-green-200 rounded-full text-green-500">
-              <CheckCircle className="w-10 h-10" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-sport-orange mb-1">Registrasi Berhasil!</p>
-              <h2 className="text-xl font-black uppercase text-slate-900">Brother & Sister Package Terdaftar</h2>
-              <p className="text-xs text-brand-muted mt-2 leading-relaxed">
-                Akun Brother & Sister Package Anda telah berhasil dibuat. Silakan lanjut ke dashboard untuk melakukan pembayaran.
-              </p>
-            </div>
-            <Link href="/login" className="w-full">
-              <Button variant="primary" className="w-full py-4 text-xs font-black" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}>
-                Masuk ke Dashboard →
-              </Button>
-            </Link>
-          </div>
         ) : (
           /* ——— Form State (guest) ——— */
           <>

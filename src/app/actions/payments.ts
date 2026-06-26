@@ -60,8 +60,8 @@ function getReturnUrls(paymentRef?: string) {
 
   const refQuery = paymentRef ? `&ref=${encodeURIComponent(paymentRef)}` : ''
   return {
-    success_return_url: `${appUrl}/dashboard?payment=success${refQuery}`,
-    cancel_return_url: `${appUrl}/dashboard?payment=cancelled${refQuery}`,
+    success_return_url: `${appUrl}/community-dashboard?payment=success${refQuery}`,
+    cancel_return_url: `${appUrl}/community-dashboard?payment=cancelled${refQuery}`,
   }
 }
 
@@ -280,7 +280,7 @@ export async function createCommunityPayment() {
     console.error('Failed to log community payment creation:', logError)
   }
 
-  revalidatePath('/dashboard')
+  revalidatePath('/community-dashboard')
 
   return {
     success: true,
@@ -328,7 +328,7 @@ export async function simulatePaymentSuccess(paymentId: string) {
     console.error('Failed to log payment simulation:', logError)
   }
 
-  revalidatePath('/dashboard')
+  revalidatePath('/community-dashboard')
   return { success: true }
 }
 
@@ -380,7 +380,7 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
       } catch (logError) {
         console.error('Failed to log payment sync failure:', logError)
       }
-      revalidatePath('/dashboard')
+      revalidatePath('/community-dashboard')
       return { success: true, status }
     }
 
@@ -419,6 +419,6 @@ export async function syncXenditPaymentStatus(paymentReference: string) {
     console.error('Failed to log payment sync success:', logError)
   }
 
-  revalidatePath('/dashboard')
+  revalidatePath('/community-dashboard')
   return { success: true, status: 'paid' as const, paymentMethod }
 }

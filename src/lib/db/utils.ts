@@ -8,6 +8,15 @@ export function nowIso() {
   return new Date().toISOString()
 }
 
+export function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
+}
+
+export function exactEmailRegex(email: string) {
+  const escaped = normalizeEmail(email).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^${escaped}$`, 'i')
+}
+
 export function newId() {
   return crypto.randomUUID()
 }

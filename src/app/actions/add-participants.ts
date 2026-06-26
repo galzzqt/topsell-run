@@ -6,10 +6,6 @@ import { getCommunitySession } from '@/lib/auth/community'
 import { 
   insertFamilyParticipants, 
   insertParticipants, 
-  findDuplicateParticipants,
-  findDuplicateFamilyParticipants,
-  findActiveParticipants,
-  findActiveFamilyParticipants,
   findActiveCrossParticipant,
   findActiveCrossFamilyParticipant,
   findParticipantsByCommunityId,
@@ -36,13 +32,16 @@ const addParticipantsSchema = z.object({
 })
 .refine((data) => {
   // Check for duplicate participants within the same submission (same email OR same phone)
-  const emailPhonePairs = new Set<string>()
+  const emails = new Set<string>()
+  const phones = new Set<string>()
   for (const participant of data.participants) {
-    const pair = `${participant.email.toLowerCase()}|${participant.phone}`
-    if (emailPhonePairs.has(pair)) {
+    const email = participant.email.trim().toLowerCase()
+    const phone = participant.phone.trim()
+    if (emails.has(email) || phones.has(phone)) {
       return false
     }
-    emailPhonePairs.add(pair)
+    emails.add(email)
+    phones.add(phone)
   }
   return true
 }, {

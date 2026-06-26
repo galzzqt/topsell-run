@@ -5,15 +5,20 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Activity, Lock, ArrowLeft } from 'lucide-react'
+import { Activity, Lock, ArrowLeft, Mail } from 'lucide-react'
 import { loginSchema, LoginFormValues } from '@/lib/validations/auth'
 import { signInFamily } from '@/app/actions/family-auth'
+import { resendVerificationEmail } from '@/app/actions/email-verification'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
   const router = useRouter()
   const [authError, setAuthError] = useState<string | null>(null)
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [familyIdForResend, setFamilyIdForResend] = useState<string | null>(null)
+  const [isResending, setIsResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -22,12 +27,37 @@ export default function LoginPage() {
 
   const onSubmit = async (values: LoginFormValues) => {
     setAuthError(null)
+    setNeedsVerification(false)
+    setResendMessage(null)
+    
     const result = await signInFamily(values)
+    
     if (result.error) {
       setAuthError(result.error)
+      
+      if ('needsVerification' in result && result.needsVerification) {
+        setNeedsVerification(true)
+        setFamilyIdForResend(result.familyId || null)
+      }
     } else {
       router.refresh()
       router.push('/dashboard')
+    }
+  }
+
+  const handleResendVerification = async () => {
+    if (!familyIdForResend) return
+    
+    setIsResending(true)
+    setResendMessage(null)
+    
+    const result = await resendVerificationEmail(familyIdForResend)
+    setIsResending(false)
+    
+    if (result.error) {
+      setResendMessage(result.error)
+    } else {
+      setResendMessage('Email verifikasi telah dikirim ulang. Silakan cek inbox Anda.')
     }
   }
 
@@ -58,11 +88,45 @@ export default function LoginPage() {
         {/* Card */}
         <div className="bg-white border border-card-border rounded-xl p-6 flex flex-col gap-4 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
+          
           {authError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-500">
               {authError}
             </div>
           )}
+          
+          {needsVerification && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <Mail className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-900 mb-1">
+                    Email Belum Diverifikasi
+                  </p>
+                  <p className="text-[10px] text-amber-800 leading-relaxed">
+                    Silakan cek email Anda dan klik link aktivasi. Jika tidak menerima email, kirim ulang di bawah ini.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={handleResendVerification}
+                variant="secondary"
+                className="w-full py-2.5 text-xs"
+                isLoading={isResending}
+                disabled={isResending}
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                Kirim Ulang Email Verifikasi
+              </Button>
+              {resendMessage && (
+                <p className={`text-[10px] text-center ${resendMessage.includes('berhasil') || resendMessage.includes('dikirim') ? 'text-green-600' : 'text-red-600'}`}>
+                  {resendMessage}
+                </p>
+              )}
+            </div>
+          )}
+          
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <Input label="Nomor WhatsApp / Email Perwakilan" placeholder="08xxxxxxxxxx atau email@example.com" error={errors.phone?.message} disabled={isSubmitting} {...register('phone')} />
             <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} disabled={isSubmitting} {...register('password')} />

@@ -3,7 +3,7 @@ import 'server-only'
 import { getDb } from '@/lib/mongodb/client'
 import type { Community } from '@/lib/types'
 import type { PasswordRecord } from '@/lib/auth/password'
-import { docToCommunity, generateCommunityCode, newId, nowIso, stripMongoId } from './utils'
+import { docToCommunity, exactEmailRegex, generateCommunityCode, newId, normalizeEmail, nowIso, stripMongoId } from './utils'
 
 type CommunityDoc = Community & { _id?: unknown }
 
@@ -21,7 +21,7 @@ export async function findCommunityByPhone(phone: string) {
 
 export async function findCommunityByEmail(email: string) {
   const db = await getDb()
-  const doc = await db.collection<CommunityDoc>('communities').findOne({ email: { $regex: new RegExp(`^${email.trim()}$`, 'i') } })
+  const doc = await db.collection<CommunityDoc>('communities').findOne({ email: { $regex: exactEmailRegex(email) } })
   return stripMongoId(doc) as Community | null
 }
 
@@ -64,7 +64,7 @@ export async function createCommunity(input: {
     id,
     name: input.name,
     leader_name: input.leader_name,
-    email: input.email,
+    email: input.email ? normalizeEmail(input.email) : null,
     phone: input.phone,
     category: input.category,
     community_code: await createUniqueCommunityCode(),
@@ -82,9 +82,13 @@ export async function createCommunity(input: {
 export async function updateCommunity(id: string, values: Partial<Community>) {
   const db = await getDb()
   const updatedAt = nowIso()
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
   await db.collection('communities').updateOne(
     { id },
-    { $set: { ...values, updated_at: updatedAt } }
+    { $set: { ...nextValues, updated_at: updatedAt } }
   )
 }
 

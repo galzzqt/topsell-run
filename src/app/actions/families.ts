@@ -3,6 +3,7 @@
 import { getFamilySession } from '@/lib/auth/family'
 import { createPasswordRecord } from '@/lib/auth/password'
 import {
+  findAuthEmailOwner,
   findFamilyByPhoneExcept,
   updateFamily,
   updateFamilyAuthPassword,
@@ -25,6 +26,9 @@ export async function updateFamilyProfile(values: FamilyProfileValues) {
 
   const existing = await findFamilyByPhoneExcept(values.phone, session.id)
   if (existing) return { error: 'Nomor HP sudah digunakan grup Brother & Sister lain.' }
+
+  const existingEmailOwner = await findAuthEmailOwner(values.email, { type: 'family', id: session.id })
+  if (existingEmailOwner) return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan akun lain.' }
 
   await updateFamily(session.id, {
     phone: values.phone,

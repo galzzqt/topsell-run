@@ -12,10 +12,10 @@ import {
   findCommunityByPhone,
   findCommunityByEmail,
   findCommunityAuthById,
+  findAuthEmailOwner,
   insertParticipants,
   saveCommunityAuth,
   updateCommunity,
-  findDuplicateParticipants,
   findActiveCrossParticipant,
 } from '@/lib/db'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
@@ -32,6 +32,11 @@ export async function signUpCommunity(values: RegisterFormValues) {
   const existingCommunity = await findCommunityByPhone(values.phone)
   if (existingCommunity) {
     return { error: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' }
+  }
+
+  const existingEmailOwner = await findAuthEmailOwner(values.email)
+  if (existingEmailOwner) {
+    return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan. Silakan login atau gunakan email lain.' }
   }
 
   // Check for duplicate participants based on email and phone
@@ -177,28 +182,6 @@ export async function signInCommunity(values: LoginFormValues) {
 
   if (!community || !auth || !verifyPassword(values.password, auth)) {
     return { error: 'Nomor HP/Email atau password salah' }
-  }
-
-  // Check if any participants are already registered in the system
-  const communityParticipants = await import('@/lib/db').then(m => m.findParticipantsByCommunityId(community.id))
-  const duplicates: Array<{ name: string; email: string; phone: string }> = []
-  
-  for (const participant of communityParticipants) {
-    const otherParticipant = await findDuplicateParticipants(participant.email, participant.phone)
-    if (otherParticipant && otherParticipant.id !== participant.id && otherParticipant.community_id !== community.id) {
-      duplicates.push({
-        name: participant.full_name,
-        email: participant.email,
-        phone: participant.phone,
-      })
-    }
-  }
-
-  if (duplicates.length > 0) {
-    const duplicateList = duplicates.map(d => `${d.name} (${d.email}, ${d.phone})`).join('; ')
-    return {
-      error: `Peserta berikut sudah terdaftar di komunitas lain: ${duplicateList}. Silakan hubungi admin.`
-    }
   }
 
   await createCommunitySession({

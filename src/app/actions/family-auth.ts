@@ -12,21 +12,22 @@ import {
   findFamilyByPhone,
   findFamilyByEmail,
   findFamilyAuthById,
+  findAuthEmailOwner,
   insertFamilyParticipants,
   saveFamilyAuth,
   updateFamily,
-  findDuplicateFamilyParticipants,
   findActiveCrossFamilyParticipant,
-  findFamilyParticipantsByFamilyId,
   createFamilyRegistration,
   createFamilyPayment,
   linkFamilyParticipantsToRegistration,
+  setFamilyVerificationToken,
 } from '@/lib/db'
 import { registerFamilySchema, loginSchema, RegisterFamilyFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendFamilyRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { generateRandomReference } from '@/lib/utils/format'
+import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 
 function toXenditReference(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
@@ -42,6 +43,11 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
   const existingFamily = await findFamilyByPhone(values.phone)
   if (existingFamily) {
     return { error: 'Nomor WhatsApp ini sudah terdaftar. Silakan login.' }
+  }
+
+  const existingEmailOwner = await findAuthEmailOwner(values.email)
+  if (existingEmailOwner) {
+    return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan. Silakan login atau gunakan email lain.' }
   }
 
   // Check for duplicate participants based on email and phone
@@ -162,11 +168,34 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
     console.error('Failed to send family registration confirmation WhatsApp:', sendError)
   }
 
-  await createFamilySession({
-    id: family.id,
-    phone: family.phone,
-    name: family.name,
-  })
+  // Send email verification
+  if (values.email) {
+    try {
+      const verificationToken = generateVerificationToken()
+      const tokenExpiry = getVerificationTokenExpiry()
+      
+      await setFamilyVerificationToken(family.id, verificationToken, tokenExpiry)
+      
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`
+      
+      await sendVerificationEmail({
+        email: values.email,
+        name: values.leader_name || values.name,
+        verificationUrl,
+      })
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError)
+      // Don't fail registration if email sending fails
+    }
+  }
+
+  // Don't create session yet - wait for email verification
+  // await createFamilySession({
+  //   id: family.id,
+  //   phone: family.phone,
+  //   name: family.name,
+  // })
 
   try {
     await ingestAdminLog({
@@ -218,25 +247,12 @@ export async function signInFamily(values: LoginFormValues) {
     return { error: 'Nomor HP/Email atau password salah' }
   }
 
-  // Check if any family participants are already registered in the system
-  const familyParticipants = await findFamilyParticipantsByFamilyId(family.id)
-  const duplicates: Array<{ name: string; email: string; phone: string }> = []
-  
-  for (const participant of familyParticipants) {
-    const otherParticipant = await findDuplicateFamilyParticipants(participant.email, participant.phone)
-    if (otherParticipant && otherParticipant.id !== participant.id && otherParticipant.family_id !== family.id) {
-      duplicates.push({
-        name: participant.full_name,
-        email: participant.email,
-        phone: participant.phone,
-      })
-    }
-  }
-
-  if (duplicates.length > 0) {
-    const duplicateList = duplicates.map(d => `${d.name} (${d.email}, ${d.phone})`).join('; ')
-    return {
-      error: `Peserta berikut sudah terdaftar di grup Brother & Sister lain: ${duplicateList}. Silakan hubungi admin.`
+  // Check if email is verified
+  if (!family.email_verified) {
+    return { 
+      error: 'Email belum diverifikasi. Silakan cek email Anda untuk link aktivasi atau minta kirim ulang.',
+      needsVerification: true,
+      familyId: family.id,
     }
   }
 

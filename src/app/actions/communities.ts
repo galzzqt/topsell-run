@@ -3,6 +3,7 @@
 import { getCommunitySession } from '@/lib/auth/community'
 import { createPasswordRecord } from '@/lib/auth/password'
 import {
+  findAuthEmailOwner,
   findCommunityByPhoneExcept,
   updateCommunity,
   updateCommunityAuthPassword,
@@ -25,6 +26,9 @@ export async function updateCommunityProfile(values: CommunityProfileValues) {
 
   const existing = await findCommunityByPhoneExcept(values.phone, session.id)
   if (existing) return { error: 'Nomor HP sudah digunakan komunitas lain.' }
+
+  const existingEmailOwner = await findAuthEmailOwner(values.email, { type: 'community', id: session.id })
+  if (existingEmailOwner) return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan akun lain.' }
 
   await updateCommunity(session.id, {
     phone: values.phone,

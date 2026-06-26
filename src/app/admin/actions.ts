@@ -1,6 +1,7 @@
 'use server'
 
 import {
+  findAuthEmailOwner,
   findCommunityByPhoneExcept,
   findParticipantWithCommunityById,
   markParticipantCheckedIn,
@@ -314,6 +315,9 @@ export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
   const duplicate = await findFamilyByPhoneExcept(values.phone, values.id)
   if (duplicate) return { error: 'Nomor HP sudah digunakan grup Brother & Sister lain.' }
 
+  const duplicateEmail = await findAuthEmailOwner(values.email, { type: 'family', id: values.id })
+  if (duplicateEmail) return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan akun lain.' }
+
   await updateFamily(values.id, {
     name: values.name.trim(),
     leader_name: values.leader_name.trim(),
@@ -378,6 +382,9 @@ export async function updateAdminCommunity(values: AdminCommunityUpdateValues) {
 
   const duplicate = await findCommunityByPhoneExcept(values.phone, values.id)
   if (duplicate) return { error: 'Nomor HP sudah digunakan komunitas lain.' }
+
+  const duplicateEmail = await findAuthEmailOwner(values.email, { type: 'community', id: values.id })
+  if (duplicateEmail) return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan akun lain.' }
 
   await updateCommunity(values.id, {
     name: values.name.trim(),

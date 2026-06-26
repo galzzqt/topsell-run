@@ -2,7 +2,7 @@ import 'server-only'
 
 import { getDb } from '@/lib/mongodb/client'
 import type { FamilyParticipant } from '@/lib/types'
-import { docToFamilyParticipant, newId, nowIso, stripMongoId } from './utils'
+import { docToFamilyParticipant, exactEmailRegex, newId, normalizeEmail, nowIso, stripMongoId } from './utils'
 
 type FamilyParticipantDoc = FamilyParticipant & { _id?: unknown }
 
@@ -38,7 +38,7 @@ export async function findDuplicateFamilyParticipants(email: string, phone: stri
   const db = await getDb()
   const doc = await db.collection<FamilyParticipantDoc>('family_participants').findOne({
     $or: [
-      { email: email.toLowerCase() },
+      { email: { $regex: exactEmailRegex(email) } },
       { phone: phone },
     ]
   })
@@ -51,7 +51,7 @@ export async function findActiveFamilyParticipants(email: string, phone: string)
     $and: [
       {
         $or: [
-          { email: email.toLowerCase() },
+          { email: { $regex: exactEmailRegex(email) } },
           { phone: phone },
         ]
       },
@@ -70,7 +70,7 @@ export async function findActiveCrossFamilyParticipant(email: string, phone: str
     $and: [
       {
         $or: [
-          { email: email.toLowerCase() },
+          { email: { $regex: exactEmailRegex(email) } },
           { phone: phone },
         ]
       },
@@ -88,7 +88,7 @@ export async function findActiveCrossFamilyParticipant(email: string, phone: str
     $and: [
       {
         $or: [
-          { email: email.toLowerCase() },
+          { email: { $regex: exactEmailRegex(email) } },
           { phone: phone },
         ]
       },
@@ -143,6 +143,7 @@ export async function insertFamilyParticipants(values: Omit<FamilyParticipant, '
     const id = newId()
     return {
       ...value,
+      email: normalizeEmail(value.email),
       id,
       created_at: timestamp,
       updated_at: timestamp,
@@ -156,7 +157,11 @@ export async function insertFamilyParticipants(values: Omit<FamilyParticipant, '
 
 export async function updateFamilyParticipants(filter: Record<string, unknown>, values: Partial<FamilyParticipant>) {
   const db = await getDb()
-  await db.collection('family_participants').updateMany(filter, { $set: { ...values, updated_at: nowIso() } })
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
+  await db.collection('family_participants').updateMany(filter, { $set: { ...nextValues, updated_at: nowIso() } })
 }
 
 export async function updateFamilyParticipantById(id: string, values: Partial<FamilyParticipant>, options?: { protectPaid?: boolean }) {
@@ -169,13 +174,21 @@ export async function updateFamilyParticipantById(id: string, values: Partial<Fa
   }
 
   const db = await getDb()
-  await db.collection('family_participants').updateOne({ id }, { $set: { ...values, updated_at: nowIso() } })
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
+  await db.collection('family_participants').updateOne({ id }, { $set: { ...nextValues, updated_at: nowIso() } })
   return { success: true as const }
 }
 
 export async function updateFamilyParticipantIds(ids: string[], values: Partial<FamilyParticipant>) {
   const db = await getDb()
-  await db.collection('family_participants').updateMany({ id: { $in: ids } }, { $set: { ...values, updated_at: nowIso() } })
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
+  await db.collection('family_participants').updateMany({ id: { $in: ids } }, { $set: { ...nextValues, updated_at: nowIso() } })
 }
 
 export async function linkFamilyParticipantsToRegistration(participantIds: string[], registrationId: string) {

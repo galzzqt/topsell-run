@@ -93,15 +93,6 @@ function escapeHtml(value: string | null | undefined) {
     .replace(/'/g, '&#39;')
 }
 
-function safeFilename(value: string | null | undefined) {
-  return String(value || 'peserta')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80) || 'peserta'
-}
-
 function renderCommunityEmail(communityNameValue: string, leaderName: string, participants: RacepackParticipant[], template?: EmailTemplateSettings['community']) {
   const communityName = escapeHtml(communityNameValue || 'Komunitas TOPSELL RUN')
   const leader = escapeHtml(leaderName || communityNameValue || 'Komunitas')

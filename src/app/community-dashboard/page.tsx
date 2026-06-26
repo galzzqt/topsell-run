@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
 import { Dialog } from '@/components/ui/dialog'
 import { CommunityProfileModal } from '@/components/dashboard/CommunityProfileModal'
+import { DashboardSkeleton } from '@/components/ui/Skeleton'
 
 type CheckoutPayload = {
   paymentId: string
@@ -257,6 +258,10 @@ function DashboardContent() {
   const pendingParticipants = participants.filter((p) => p.payment_status === 'pending')
   const checkoutTotal = pendingParticipants.length * TOPSELL_RUN_EVENT.price_per_participant
 
+  if (isLoading) {
+    return <DashboardSkeleton />
+  }
+
   return (
     <div className="min-h-screen bg-brand-dark flex flex-col text-foreground">
       {/* Ambient glows */}
@@ -420,19 +425,8 @@ function DashboardContent() {
             </p>
           </div>
 
-          {/* Loading */}
-          {isLoading && (
-            <div className="py-16 flex flex-col items-center gap-3">
-              <svg className="w-6 h-6 animate-spin text-sport-orange" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Memuat data peserta...</p>
-            </div>
-          )}
-
           {/* Empty state */}
-          {!isLoading && filteredParticipants.length === 0 && (
+          {filteredParticipants.length === 0 && (
             <div className="py-16 flex flex-col items-center gap-4">
               <div className="p-4 bg-brand-gray border border-card-border rounded-full">
                 <Users className="w-8 h-8 text-brand-muted" />
@@ -445,7 +439,7 @@ function DashboardContent() {
           )}
 
           {/* Table */}
-          {!isLoading && filteredParticipants.length > 0 && (
+          {filteredParticipants.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>

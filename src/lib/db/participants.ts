@@ -2,7 +2,7 @@ import 'server-only'
 
 import { getDb } from '@/lib/mongodb/client'
 import type { Participant } from '@/lib/types'
-import { docToParticipant, newId, nowIso, stripMongoId } from './utils'
+import { docToParticipant, exactEmailRegex, newId, normalizeEmail, nowIso, stripMongoId } from './utils'
 
 type ParticipantDoc = Participant & { _id?: unknown }
 
@@ -38,7 +38,7 @@ export async function findDuplicateParticipants(email: string, phone: string) {
   const db = await getDb()
   const doc = await db.collection<ParticipantDoc>('participants').findOne({
     $or: [
-      { email: email.toLowerCase() },
+      { email: { $regex: exactEmailRegex(email) } },
       { phone: phone },
     ]
   })
@@ -51,7 +51,7 @@ export async function findActiveParticipants(email: string, phone: string) {
     $and: [
       {
         $or: [
-          { email: email.toLowerCase() },
+          { email: { $regex: exactEmailRegex(email) } },
           { phone: phone },
         ]
       },
@@ -70,7 +70,7 @@ export async function findActiveCrossParticipant(email: string, phone: string) {
     $and: [
       {
         $or: [
-          { email: email.toLowerCase() },
+          { email: { $regex: exactEmailRegex(email) } },
           { phone: phone },
         ]
       },
@@ -88,7 +88,7 @@ export async function findActiveCrossParticipant(email: string, phone: string) {
     $and: [
       {
         $or: [
-          { email: email.toLowerCase() },
+          { email: { $regex: exactEmailRegex(email) } },
           { phone: phone },
         ]
       },
@@ -143,6 +143,7 @@ export async function insertParticipants(values: Omit<Participant, 'id' | 'creat
     const id = newId()
     return {
       ...value,
+      email: normalizeEmail(value.email),
       id,
       created_at: timestamp,
       updated_at: timestamp,
@@ -156,7 +157,11 @@ export async function insertParticipants(values: Omit<Participant, 'id' | 'creat
 
 export async function updateParticipants(filter: Record<string, unknown>, values: Partial<Participant>) {
   const db = await getDb()
-  await db.collection('participants').updateMany(filter, { $set: { ...values, updated_at: nowIso() } })
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
+  await db.collection('participants').updateMany(filter, { $set: { ...nextValues, updated_at: nowIso() } })
 }
 
 export async function updateParticipantById(id: string, values: Partial<Participant>, options?: { protectPaid?: boolean }) {
@@ -169,13 +174,21 @@ export async function updateParticipantById(id: string, values: Partial<Particip
   }
 
   const db = await getDb()
-  await db.collection('participants').updateOne({ id }, { $set: { ...values, updated_at: nowIso() } })
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
+  await db.collection('participants').updateOne({ id }, { $set: { ...nextValues, updated_at: nowIso() } })
   return { success: true as const }
 }
 
 export async function updateParticipantIds(ids: string[], values: Partial<Participant>) {
   const db = await getDb()
-  await db.collection('participants').updateMany({ id: { $in: ids } }, { $set: { ...values, updated_at: nowIso() } })
+  const nextValues = {
+    ...values,
+    ...(typeof values.email === 'string' ? { email: normalizeEmail(values.email) } : {}),
+  }
+  await db.collection('participants').updateMany({ id: { $in: ids } }, { $set: { ...nextValues, updated_at: nowIso() } })
 }
 
 export async function linkParticipantsToRegistration(participantIds: string[], registrationId: string) {
