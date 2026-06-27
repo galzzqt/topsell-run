@@ -26,6 +26,20 @@ function isEmailConfigured() {
   return Boolean(config.host && config.port && config.user && config.pass && config.from)
 }
 
+function createTransporter() {
+  const config = getSmtpConfig()
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    requireTLS: !config.secure,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  })
+}
+
 function formatPaymentMethod(method: string | null) {
   if (!method) return '-'
   const map: Record<string, string> = {
@@ -146,6 +160,7 @@ function renderReceiptEmail(
 
         <p style="margin:20px 0 0;color:#6b7280;font-size:12px">
           E-receipt ini adalah bukti pembayaran resmi. Simpan untuk referensi Anda.<br/>
+          Kode QR untuk pengambilan racepack akan dikirimkan terpisah maksimal H-5 sebelum tanggal pengambilan racepack.<br/>
           Jika ada pertanyaan, silakan hubungi tim TOPSELL RUN 2026.
         </p>
       </div>
@@ -174,22 +189,26 @@ export async function sendCommunityReceiptEmail(registrationId: string) {
     return { error: 'Community or email not found' }
   }
 
-  const transporter = nodemailer.createTransport(getSmtpConfig())
+  const transporter = createTransporter()
 
-  await transporter.sendMail({
-    from: getSmtpConfig().from,
-    to: community.email,
-    subject: `E-Receipt Pembayaran - TOPSELL RUN 2026 (${community.community_code})`,
-    html: renderReceiptEmail(
-      community.name,
-      community.community_code,
-      payment,
-      participants,
-      'community'
-    )
-  })
-
-  return { success: true }
+  try {
+    await transporter.sendMail({
+      from: getSmtpConfig().from,
+      to: community.email,
+      subject: `E-Receipt Pembayaran - TOPSELL RUN 2026 (${community.community_code})`,
+      html: renderReceiptEmail(
+        community.name,
+        community.community_code,
+        payment,
+        participants,
+        'community'
+      )
+    })
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to send community receipt email:', error)
+    return { error: error instanceof Error ? error.message : 'Gagal mengirim e-receipt' }
+  }
 }
 
 export async function sendFamilyReceiptEmail(registrationId: string) {
@@ -213,20 +232,24 @@ export async function sendFamilyReceiptEmail(registrationId: string) {
     return { error: 'Family or email not found' }
   }
 
-  const transporter = nodemailer.createTransport(getSmtpConfig())
+  const transporter = createTransporter()
 
-  await transporter.sendMail({
-    from: getSmtpConfig().from,
-    to: family.email,
-    subject: `E-Receipt Pembayaran - TOPSELL RUN 2026 (${family.family_code})`,
-    html: renderReceiptEmail(
-      family.name,
-      family.family_code,
-      payment,
-      participants,
-      'family'
-    )
-  })
-
-  return { success: true }
+  try {
+    await transporter.sendMail({
+      from: getSmtpConfig().from,
+      to: family.email,
+      subject: `E-Receipt Pembayaran - TOPSELL RUN 2026 (${family.family_code})`,
+      html: renderReceiptEmail(
+        family.name,
+        family.family_code,
+        payment,
+        participants,
+        'family'
+      )
+    })
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to send family receipt email:', error)
+    return { error: error instanceof Error ? error.message : 'Gagal mengirim e-receipt' }
+  }
 }

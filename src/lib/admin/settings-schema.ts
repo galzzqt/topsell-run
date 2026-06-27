@@ -141,15 +141,15 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
 
 export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
   community: {
-    subject: 'QR Race Pass TOPSELL RUN 2026 - {communityName}',
+    subject: 'Konfirmasi Pembayaran TOPSELL RUN 2026 - {communityName}',
     greeting: 'Halo {leaderName},',
-    bodyIntro: 'Pembayaran komunitas {communityName} untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.',
+    bodyIntro: 'Pembayaran komunitas {communityName} untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
     bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
   },
   family: {
-    subject: 'QR Race Pass TOPSELL RUN 2026 - {familyName}',
+    subject: 'Konfirmasi Pembayaran TOPSELL RUN 2026 - {familyName}',
     greeting: 'Halo {leaderName},',
-    bodyIntro: 'Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima. Race Pass peserta sudah aktif.',
+    bodyIntro: 'Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
     bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
   },
 }
