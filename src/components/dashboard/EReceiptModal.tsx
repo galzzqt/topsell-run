@@ -53,8 +53,8 @@ export function EReceiptModal({
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             box-sizing: border-box !important;
-            orphans: 2;
-            widows: 2;
+            orphans: 1;
+            widows: 1;
           }
           html, body {
             margin: 0 !important;
@@ -64,6 +64,7 @@ export function EReceiptModal({
             width: 100% !important;
             background: #fff !important;
             -webkit-text-size-adjust: 100%;
+            font-size: 12px !important;
           }
           body * {
             visibility: hidden;
@@ -72,21 +73,18 @@ export function EReceiptModal({
             visibility: visible;
           }
           #receipt-printable {
-            position: absolute !important;
+            position: relative !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: 15px !important;
+            padding: 0 !important;
             box-shadow: none !important;
             border: none !important;
             background-color: #ffffff !important;
             z-index: 9999 !important;
             overflow: visible !important;
-          }
-          #receipt-printable > div,
-          #receipt-printable > div > div {
             page-break-inside: avoid !important;
           }
           #receipt-printable .grid {
@@ -111,37 +109,53 @@ export function EReceiptModal({
             background: linear-gradient(90deg, #ff2a44, #ff6a00) !important;
           }
           #receipt-printable .px-6 {
-            padding-left: 15px !important;
-            padding-right: 15px !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
           }
           #receipt-printable .py-6 {
-            padding-top: 15px !important;
-            padding-bottom: 15px !important;
+            padding-top: 12px !important;
+            padding-bottom: 12px !important;
           }
           #receipt-printable .py-4 {
-            padding-top: 10px !important;
-            padding-bottom: 10px !important;
-          }
-          #receipt-printable .gap-4 {
-            gap: 10px !important;
-          }
-          #receipt-printable .space-y-6 {
-            gap: 10px !important;
-          }
-          #receipt-printable .space-y-2 {
-            gap: 8px !important;
-          }
-          #receipt-printable .py-2 {
             padding-top: 8px !important;
             padding-bottom: 8px !important;
           }
+          #receipt-printable .gap-4 {
+            gap: 8px !important;
+          }
+          #receipt-printable .space-y-6 {
+            gap: 8px !important;
+          }
+          #receipt-printable .space-y-2 {
+            gap: 6px !important;
+          }
+          #receipt-printable .py-2 {
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+          }
           #receipt-printable .px-3 {
-            padding-left: 10px !important;
-            padding-right: 10px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+          }
+          #receipt-printable .text-xs,
+          #receipt-printable .text-sm {
+            font-size: 11px !important;
+          }
+          #receipt-printable .text-xl {
+            font-size: 16px !important;
+          }
+          #receipt-printable .text-[10px] {
+            font-size: 9px !important;
+          }
+          #receipt-printable .text-[9px] {
+            font-size: 8px !important;
+          }
+          #receipt-printable .text-[8px] {
+            font-size: 7px !important;
           }
           @page {
             size: A4 portrait;
-            margin: 8mm !important;
+            margin: 5mm !important;
           }
         }
       `}</style>

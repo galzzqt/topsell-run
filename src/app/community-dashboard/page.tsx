@@ -4,7 +4,7 @@ import React, { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Activity, LogOut, Users, CreditCard, QrCode,
+  Activity, LogOut, Users, CreditCard, User,
   Trophy, Clock, CheckCircle, AlertCircle,
   TrendingUp, Copy, Check, ExternalLink, Settings,
   Receipt,
@@ -18,7 +18,7 @@ import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus
 import { Participant, Payment, TOPSELL_RUN_EVENT } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { QRCodeModal } from '@/components/dashboard/QRCodeModal'
+import { ParticipantDetailModal } from '@/components/dashboard/ParticipantDetailModal'
 import { EReceiptModal } from '@/components/dashboard/EReceiptModal'
 import { Dialog } from '@/components/ui/dialog'
 import { CommunityProfileModal } from '@/components/dashboard/CommunityProfileModal'
@@ -40,7 +40,7 @@ function DashboardContent() {
   const searchParams = useSearchParams()
   const { user, community, participants, payments, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useCommunityStore()
 
-  const [qrParticipant, setQrParticipant] = useState<Participant | null>(null)
+  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [receiptData, setReceiptData] = useState<{
     payment: Payment
     participants: Participant[]
@@ -506,10 +506,10 @@ function DashboardContent() {
                         <td className="px-4 py-3.5 text-center">
                           {p.payment_status === 'paid' ? (
                             <button
-                              onClick={() => setQrParticipant(p)}
+                              onClick={() => setSelectedParticipant(p)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sport-orange/10 hover:bg-sport-orange/20 border border-sport-orange/25 text-sport-orange rounded text-[9px] font-black uppercase cursor-pointer active:scale-95 transition-all"
                             >
-                              <QrCode className="w-3 h-3" />Race Pass
+                              <User className="w-3 h-3" />Detail
                             </button>
                           ) : (
                             <span className="text-[9px] text-brand-muted font-bold uppercase">—</span>
@@ -589,10 +589,10 @@ function DashboardContent() {
       </main>
 
       {/* MODALS */}
-      <QRCodeModal
-        participant={qrParticipant}
-        isOpen={!!qrParticipant}
-        onClose={() => setQrParticipant(null)}
+      <ParticipantDetailModal
+        participant={selectedParticipant}
+        isOpen={!!selectedParticipant}
+        onClose={() => setSelectedParticipant(null)}
       />
       
       {receiptData && (
