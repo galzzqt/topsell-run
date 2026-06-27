@@ -48,5 +48,9 @@
   },
   "overrides": {
     "postcss": "^8.5.15"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }
+
