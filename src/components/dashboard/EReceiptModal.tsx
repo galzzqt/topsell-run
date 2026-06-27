@@ -63,6 +63,7 @@ export function EReceiptModal({
             overflow: visible !important;
             width: 100% !important;
             background: #fff !important;
+            -webkit-text-size-adjust: 100%;
           }
           body * {
             visibility: hidden;
@@ -77,7 +78,7 @@ export function EReceiptModal({
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 15px !important;
             box-shadow: none !important;
             border: none !important;
             background-color: #ffffff !important;
@@ -110,26 +111,37 @@ export function EReceiptModal({
             background: linear-gradient(90deg, #ff2a44, #ff6a00) !important;
           }
           #receipt-printable .px-6 {
-            padding-left: 20px !important;
-            padding-right: 20px !important;
+            padding-left: 15px !important;
+            padding-right: 15px !important;
           }
           #receipt-printable .py-6 {
-            padding-top: 20px !important;
-            padding-bottom: 20px !important;
-          }
-          #receipt-printable .py-4 {
             padding-top: 15px !important;
             padding-bottom: 15px !important;
           }
+          #receipt-printable .py-4 {
+            padding-top: 10px !important;
+            padding-bottom: 10px !important;
+          }
           #receipt-printable .gap-4 {
-            gap: 15px !important;
+            gap: 10px !important;
           }
           #receipt-printable .space-y-6 {
-            gap: 15px !important;
+            gap: 10px !important;
+          }
+          #receipt-printable .space-y-2 {
+            gap: 8px !important;
+          }
+          #receipt-printable .py-2 {
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+          }
+          #receipt-printable .px-3 {
+            padding-left: 10px !important;
+            padding-right: 10px !important;
           }
           @page {
             size: A4 portrait;
-            margin: 10mm !important;
+            margin: 8mm !important;
           }
         }
       `}</style>
