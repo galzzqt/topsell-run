@@ -176,7 +176,7 @@ export function EReceiptModal({
           {/* Receipt Content */}
           <div className="px-6 py-6 space-y-6">
             {/* Payer & Payment Info */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">
                   {type === 'community' ? 'Nama Komunitas' : 'Nama Keluarga'}
@@ -193,15 +193,18 @@ export function EReceiptModal({
                     : (payer as Family).family_code}
                 </p>
               </div>
-              <div>
-                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">No. Referensi</p>
-                <p className="text-sm font-black text-black">{payment.payment_reference}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">Tanggal Pembayaran</p>
-                <p className="text-sm font-black text-black">
-                  {payment.paid_at ? formatDate(payment.paid_at) : '-'}
-                </p>
+              {/* No. Referensi & Tanggal Pembayaran - Stacked on mobile */}
+              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">No. Referensi</p>
+                  <p className="text-sm font-black text-black">{payment.payment_reference}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">Tanggal Pembayaran</p>
+                  <p className="text-sm font-black text-black">
+                    {payment.paid_at ? formatDate(payment.paid_at) : '-'}
+                  </p>
+                </div>
               </div>
               <div>
                 <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">Metode Pembayaran</p>
@@ -216,7 +219,7 @@ export function EReceiptModal({
             {/* Event Info */}
             <div className="pt-4 border-t border-gray-300">
               <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider mb-2">Detail Event</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] font-medium text-gray-700">{TOPSELL_RUN_EVENT.name}</p>
                   <p className="text-[10px] text-gray-600">{TOPSELL_RUN_EVENT.location}</p>

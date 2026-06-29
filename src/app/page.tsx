@@ -510,7 +510,7 @@ export default function LandingPage() {
               alt="TOPSELL RUN"
               width={152}
               height={43}
-              className="h-8 w-auto object-contain"
+              className="h-6 sm:h-8 w-auto object-contain"
               priority
             />
           </Link>
@@ -538,7 +538,7 @@ export default function LandingPage() {
               alt="Run For Changes 2026"
               width={492}
               height={216}
-              className="w-full max-w-[456px] h-auto object-contain"
+              className="w-full max-w-[280px] sm:max-w-[456px] h-auto object-contain"
               priority
             />
           </div>
