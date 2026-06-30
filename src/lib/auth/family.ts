@@ -5,7 +5,11 @@ import { cookies, headers } from 'next/headers'
 import { FAMILY_COOKIE, type FamilySession } from './family-session'
 
 function getFamilySecret() {
-  return process.env.FAMILY_SESSION_SECRET || process.env.COMMUNITY_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || process.env.MONGODB_URI || ''
+  const secret = process.env.FAMILY_SESSION_SECRET || process.env.SESSION_SECRET
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('FAMILY_SESSION_SECRET or SESSION_SECRET is required in production')
+  }
+  return secret || 'dev-secret-only-use-in-development-do-not-commit-this'
 }
 
 function sign(value: string) {

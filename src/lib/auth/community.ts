@@ -5,7 +5,11 @@ import { cookies, headers } from 'next/headers'
 import { COMMUNITY_COOKIE, type CommunitySession } from './community-session'
 
 function getCommunitySecret() {
-  return process.env.COMMUNITY_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || process.env.MONGODB_URI || ''
+  const secret = process.env.COMMUNITY_SESSION_SECRET || process.env.SESSION_SECRET
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('COMMUNITY_SESSION_SECRET or SESSION_SECRET is required in production')
+  }
+  return secret || 'dev-secret-only-use-in-development-do-not-commit-this'
 }
 
 function sign(value: string) {
