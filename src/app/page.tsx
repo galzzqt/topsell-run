@@ -24,6 +24,8 @@ import { getActiveSessionAction, type ActiveSession } from '@/app/actions/sessio
 import { addFamilyParticipantsAction, addCommunityParticipantsAction, type AddParticipantsValues } from '@/app/actions/add-participants'
 import { signOutFamily } from '@/app/actions/family-auth'
 import { signOutCommunity } from '@/app/actions/auth'
+import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
+import { TOPSELL_RUN_EVENT } from '@/lib/types'
 
 const defaultParticipant = {
   full_name: '',
@@ -155,7 +157,7 @@ function NavUserWidget({ session, onLogout }: { session: ActiveSession | undefin
   }
 
   const initial = session.name.charAt(0).toUpperCase()
-  const label = session.type === 'community' ? 'Komunitas' : 'Brother & Sister'
+  const label = session.type === 'community' ? 'Komunitas' : 'Bro & Sist'
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -259,9 +261,10 @@ export default function LandingPage() {
 
   const selectedProvinsi = useWatch({ control, name: 'provinsi' })
   const selectedKota = useWatch({ control, name: 'kota' })
+
   const familyFallbacks = {
-    name: 'Brother & Sister Topsell',
-    leader_name: 'Perwakilan Brother & Sister',
+    name: 'Bro & Sist Topsell',
+    leader_name: 'Perwakilan Bro & Sist',
     phone: '081234567890',
     email: 'presentasi@topsell-run.com',
     category: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000',
@@ -383,6 +386,16 @@ export default function LandingPage() {
         origin: { y: 0.6 },
         colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
       })
+      // Track Meta Pixel Purchase event
+      await trackMetaPixelPurchase(
+        values.participants.length * TOPSELL_RUN_EVENT.price_per_participant,
+        'IDR',
+        {
+          content_ids: [values.email],
+          content_type: 'product',
+          num_items: values.participants.length
+        }
+      )
       // Store email and show success modal
       setRegisteredEmail(values.email)
       setIsSuccess(true)
@@ -436,7 +449,7 @@ export default function LandingPage() {
           {/* Main Message */}
           <div>
             <h3 className="text-2xl font-black uppercase text-slate-900 mb-2">
-              Brother & Sister Package Terdaftar!
+              Bro & Sist Package Terdaftar!
             </h3>
             <p className="text-sm text-brand-muted leading-relaxed">
               Akun Anda telah berhasil dibuat dengan email:
@@ -524,7 +537,7 @@ export default function LandingPage() {
           {/* Event badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 border border-card-border rounded-full backdrop-blur-sm shadow-sm">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Pendaftaran Brother & Sister Package Dibuka</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Pendaftaran Bro & Sist Package Dibuka</span>
           </div>
 
           {/* Main title */}
@@ -562,7 +575,7 @@ export default function LandingPage() {
             className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-xs font-black text-white uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-sport-purple/20 cursor-pointer"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
           >
-            Daftar Brother & Sister Package <ArrowRight className="w-4 h-4" />
+            Daftar Bro & Sist Package <ArrowRight className="w-4 h-4" />
           </a>
 
           <p className="text-[10px] text-brand-muted font-bold uppercase tracking-wider mt-1">
@@ -616,7 +629,7 @@ export default function LandingPage() {
                   </div>
                   <h2 className="text-xl font-black uppercase text-slate-900">Tambah Anggota</h2>
                   <p className="text-xs text-brand-muted font-medium">
-                    Masuk sebagai <span className="font-bold text-sport-purple">{activeSession.name}</span> · Daftarkan anggota baru ke {activeSession.type === 'family' ? 'grup Brother & Sister' : 'komunitas'} Anda
+                    Masuk sebagai <span className="font-bold text-sport-purple">{activeSession.name}</span> · Daftarkan anggota baru ke {activeSession.type === 'family' ? 'grup Bro & Sist' : 'komunitas'} Anda
                   </p>
                 </div>
 
@@ -771,7 +784,7 @@ export default function LandingPage() {
                 <div className="p-3 rounded-xl mb-1 bg-linear-to-br from-sport-purple via-sport-red to-sport-orange">
                   <UserPlus className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-xl font-black uppercase text-slate-900">Daftar Brother & Sister Package</h2>
+                <h2 className="text-xl font-black uppercase text-slate-900">Daftar Bro & Sist Package</h2>
                 <p className="text-xs text-brand-muted font-medium">Buat akun untuk mendaftarkan peserta lari bersama saudara Anda</p>
               </div>
 
@@ -779,7 +792,7 @@ export default function LandingPage() {
               <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
                 <Users className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
                 <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-                  <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data grup, input semua nama peserta Brother & Sister, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
+                  <span className="text-slate-900 font-bold">Daftar peserta langsung di sini.</span> Isi data grup, input semua nama peserta Bro & Sist, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
                 </p>
               </div>
 
@@ -928,7 +941,7 @@ export default function LandingPage() {
                     <div>
                       <h3 className="text-sm font-black uppercase text-slate-900 flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-sport-purple" />
-                        Daftar Peserta Brother & Sister
+                        Daftar Peserta Bro & Sist
                       </h3>
                       <p className="text-[10px] text-brand-muted mt-0.5">Input minimal 3 peserta untuk grup Anda</p>
                     </div>
@@ -1182,7 +1195,7 @@ export default function LandingPage() {
                   style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
                   isLoading={isSubmitting}
                 >
-                  <Trophy className="w-4 h-4 mr-2" />Daftar Brother & Sister Package Sekarang
+                  <Trophy className="w-4 h-4 mr-2" />Daftar Bro & Sist Package Sekarang
                 </Button>
               </form>
 

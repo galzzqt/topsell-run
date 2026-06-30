@@ -149,7 +149,7 @@ export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
   family: {
     subject: 'Konfirmasi Pembayaran TOPSELL RUN 2026 - {familyName}',
     greeting: 'Halo {leaderName},',
-    bodyIntro: 'Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
+    bodyIntro: 'Pembayaran Bro & Sist Package untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
     bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
   },
 }

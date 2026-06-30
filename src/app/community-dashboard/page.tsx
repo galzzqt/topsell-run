@@ -13,6 +13,7 @@ import confetti from 'canvas-confetti'
 import { useCommunityStore } from '@/lib/store/useCommunityStore'
 import { getCommunitySessionAction } from '@/app/actions/dashboard'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
+import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
 import { signOutCommunity } from '@/app/actions/auth'
 import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus } from '@/app/actions/payments'
 import { Participant, Payment, TOPSELL_RUN_EVENT } from '@/lib/types'
@@ -127,6 +128,18 @@ function DashboardContent() {
 
       if (!cancelled && hasPaid && !hasCelebratedPayment) {
         confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+        const { payments } = useCommunityStore.getState()
+        const paidPayment = paymentRef
+          ? payments.find((p) => p.status === 'paid' && p.payment_reference === paymentRef)
+          : payments.find((p) => p.status === 'paid')
+        if (paidPayment) {
+          const paidParticipants = participants.filter(p => p.registration_id === paidPayment.registration_id)
+          trackMetaPixelPurchase(paidPayment.amount, 'IDR', {
+            content_ids: [paidPayment.payment_reference],
+            content_type: 'product',
+            num_items: paidParticipants.length
+          })
+        }
         setHasCelebratedPayment(true)
         router.replace('/community-dashboard')
       }
@@ -173,6 +186,11 @@ function DashboardContent() {
       const res = await simulatePaymentSuccess(checkoutPayload.paymentId)
       if (res.error) return alert(res.error)
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+      trackMetaPixelPurchase(checkoutPayload.amount, 'IDR', {
+        content_ids: [checkoutPayload.reference],
+        content_type: 'product',
+        num_items: checkoutPayload.participantCount
+      })
       if (user?.id) await fetchCommunityData()
       setCheckoutPayload(null)
       setHasOpenedCheckout(false)
@@ -206,6 +224,11 @@ function DashboardContent() {
       if (hasPaid) {
         if (!hasCelebratedPayment) {
           confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+          trackMetaPixelPurchase(checkoutPayload.amount, 'IDR', {
+            content_ids: [checkoutPayload.reference],
+            content_type: 'product',
+            num_items: checkoutPayload.participantCount
+          })
           setHasCelebratedPayment(true)
         }
         setCheckoutPayload(null)

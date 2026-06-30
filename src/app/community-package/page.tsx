@@ -19,6 +19,8 @@ import { DateInput } from '@/components/ui/date-input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
+import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
+import { TOPSELL_RUN_EVENT } from '@/lib/types'
 
 const defaultParticipant = {
   full_name: '',
@@ -159,6 +161,7 @@ export default function LandingPage() {
 
   const selectedProvinsi = useWatch({ control, name: 'provinsi' })
   const selectedKota = useWatch({ control, name: 'kota' })
+
   const communityFallbacks = {
     name: 'Komunitas Topsell',
     leader_name: 'PIC Komunitas',
@@ -277,6 +280,16 @@ export default function LandingPage() {
         origin: { y: 0.6 },
         colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
       })
+      // Track Meta Pixel Purchase event
+      await trackMetaPixelPurchase(
+        values.participants.length * TOPSELL_RUN_EVENT.price_per_participant,
+        'IDR',
+        {
+          content_ids: [values.email],
+          content_type: 'product',
+          num_items: values.participants.length
+        }
+      )
       router.refresh()
       router.push('/community-dashboard')
     }

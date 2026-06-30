@@ -70,7 +70,7 @@ export async function sendFamilyRegistrationConfirmationWebhook(payload: {
     community_name: payload.familyName,
     leader_name: payload.representativeName,
     participant_count: payload.participantCount,
-    message: `Pendaftaran Brother & Sister Package ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima dengan ${payload.participantCount} anggota. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
+    message: `Pendaftaran Bro & Sist Package ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima dengan ${payload.participantCount} anggota. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
   })
 }
 
@@ -112,6 +112,6 @@ export async function sendFamilyRacepackWebhook(payload: {
     participant_count: payload.participantCount,
     community_name: payload.familyName,
     community_code: payload.familyCode,
-    message: `Pembayaran Brother & Sister Package ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. QR Code pengambilan racepack untuk ${payload.participantCount} anggota sudah dikirim ke email ${payload.email}. Setiap file QR dinamai sesuai nama peserta. Silakan cek inbox atau folder spam/promosi.`,
+    message: `Pembayaran Bro & Sist Package ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. QR Code pengambilan racepack untuk ${payload.participantCount} anggota sudah dikirim ke email ${payload.email}. Setiap file QR dinamai sesuai nama peserta. Silakan cek inbox atau folder spam/promosi.`,
   })
 }

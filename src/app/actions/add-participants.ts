@@ -130,7 +130,7 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
       level: 'info',
       source: 'family',
       event: 'family_participants_added',
-      message: `${validated.data.participants.length} anggota baru ditambahkan ke Brother & Sister Package: ${session.name}.`,
+      message: `${validated.data.participants.length} anggota baru ditambahkan ke Bro & Sist Package: ${session.name}.`,
       data: { familyId: session.id, name: session.name, count: validated.data.participants.length },
     })
   } catch {

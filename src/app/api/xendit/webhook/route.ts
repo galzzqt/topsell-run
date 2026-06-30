@@ -211,7 +211,7 @@ export async function POST(request: Request) {
             level: 'warning',
             source: 'payment',
             event: isExpired ? 'family_payment_webhook_expired' : 'family_payment_webhook_failed',
-            message: `Pembayaran Brother & Sister Package ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
+            message: `Pembayaran Bro & Sist Package ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
             data: { paymentId: p.id, reference: p.payment_reference, amount: p.amount, status }
           })
           processedAny = true
@@ -264,7 +264,7 @@ export async function POST(request: Request) {
         level: 'info',
         source: 'payment',
         event: 'family_payment_webhook_paid',
-        message: `Pembayaran Brother & Sister Package sukses via webhook (Session: ${sessionId}).`,
+        message: `Pembayaran Bro & Sist Package sukses via webhook (Session: ${sessionId}).`,
         data: { sessionId, reference: familyPayments[0]?.payment_reference, amount: familyPayments[0]?.amount }
       })
       return NextResponse.json({ received: true })
@@ -300,7 +300,7 @@ export async function POST(request: Request) {
         level: 'info',
         source: 'payment',
         event: 'family_payment_webhook_paid',
-        message: `Pembayaran Brother & Sister Package sukses via webhook (Ref: ${referenceId}).`,
+        message: `Pembayaran Bro & Sist Package sukses via webhook (Ref: ${referenceId}).`,
         data: { referenceId, amount: familyPayments[0]?.amount }
       })
       return NextResponse.json({ received: true })

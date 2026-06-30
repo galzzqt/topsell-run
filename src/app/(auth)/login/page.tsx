@@ -81,8 +81,8 @@ export default function LoginPage() {
             <Activity className="w-5 h-5 text-white" />
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-sport-purple">TOPSELL RUN 2026</p>
-          <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk Brother & Sister Package</h1>
-          <p className="text-xs text-brand-muted font-medium">Login untuk mengelola peserta Brother & Sister Package Anda</p>
+          <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk Bro & Sist Package</h1>
+          <p className="text-xs text-brand-muted font-medium">Login untuk mengelola peserta Bro & Sist Package Anda</p>
         </div>
 
         {/* Card */}
@@ -137,7 +137,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-xs text-center text-brand-muted">
-          Belum punya akun Brother & Sister Package?{' '}
+          Belum punya akun Bro & Sist Package?{' '}
           <Link href="/#register-section" className="font-bold hover:underline text-sport-purple">Daftar Sekarang</Link>
         </p>
       </div>

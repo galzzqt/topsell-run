@@ -174,7 +174,7 @@ function VerifyEmailContent() {
         {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-xs text-brand-muted">
-            Brother & Sister Package • TOPSELL RUN 2026
+            Bro & Sist Package • TOPSELL RUN 2026
           </p>
         </div>
       </div>

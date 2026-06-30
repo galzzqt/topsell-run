@@ -13,6 +13,7 @@ import confetti from 'canvas-confetti'
 import { useFamilyStore } from '@/lib/store/useFamilyStore'
 import { getFamilySessionAction } from '@/app/actions/family-dashboard'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
+import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
 import { signOutFamily } from '@/app/actions/family-auth'
 import { createFamilyPayment, simulateFamilyPaymentSuccess, syncXenditFamilyPaymentStatus } from '@/app/actions/family-payments'
 import { FamilyParticipant, FamilyPayment, TOPSELL_RUN_EVENT } from '@/lib/types'
@@ -127,6 +128,18 @@ function DashboardContent() {
 
       if (!cancelled && hasPaid && !hasCelebratedPayment) {
         confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+        const { payments } = useFamilyStore.getState()
+        const paidPayment = paymentRef
+          ? payments.find((p) => p.status === 'paid' && p.payment_reference === paymentRef)
+          : payments.find((p) => p.status === 'paid')
+        if (paidPayment) {
+          const paidParticipants = participants.filter(p => p.registration_id === paidPayment.registration_id)
+          trackMetaPixelPurchase(paidPayment.amount, 'IDR', {
+            content_ids: [paidPayment.payment_reference],
+            content_type: 'product',
+            num_items: paidParticipants.length
+          })
+        }
         setHasCelebratedPayment(true)
         router.replace('/dashboard')
       }
@@ -173,6 +186,11 @@ function DashboardContent() {
       const res = await simulateFamilyPaymentSuccess(checkoutPayload.paymentId)
       if (res.error) return alert(res.error)
       confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+      trackMetaPixelPurchase(checkoutPayload.amount, 'IDR', {
+        content_ids: [checkoutPayload.reference],
+        content_type: 'product',
+        num_items: checkoutPayload.participantCount
+      })
       if (user?.id) await fetchFamilyData()
       setCheckoutPayload(null)
       setHasOpenedCheckout(false)
@@ -206,6 +224,11 @@ function DashboardContent() {
       if (hasPaid) {
         if (!hasCelebratedPayment) {
           confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+          trackMetaPixelPurchase(checkoutPayload.amount, 'IDR', {
+            content_ids: [checkoutPayload.reference],
+            content_type: 'product',
+            num_items: checkoutPayload.participantCount
+          })
           setHasCelebratedPayment(true)
         }
         setCheckoutPayload(null)
@@ -284,7 +307,7 @@ function DashboardContent() {
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
               <p className="text-xs font-black uppercase tracking-wide text-foreground hidden sm:block">
-                {family?.name || 'Dashboard Brother & Sister Package'}
+                {family?.name || 'Dashboard Bro & Sist Package'}
               </p>
             </div>
           </div>
@@ -355,7 +378,7 @@ function DashboardContent() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Event Aktif</p>
               <p className="text-sm font-black uppercase text-foreground">{TOPSELL_RUN_EVENT.name}</p>
               <p className="text-[10px] text-brand-muted font-medium">
-                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Brother & Sister Package / {TOPSELL_RUN_EVENT.category}
+                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Bro & Sist Package / {TOPSELL_RUN_EVENT.category}
               </p>
             </div>
           </div>
@@ -372,7 +395,7 @@ function DashboardContent() {
               <CreditCard className="w-4 h-4 text-sport-orange" />
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Brother & Sister Package</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Bro & Sist Package</p>
               <p className="text-sm font-black uppercase text-foreground">Bayar semua anggota sekaligus</p>
               <p className="text-[10px] text-brand-muted font-medium mt-1">
                 {pendingParticipants.length > 0
@@ -427,7 +450,7 @@ function DashboardContent() {
             </div>
 
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
-              Pembayaran dilakukan kolektif oleh grup Brother & Sister
+              Pembayaran dilakukan kolektif oleh grup Bro & Sist
             </p>
           </div>
 
@@ -533,7 +556,7 @@ function DashboardContent() {
                 </div>
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Riwayat Pembayaran</p>
-                  <p className="text-sm font-black uppercase text-foreground">Semua transaksi Brother & Sister</p>
+                  <p className="text-sm font-black uppercase text-foreground">Semua transaksi Bro & Sist</p>
                 </div>
               </div>
             </div>
@@ -619,7 +642,7 @@ function DashboardContent() {
           setHasOpenedCheckout(false)
           setPaymentSyncMessage('')
         }}
-        title="Pembayaran Brother & Sister Package"
+        title="Pembayaran Bro & Sist Package"
         className="max-w-md"
       >
         {checkoutPayload && (

@@ -76,21 +76,21 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
       kecamatan: values.kecamatan,
     })
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Gagal membuat profil Brother & Sister Package.' }
+    return { error: error instanceof Error ? error.message : 'Gagal membuat profil Bro & Sist Package.' }
   }
 
   try {
     await saveFamilyAuth(family.id, values.phone, createPasswordRecord(values.password))
   } catch (error) {
     await deleteFamily(family.id)
-    return { error: error instanceof Error ? error.message : 'Gagal menyimpan akun Brother & Sister Package.' }
+    return { error: error instanceof Error ? error.message : 'Gagal menyimpan akun Bro & Sist Package.' }
   }
 
   try {
     await updateFamily(family.id, { email: values.email, category: values.category })
   } catch (error) {
     await deleteFamily(family.id)
-    return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil Brother & Sister Package.' }
+    return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil Bro & Sist Package.' }
   }
 
   let participantIds: string[] = []
@@ -202,7 +202,7 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
       level: 'info',
       source: 'auth',
       event: 'family_signup',
-      message: `Pendaftaran Brother & Sister Package baru: ${values.name} (Perwakilan: ${values.leader_name}, HP: ${values.phone}, Jumlah Anggota: ${values.participants.length}).`,
+      message: `Pendaftaran Bro & Sist Package baru: ${values.name} (Perwakilan: ${values.leader_name}, HP: ${values.phone}, Jumlah Anggota: ${values.participants.length}).`,
       data: {
         familyId: family.id,
         name: values.name,
@@ -267,7 +267,7 @@ export async function signInFamily(values: LoginFormValues) {
       level: 'info',
       source: 'auth',
       event: 'family_signin',
-      message: `Brother & Sister Package login berhasil: ${family.name} (HP: ${family.phone}).`,
+      message: `Bro & Sist Package login berhasil: ${family.name} (HP: ${family.phone}).`,
       data: {
         familyId: family.id,
         name: family.name,

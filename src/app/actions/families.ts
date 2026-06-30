@@ -25,7 +25,7 @@ export async function updateFamilyProfile(values: FamilyProfileValues) {
   }
 
   const existing = await findFamilyByPhoneExcept(values.phone, session.id)
-  if (existing) return { error: 'Nomor HP sudah digunakan grup Brother & Sister lain.' }
+  if (existing) return { error: 'Nomor HP sudah digunakan grup Bro & Sist lain.' }
 
   const existingEmailOwner = await findAuthEmailOwner(values.email, { type: 'family', id: session.id })
   if (existingEmailOwner) return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan akun lain.' }
@@ -46,7 +46,7 @@ export async function updateFamilyProfile(values: FamilyProfileValues) {
       level: 'info',
       source: 'family',
       event: 'family_profile_updated',
-      message: `Profil Brother & Sister Package diperbarui sendiri oleh pengguna: ${session.name} (HP Baru: ${values.phone}, Email Baru: ${values.email}).`,
+      message: `Profil Bro & Sist Package diperbarui sendiri oleh pengguna: ${session.name} (HP Baru: ${values.phone}, Email Baru: ${values.email}).`,
       data: {
         familyId: session.id,
         name: session.name,

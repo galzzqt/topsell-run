@@ -526,7 +526,7 @@ export function AdminDashboardClient({
     const selectedCommunities = targetCommunities.filter((community) => selectedIds.has(community.id))
 
     if (mode === 'selected' && selectedCommunities.length === 0) {
-      alert(`Pilih minimal satu ${packageType === 'community' ? 'komunitas' : 'grup Brother & Sister'} untuk diekspor.`)
+      alert(`Pilih minimal satu ${packageType === 'community' ? 'komunitas' : 'grup Bro & Sist'} untuk diekspor.`)
       return
     }
 
@@ -557,7 +557,7 @@ export function AdminDashboardClient({
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allPaymentsRows), 'Pembayaran')
       }
 
-      const segmentName = packageType === 'community' ? 'komunitas' : 'brother-sister'
+      const segmentName = packageType === 'community' ? 'komunitas' : 'bro-sist'
       XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}-${today}.xlsx`)
     } else {
       for (const community of selectedCommunities) {
@@ -1344,13 +1344,13 @@ export function AdminDashboardClient({
                       : 'border-transparent text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  Brother & Sister Package
+                  Bro & Sist Package
                 </button>
               </div>
               <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
-                    {packageType === 'community' ? 'Komunitas' : 'Brother & Sister'}
+                    {packageType === 'community' ? 'Komunitas' : 'Bro & Sist'}
                   </p>
                   <p className="text-xs font-bold text-foreground">
                     {groupedParticipants.length} {packageType === 'community' ? 'komunitas' : 'grup'} ditemukan
@@ -1517,7 +1517,7 @@ export function AdminDashboardClient({
                       : 'border-transparent text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  Brother & Sister Package
+                  Bro & Sist Package
                 </button>
               </div>
               <div className="overflow-x-auto">
@@ -1986,7 +1986,7 @@ export function AdminDashboardClient({
                     <p className="text-[10px] font-black uppercase text-brand-muted mb-2">Variabel yang tersedia:</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] text-brand-muted">
                       <div><code className="text-sport-orange">{'{communityName}'}</code> - Nama komunitas</div>
-                      <div><code className="text-sport-orange">{'{familyName}'}</code> - Nama keluarga/Brother & Sister</div>
+                      <div><code className="text-sport-orange">{'{familyName}'}</code> - Nama keluarga/Bro & Sist</div>
                       <div><code className="text-sport-orange">{'{leaderName}'}</code> - Nama ketua/perwakilan</div>
                       <div><code className="text-sport-orange">{'{participantCount}'}</code> - Jumlah peserta</div>
                     </div>
@@ -2041,7 +2041,7 @@ export function AdminDashboardClient({
 
                   {/* Family Email Template */}
                   <div className="border border-card-border rounded-lg p-4 bg-brand-gray/10">
-                    <h4 className="text-xs font-black uppercase text-foreground mb-3">Email Brother & Sister Package</h4>
+                    <h4 className="text-xs font-black uppercase text-foreground mb-3">Email Bro & Sist Package</h4>
                     <div className="flex flex-col gap-3">
                       <label className="flex flex-col gap-1.5">
                         <span className="text-[10px] font-black uppercase text-brand-muted">Subject</span>
@@ -2068,7 +2068,7 @@ export function AdminDashboardClient({
                         <textarea
                           value={settingsForm.emailTemplates.family.bodyIntro}
                           onChange={(e) => updateFamilyEmailTemplate('bodyIntro', e.target.value)}
-                          placeholder="Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima..."
+                          placeholder="Pembayaran Bro & Sist Package untuk TOPSELL RUN 2026 sudah kami terima..."
                           rows={3}
                           className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground resize-none"
                         />
@@ -2116,7 +2116,7 @@ export function AdminDashboardClient({
                       : 'border-transparent text-brand-muted hover:text-foreground'
                   }`}
                 >
-                  Brother & Sister Package
+                  Bro & Sist Package
                 </button>
               </div>
               <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
@@ -2125,7 +2125,7 @@ export function AdminDashboardClient({
                     {activeTab === 'export_participants' ? 'Export Peserta' : 'Export Pembayaran'}
                   </p>
                   <p className="text-xs font-bold text-brand-muted">
-                    Pilih {packageType === 'community' ? 'komunitas' : 'grup Brother & Sister'}, lalu sistem membuat {combineFiles ? '1 file Excel gabungan' : `1 file Excel untuk tiap ${packageType === 'community' ? 'komunitas' : 'grup'}`}.
+                    Pilih {packageType === 'community' ? 'komunitas' : 'grup Bro & Sist'}, lalu sistem membuat {combineFiles ? '1 file Excel gabungan' : `1 file Excel untuk tiap ${packageType === 'community' ? 'komunitas' : 'grup'}`}.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
@@ -2143,7 +2143,7 @@ export function AdminDashboardClient({
                       checked={resolvedSelection.size === (packageType === 'community' ? communities : families).length && (packageType === 'community' ? communities : families).length > 0}
                       onChange={(event) => setAllExportCommunities(event.target.checked)}
                     />
-                    Pilih semua {packageType === 'community' ? 'komunitas' : 'grup Brother & Sister'}
+                    Pilih semua {packageType === 'community' ? 'komunitas' : 'grup Bro & Sist'}
                   </label>
                 </div>
               {activeTab === 'export_participants' && (
@@ -2286,7 +2286,7 @@ export function AdminDashboardClient({
           setCommunityEditing(null)
           setCommunityForm(null)
         }}
-        title={packageType === 'community' ? 'Edit Data Komunitas' : 'Edit Data Brother & Sister Package'}
+        title={packageType === 'community' ? 'Edit Data Komunitas' : 'Edit Data Bro & Sist Package'}
         className="max-w-2xl"
       >
         {communityForm && (

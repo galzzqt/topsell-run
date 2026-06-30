@@ -48,7 +48,7 @@ export async function verifyEmailToken(token: string) {
       level: 'info',
       source: 'auth',
       event: 'family_email_verified',
-      message: `Email berhasil diverifikasi untuk Brother & Sister Package: ${family.name} (${family.email}).`,
+      message: `Email berhasil diverifikasi untuk Bro & Sist Package: ${family.name} (${family.email}).`,
       data: {
         familyId: family.id,
         name: family.name,
@@ -119,7 +119,7 @@ export async function resendVerificationEmail(familyIdOrPhone: string) {
       level: 'info',
       source: 'auth',
       event: 'family_verification_email_resent',
-      message: `Email verifikasi dikirim ulang untuk Brother & Sister Package: ${family.name} (${family.email}).`,
+      message: `Email verifikasi dikirim ulang untuk Bro & Sist Package: ${family.name} (${family.email}).`,
       data: {
         familyId: family.id,
         name: family.name,

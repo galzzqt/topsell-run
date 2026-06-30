@@ -270,7 +270,7 @@ export async function updateAdminParticipant(participantId: string, values: Admi
       level: 'info',
       source: 'admin',
       event: 'admin_participant_updated',
-      message: `Admin ${session.name} memperbarui data peserta: ${payload.full_name} (BIB: ${payload.bib_name}, HP: ${payload.phone}, Tipe: ${existingCommunity ? 'Komunitas' : 'Brother & Sister'}).`,
+      message: `Admin ${session.name} memperbarui data peserta: ${payload.full_name} (BIB: ${payload.bib_name}, HP: ${payload.phone}, Tipe: ${existingCommunity ? 'Komunitas' : 'Bro & Sist'}).`,
       actor: session,
       data: {
         participantId,
@@ -313,7 +313,7 @@ export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
   if (values.password && values.password.length < 6) return { error: 'Password minimal 6 karakter.' }
 
   const duplicate = await findFamilyByPhoneExcept(values.phone, values.id)
-  if (duplicate) return { error: 'Nomor HP sudah digunakan grup Brother & Sister lain.' }
+  if (duplicate) return { error: 'Nomor HP sudah digunakan grup Bro & Sist lain.' }
 
   const duplicateEmail = await findAuthEmailOwner(values.email, { type: 'family', id: values.id })
   if (duplicateEmail) return { error: 'Email ini sudah terdaftar sebagai email login/perwakilan akun lain.' }
@@ -339,7 +339,7 @@ export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
       level: 'info',
       source: 'admin',
       event: 'admin_family_updated',
-      message: `Admin ${session.name} memperbarui data Brother & Sister Package: ${values.name} (Penanggung Jawab: ${values.leader_name}, HP: ${values.phone}).`,
+      message: `Admin ${session.name} memperbarui data Bro & Sist Package: ${values.name} (Penanggung Jawab: ${values.leader_name}, HP: ${values.phone}).`,
       actor: session,
       data: {
         familyId: values.id,
@@ -667,7 +667,7 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
     }
 
     const oldStatus = payment.status
-    const packageName = packageType === 'community' ? 'komunitas' : 'Brother & Sister Package'
+    const packageName = packageType === 'community' ? 'komunitas' : 'Bro & Sist Package'
 
     // Handle status change
     if (status === 'paid') {

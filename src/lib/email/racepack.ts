@@ -308,7 +308,7 @@ function renderFamilyEmail(
   payment: FamilyPayment | null | undefined,
   template?: EmailTemplateSettings['family']
 ) {
-  const familyName = escapeHtml(familyNameValue || 'Brother & Sister TOPSELL RUN')
+  const familyName = escapeHtml(familyNameValue || 'Bro & Sist TOPSELL RUN')
   const leader = escapeHtml(leaderName || familyNameValue || 'Keluarga')
 
   const variables = {
@@ -318,7 +318,7 @@ function renderFamilyEmail(
   }
 
   const greeting = template ? applyEmailVariables(template.greeting, variables) : `Halo <strong>${familyName}</strong>,`
-  const bodyIntro = template ? applyEmailVariables(template.bodyIntro, variables) : 'Pembayaran Brother & Sister Package untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.'
+  const bodyIntro = template ? applyEmailVariables(template.bodyIntro, variables) : 'Pembayaran Bro & Sist Package untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.'
   const bodyOutro = template ? applyEmailVariables(template.bodyOutro, variables) : 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️'
 
   const familyCode = participants[0]?.family?.family_code || '-'
@@ -430,7 +430,7 @@ export async function sendFamilyRacepackEmailsForRegistration(registrationId: st
   try {
     await sendFamilyRacepackEmail(
       familyEmail,
-      family?.name || 'Brother & Sister TOPSELL RUN',
+      family?.name || 'Bro & Sist TOPSELL RUN',
       family?.leader_name || family?.name || 'Perwakilan',
       normalizedParticipants,
       payment

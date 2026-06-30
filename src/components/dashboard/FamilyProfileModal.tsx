@@ -62,7 +62,7 @@ export function FamilyProfileModal({ isOpen, onClose }: FamilyProfileModalProps)
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Akun Brother & Sister Package">
+    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Akun Bro & Sist Package">
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <KeyRound className="w-4 h-4 text-sport-orange shrink-0" />

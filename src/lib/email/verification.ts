@@ -54,14 +54,14 @@ function renderVerificationEmail(name: string, verificationUrl: string): string 
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:600px;margin:0 auto">
       <div style="background:linear-gradient(135deg, #ff2a44 0%, #ff6a00 100%);padding:30px;text-align:center;border-radius:8px 8px 0 0">
         <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:bold">TOPSELL RUN 2026</h1>
-        <p style="color:#ffffff;margin:8px 0 0;font-size:14px">Aktivasi Akun Brother & Sister Package</p>
+        <p style="color:#ffffff;margin:8px 0 0;font-size:14px">Aktivasi Akun Bro & Sist Package</p>
       </div>
       
       <div style="background:#ffffff;padding:40px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px">Halo ${name},</h2>
         
         <p style="margin:0 0 16px;color:#374151">
-          Terima kasih telah mendaftar TOPSELL RUN 2026 Brother & Sister Package! 
+          Terima kasih telah mendaftar TOPSELL RUN 2026 Bro & Sist Package! 
           Untuk melanjutkan dan mengakses dashboard, silakan aktivasi akun Anda dengan mengklik tombol di bawah ini:
         </p>
         
@@ -112,7 +112,7 @@ export async function sendVerificationEmail(params: VerificationEmailParams): Pr
     await transporter.sendMail({
       from: config.from,
       to: params.email,
-      subject: 'Aktivasi Akun TOPSELL RUN 2026 - Brother & Sister Package',
+      subject: 'Aktivasi Akun TOPSELL RUN 2026 - Bro & Sist Package',
       html: renderVerificationEmail(params.name, params.verificationUrl),
     })
 
