@@ -17,10 +17,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Env vars yang dibutuhkan saat build (nilai dummy agar next build tidak error)
-# Nilai sesungguhnya di-inject saat runtime oleh Dokploy
+# Env vars yang dibutuhkan saat build
+ARG NEXT_PUBLIC_META_PIXEL_ID
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_META_PIXEL_ID=$NEXT_PUBLIC_META_PIXEL_ID
 
 RUN npm run build
 
