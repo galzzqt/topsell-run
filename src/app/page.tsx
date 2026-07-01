@@ -501,7 +501,18 @@ export default function LandingPage() {
             </Button>
             
             <p className="text-xs text-center text-brand-muted leading-relaxed px-4">
-              Tidak menerima email? <strong>Cek folder spam</strong> atau minta kirim ulang dari halaman login
+              Tidak menerima email? <strong>Cek folder spam</strong> atau minta kirim ulang dari halaman login.
+            </p>
+            <p className="text-xs text-center text-brand-muted leading-relaxed px-4 mt-0.5">
+              Mengalami kesulitan? Hubungi kami via{' '}
+              <a
+                href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sport-orange hover:text-sport-red font-bold transition-colors hover:underline"
+              >
+                WhatsApp CS (0858-9259-9688)
+              </a>
             </p>
           </div>
         </div>
