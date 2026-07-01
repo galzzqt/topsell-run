@@ -21,8 +21,14 @@ import {
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
+import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
 
 export async function signUpCommunity(values: RegisterFormValues) {
+  const limit = rateLimit('community-signup', 5, 10 * 60 * 1000)
+  if (limit.limited) {
+    return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
+  }
+
   const validated = registerSchema.safeParse(values)
   if (!validated.success) {
     const errorMsg = validated.error.issues[0]?.message || 'Data registrasi tidak valid'
@@ -156,6 +162,11 @@ export async function signUpCommunity(values: RegisterFormValues) {
 }
 
 export async function signInCommunity(values: LoginFormValues) {
+  const limit = rateLimit('community-login', 10, 5 * 60 * 1000)
+  if (limit.limited) {
+    return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
+  }
+
   const validated = loginSchema.safeParse(values)
   if (!validated.success) {
     const errorMsg = validated.error.issues[0]?.message || 'Nomor HP/Email atau password tidak valid'
@@ -184,6 +195,7 @@ export async function signInCommunity(values: LoginFormValues) {
     return { error: 'Nomor HP/Email atau password salah' }
   }
 
+  clearRateLimit('community-login')
   await createCommunitySession({
     id: community.id,
     phone: community.phone,

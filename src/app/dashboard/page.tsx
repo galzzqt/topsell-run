@@ -167,6 +167,24 @@ function DashboardContent() {
   }
 
   const handleCheckout = async () => {
+    // Check if there's already a pending payment!
+    const existingPendingPayment = payments.find(p => p.status === 'pending')
+    if (existingPendingPayment) {
+      // Try to get existing pending payment
+      setIsCheckoutLoading(true)
+      try {
+        const res = await createFamilyPayment()
+        if (!res.success) return alert(res.error)
+        setPaymentSyncMessage('')
+        setHasOpenedCheckout(false)
+        setCheckoutPayload(res)
+      } finally {
+        setIsCheckoutLoading(false)
+      }
+      return
+    }
+
+    // No existing pending payment, create new
     setIsCheckoutLoading(true)
     try {
       const res = await createFamilyPayment()
@@ -414,9 +432,10 @@ function DashboardContent() {
               className="w-full sm:w-auto px-8 py-3.5 text-xs font-black"
               isLoading={isCheckoutLoading}
               onClick={handleCheckout}
-              disabled={pendingParticipants.length === 0}
+              disabled={pendingParticipants.length === 0 && !payments.some(p => p.status === 'pending')}
             >
-              <CreditCard className="w-4 h-4 mr-2" />Bayar Semua Anggota
+              <CreditCard className="w-4 h-4 mr-2" />
+              {payments.some(p => p.status === 'pending') ? 'Lanjutkan Pembayaran' : 'Bayar Semua Anggota'}
             </Button>
           </div>
         </div>

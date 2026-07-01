@@ -1,6 +1,5 @@
 import 'server-only'
 
-import { createHmac, timingSafeEqual } from 'crypto'
 import { cookies, headers } from 'next/headers'
 import { COMMUNITY_COOKIE, type CommunitySession } from './community-session'
 
@@ -12,14 +11,26 @@ function getCommunitySecret() {
   return secret || 'dev-secret-only-use-in-development-do-not-commit-this'
 }
 
-function sign(value: string) {
-  return createHmac('sha256', getCommunitySecret()).update(value).digest('hex')
+async function getCryptoKey(secret: string) {
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(secret)
+  return await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify']
+  )
 }
 
-function safeCompare(a: string, b: string) {
-  const left = Buffer.from(a)
-  const right = Buffer.from(b)
-  return left.length === right.length && timingSafeEqual(left, right)
+async function sign(value: string) {
+  const key = await getCryptoKey(getCommunitySecret())
+  const encoder = new TextEncoder()
+  const data = encoder.encode(value)
+  const signature = await crypto.subtle.sign('HMAC', key, data)
+  return Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 type EncodedSession = CommunitySession & {
@@ -47,7 +58,8 @@ export async function createCommunitySession(session: CommunitySession) {
     ...session,
     issuedAt: Date.now(),
   })
-  const token = `${payload}.${sign(payload)}`
+  const signature = await sign(payload)
+  const token = `${payload}.${signature}`
   const cookieStore = await cookies()
   const headersList = await headers()
   const isHttps = headersList.get('x-forwarded-proto') === 'https'
@@ -83,7 +95,12 @@ export async function getCommunitySession(): Promise<CommunitySession | null> {
   const [encodedPayload, signature] = token.split('.')
   if (!encodedPayload || !signature) return null
 
-  if (!getCommunitySecret() || !safeCompare(signature, sign(encodedPayload))) {
+  if (!getCommunitySecret()) {
+    return null
+  }
+
+  const expectedSignature = await sign(encodedPayload)
+  if (signature !== expectedSignature) {
     return null
   }
 

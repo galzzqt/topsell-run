@@ -125,6 +125,69 @@ export async function createCommunityPayment() {
       const existingRegistration = pendingRegistrations.find(
         (registration) => registration.id === existingPayment.registration_id
       )
+
+      // If existing payment has no checkout URL, try to generate a new one!
+      if (!existingPayment.checkout_url && !existingPayment.xendit_session_id?.startsWith('demo-xendit-session-')) {
+        const xenditSecretKey = process.env.XENDIT_SECRET_KEY || ''
+        let newCheckoutUrl: string | null = null
+        let newXenditSessionId: string | null = null
+
+        if (xenditSecretKey && !xenditSecretKey.includes('XXXXXX') && !xenditSecretKey.includes('your-')) {
+          try {
+            const authHeader = 'Basic ' + Buffer.from(`${xenditSecretKey}:`).toString('base64')
+
+            const res = await fetch(XENDIT_SESSION_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: authHeader,
+              },
+              body: JSON.stringify({
+                reference_id: existingPayment.payment_reference,
+                session_type: 'PAY',
+                currency: 'IDR',
+                amount: existingPayment.amount,
+                country: 'ID',
+                mode: 'PAYMENT_LINK',
+                capture_method: 'AUTOMATIC',
+                allowed_payment_channels: getXenditChannels(),
+                description: `TOPSELL RUN 6K Community - ${existingRegistration?.total_participants || 0} peserta`,
+                ...getReturnUrls(existingPayment.payment_reference),
+              }),
+            })
+
+            if (res.ok) {
+              const xenditData = await res.json()
+              newXenditSessionId = xenditData.payment_session_id || xenditData.id || null
+              newCheckoutUrl = xenditData.payment_link_url || null
+
+              if (newCheckoutUrl && newXenditSessionId) {
+                await updatePayment(existingPayment.id, {
+                  checkout_url: newCheckoutUrl,
+                  xendit_session_id: newXenditSessionId,
+                })
+              }
+            }
+          } catch (err) {
+            console.error('Failed to generate new checkout URL for existing community payment:', err)
+          }
+        }
+
+        return {
+          success: true,
+          paymentId: existingPayment.id,
+          registrationId: existingPayment.registration_id,
+          checkoutUrl: newCheckoutUrl || existingPayment.checkout_url,
+          xenditSessionId: newXenditSessionId || existingPayment.xendit_session_id,
+          isDemoMode: isDemoSession(existingPayment),
+          amount: existingPayment.amount,
+          reference: existingPayment.payment_reference,
+          participantCount: existingRegistration?.total_participants || 0,
+          reusedPendingPayment: true,
+        }
+      }
+
       return {
         success: true,
         paymentId: existingPayment.id,

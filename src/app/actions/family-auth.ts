@@ -28,12 +28,18 @@ import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
 import { generateRandomReference } from '@/lib/utils/format'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
+import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
 
 function toXenditReference(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
 }
 
 export async function signUpFamily(values: RegisterFamilyFormValues) {
+  const limit = rateLimit('family-signup', 5, 10 * 60 * 1000)
+  if (limit.limited) {
+    return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
+  }
+
   const validated = registerFamilySchema.safeParse(values)
   if (!validated.success) {
     const errorMsg = validated.error.issues[0]?.message || 'Data registrasi tidak valid'
@@ -219,6 +225,11 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
 }
 
 export async function signInFamily(values: LoginFormValues) {
+  const limit = rateLimit('family-login', 10, 5 * 60 * 1000)
+  if (limit.limited) {
+    return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
+  }
+
   const validated = loginSchema.safeParse(values)
   if (!validated.success) {
     const errorMsg = validated.error.issues[0]?.message || 'Nomor HP/Email atau password tidak valid'
@@ -256,6 +267,7 @@ export async function signInFamily(values: LoginFormValues) {
     }
   }
 
+  clearRateLimit('family-login')
   await createFamilySession({
     id: family.id,
     phone: family.phone,
