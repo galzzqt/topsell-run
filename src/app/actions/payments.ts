@@ -56,8 +56,9 @@ function canUseReturnUrl(appUrl: string | undefined) {
 }
 
 function getReturnUrls(paymentRef?: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (!canUseReturnUrl(appUrl)) return {}
+  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!rawAppUrl || !canUseReturnUrl(rawAppUrl)) return {}
+  const appUrl = rawAppUrl.replace(/\/+$/, '')
 
   const refQuery = paymentRef ? `&ref=${encodeURIComponent(paymentRef)}` : ''
   return {

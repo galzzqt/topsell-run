@@ -176,7 +176,7 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
       
       await setFamilyVerificationToken(family.id, verificationToken, tokenExpiry)
       
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
       const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`
       
       await sendVerificationEmail({
