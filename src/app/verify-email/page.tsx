@@ -158,6 +158,18 @@ function VerifyEmailContent() {
                       </Button>
                     </div>
                   )}
+
+                  <p className="text-xs text-brand-muted mt-4">
+                    Butuh bantuan? Hubungi{' '}
+                    <a
+                      href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20verifikasi%20email%20dengan%20token%20saya."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sport-orange hover:text-sport-red font-bold transition-colors hover:underline"
+                    >
+                      WhatsApp CS
+                    </a>
+                  </p>
                 </div>
                 <Button
                   onClick={() => router.push('/login')}

@@ -829,6 +829,18 @@ export default function LandingPage() {
                   </label>
                 </div>
 
+                {/* General participants array errors (e.g. duplicate email/phone check) */}
+                {errors.participants && 'message' in errors.participants && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-500 my-2">
+                    {(errors.participants as any).message}
+                  </div>
+                )}
+                {errors.participants && 'root' in errors.participants && (errors.participants as any).root?.message && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-500 my-2">
+                    {(errors.participants as any).root.message}
+                  </div>
+                )}
+
                 <Button
                   type="submit"
                   variant="primary"

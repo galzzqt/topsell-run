@@ -86,6 +86,17 @@ function renderVerificationEmail(name: string, verificationUrl: string): string 
           </p>
         </div>
         
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:24px 0">
+          <p style="margin:0;color:#15803d;font-size:14px;font-weight:bold">💬 Butuh bantuan?</p>
+          <p style="margin:8px 0 0;color:#166534;font-size:13px">
+            Jika mengalami kesulitan dalam proses aktivasi, hubungi tim kami:
+          </p>
+          <a href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
+             style="display:inline-block;margin-top:10px;background:#25d366;color:#ffffff;text-decoration:none;padding:8px 18px;border-radius:6px;font-weight:bold;font-size:13px">
+            💬 Chat WhatsApp CS
+          </a>
+        </div>
+        
         <p style="margin:24px 0 0;color:#6b7280;font-size:13px">
           Jika Anda tidak melakukan pendaftaran ini, abaikan email ini.
         </p>

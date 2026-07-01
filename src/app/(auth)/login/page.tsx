@@ -104,7 +104,15 @@ export default function LoginPage() {
                     Email Belum Diverifikasi
                   </p>
                   <p className="text-[10px] text-amber-800 leading-relaxed">
-                    Silakan cek email Anda dan klik link aktivasi. Jika tidak menerima email, kirim ulang di bawah ini.
+                    Silakan cek email Anda dan klik link aktivasi. Jika tidak menerima email, kirim ulang di bawah ini atau hubungi{' '}
+                    <a
+                      href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sport-orange hover:text-sport-red font-bold transition-colors hover:underline"
+                    >
+                      WhatsApp CS
+                    </a>.
                   </p>
                 </div>
               </div>
