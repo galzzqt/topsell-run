@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Pencil } from 'lucide-react'
@@ -22,6 +23,7 @@ interface ParticipantFormModalProps {
 
 export function ParticipantFormModal({ isOpen, onClose, editParticipant }: ParticipantFormModalProps) {
   const { user, fetchCommunityData } = useCommunityStore()
+  const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
 
   const {
     register,
@@ -95,139 +97,168 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
   }
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Data Peserta">
-      <div className="flex flex-col gap-5">
-        <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
-          <Pencil className="w-4 h-4 text-sport-orange shrink-0" />
-          <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-            Edit data peserta yang masih berstatus pending. Jumlah peserta tidak dapat ditambah atau dikurangi dari dashboard.
-          </p>
-        </div>
+    <>
+      <Dialog isOpen={isOpen} onClose={handleClose} title="Edit Data Peserta">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
+            <Pencil className="w-4 h-4 text-sport-orange shrink-0" />
+            <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
+              Edit data peserta yang masih berstatus pending. Jumlah peserta tidak dapat ditambah atau dikurangi dari dashboard.
+            </p>
+          </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <Input
-            label="Nama Lengkap Peserta"
-            placeholder="Nama sesuai identitas"
-            error={errors.full_name?.message}
-            disabled={isSubmitting}
-            {...register('full_name')}
-          />
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <Input
+              label="Nama Lengkap Peserta"
+              placeholder="Nama sesuai identitas"
+              error={errors.full_name?.message}
+              disabled={isSubmitting}
+              {...register('full_name')}
+            />
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="Nama BIB"
-              placeholder="Nama yang dicetak di BIB"
-              error={errors.bib_name?.message}
-              disabled={isSubmitting}
-              {...register('bib_name')}
-            />
-            <Input
-              label="Email"
-              type="email"
-              placeholder="peserta@email.com"
-              error={errors.email?.message}
-              disabled={isSubmitting}
-              {...register('email')}
-            />
-            <Input
-              label="No. HP / WhatsApp"
-              placeholder="08xxxxxxxxxx"
-              error={errors.phone?.message}
-              disabled={isSubmitting}
-              {...register('phone')}
-            />
-            <Controller
-              name="date_of_birth"
-              control={control}
-              render={({ field }) => (
-                <DateInput
-                  label="Tanggal Lahir"
-                  error={errors.date_of_birth?.message}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Input
+                label="Nama BIB"
+                placeholder="Nama yang dicetak di BIB"
+                error={errors.bib_name?.message}
+                disabled={isSubmitting}
+                {...register('bib_name')}
+              />
+              <Input
+                label="Email"
+                type="email"
+                placeholder="peserta@email.com"
+                error={errors.email?.message}
+                disabled={isSubmitting}
+                {...register('email')}
+              />
+              <Input
+                label="No. HP / WhatsApp"
+                placeholder="08xxxxxxxxxx"
+                error={errors.phone?.message}
+                disabled={isSubmitting}
+                {...register('phone')}
+              />
+              <Controller
+                name="date_of_birth"
+                control={control}
+                render={({ field }) => (
+                  <DateInput
+                    label="Tanggal Lahir"
+                    error={errors.date_of_birth?.message}
+                    disabled={isSubmitting}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Select
+                label="Jenis Kelamin"
+                error={errors.gender?.message}
+                disabled={isSubmitting}
+                options={[
+                  { value: 'male', label: 'Laki-laki' },
+                  { value: 'female', label: 'Perempuan' },
+                ]}
+                {...register('gender')}
+              />
+              <div className="flex flex-col gap-1">
+                <Select
+                  label="Ukuran Jersey"
+                  error={errors.tshirt_size?.message}
                   disabled={isSubmitting}
-                  value={field.value}
-                  onChange={field.onChange}
+                  options={[
+                    { value: 'XS', label: 'XS' },
+                    { value: 'S', label: 'S' },
+                    { value: 'M', label: 'M' },
+                    { value: 'L', label: 'L' },
+                    { value: 'XL', label: 'XL' },
+                    { value: 'XXL', label: 'XXL' },
+                    { value: '3XL', label: '3XL' },
+                    { value: '4XL', label: '4XL' },
+                    { value: '5XL', label: '5XL' },
+                  ]}
+                  {...register('tshirt_size')}
                 />
-              )}
-            />
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSizeChartOpen(true)}
+                  className="text-[9px] text-sport-purple hover:text-sport-purple/80 font-semibold hover:underline text-left cursor-pointer"
+                >
+                  Lihat Size Chart
+                </button>
+              </div>
+              <Select
+                label="Gol. Darah"
+                error={errors.blood_type?.message}
+                disabled={isSubmitting}
+                options={[
+                  { value: 'A', label: 'A' },
+                  { value: 'B', label: 'B' },
+                  { value: 'AB', label: 'AB' },
+                  { value: 'O', label: 'O' },
+                ]}
+                {...register('blood_type')}
+              />
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Select
-              label="Jenis Kelamin"
-              error={errors.gender?.message}
+            <Input
+              label="Penyakit Bawaan"
+              placeholder="Isi jika ada"
+              error={errors.medical_condition?.message}
               disabled={isSubmitting}
-              options={[
-                { value: 'male', label: 'Laki-laki' },
-                { value: 'female', label: 'Perempuan' },
-              ]}
-              {...register('gender')}
+              {...register('medical_condition')}
             />
-            <Select
-              label="Ukuran Jersey"
-              error={errors.tshirt_size?.message}
-              disabled={isSubmitting}
-              options={[
-                { value: 'XS', label: 'XS' },
-                { value: 'S', label: 'S' },
-                { value: 'M', label: 'M' },
-                { value: 'L', label: 'L' },
-                { value: 'XL', label: 'XL' },
-                { value: 'XXL', label: 'XXL' },
-                { value: '3XL', label: '3XL' },
-                { value: '4XL', label: '4XL' },
-                { value: '5XL', label: '5XL' },
-              ]}
-              {...register('tshirt_size')}
-            />
-            <Select
-              label="Gol. Darah"
-              error={errors.blood_type?.message}
-              disabled={isSubmitting}
-              options={[
-                { value: 'A', label: 'A' },
-                { value: 'B', label: 'B' },
-                { value: 'AB', label: 'AB' },
-                { value: 'O', label: 'O' },
-              ]}
-              {...register('blood_type')}
-            />
-          </div>
 
-          <Input
-            label="Penyakit Bawaan"
-            placeholder="Isi jika ada"
-            error={errors.medical_condition?.message}
-            disabled={isSubmitting}
-            {...register('medical_condition')}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Nama Kontak Darurat"
+                placeholder="Nama kontak darurat"
+                error={errors.emergency_contact_name?.message}
+                disabled={isSubmitting}
+                {...register('emergency_contact_name')}
+              />
+              <Input
+                label="No. Kontak Darurat"
+                placeholder="08xxxxxxxxxx"
+                error={errors.emergency_contact_phone?.message}
+                disabled={isSubmitting}
+                {...register('emergency_contact_phone')}
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2 border-t border-card-border">
+              <Button type="button" variant="ghost" className="flex-1" onClick={handleClose} disabled={isSubmitting}>
+                Batal
+              </Button>
+              <Button type="submit" variant="primary" className="flex-1" isLoading={isSubmitting}>
+                Simpan Perubahan
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Dialog>
+
+      {/* Size Chart Modal */}
+      <Dialog
+        isOpen={isSizeChartOpen}
+        onClose={() => setIsSizeChartOpen(false)}
+        title="Size Chart Jersey"
+        className="max-w-2xl"
+      >
+        <div className="flex flex-col items-center">
+          <Image
+            src="/images/size.jpg"
+            alt="Size Chart Jersey"
+            width={800}
+            height={800}
+            className="w-full h-auto rounded-lg shadow-md"
           />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Nama Kontak Darurat"
-              placeholder="Nama kontak darurat"
-              error={errors.emergency_contact_name?.message}
-              disabled={isSubmitting}
-              {...register('emergency_contact_name')}
-            />
-            <Input
-              label="No. Kontak Darurat"
-              placeholder="08xxxxxxxxxx"
-              error={errors.emergency_contact_phone?.message}
-              disabled={isSubmitting}
-              {...register('emergency_contact_phone')}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2 border-t border-card-border">
-            <Button type="button" variant="ghost" className="flex-1" onClick={handleClose} disabled={isSubmitting}>
-              Batal
-            </Button>
-            <Button type="submit" variant="primary" className="flex-1" isLoading={isSubmitting}>
-              Simpan Perubahan
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Dialog>
+        </div>
+      </Dialog>
+    </>
   )
 }

@@ -225,6 +225,7 @@ export default function LandingPage() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
   const [activeSession, setActiveSession] = useState<ActiveSession | undefined>(undefined)
+  const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
   
   // Check active session for navbar
   useEffect(() => {
@@ -718,6 +719,15 @@ export default function LandingPage() {
                             >
                               {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
+                            {key === 'tshirt_size' && (
+                              <button
+                                type="button"
+                                onClick={() => setIsSizeChartOpen(true)}
+                                className="text-[9px] text-sport-purple hover:text-sport-purple/80 font-semibold hover:underline text-left cursor-pointer"
+                              >
+                                Lihat Size Chart
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1067,14 +1077,23 @@ export default function LandingPage() {
                         )}
 
                         {formSettings.participants.tshirt_size.visible ? (
-                          <Select
-                            label={formSettings.participants.tshirt_size.label}
-                            placeholder={formSettings.participants.tshirt_size.placeholder}
-                            error={errors.participants?.[index]?.tshirt_size?.message}
-                            disabled={isSubmitting}
-                            options={formSettings.participants.tshirt_size.options}
-                            {...register(`participants.${index}.tshirt_size` as const)}
-                          />
+                          <div className="flex flex-col gap-1">
+                            <Select
+                              label={formSettings.participants.tshirt_size.label}
+                              placeholder={formSettings.participants.tshirt_size.placeholder}
+                              error={errors.participants?.[index]?.tshirt_size?.message}
+                              disabled={isSubmitting}
+                              options={formSettings.participants.tshirt_size.options}
+                              {...register(`participants.${index}.tshirt_size` as const)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setIsSizeChartOpen(true)}
+                              className="text-[9px] text-sport-purple hover:text-sport-purple/80 font-semibold hover:underline text-left cursor-pointer"
+                            >
+                              Lihat Size Chart
+                            </button>
+                          </div>
                         ) : (
                           <input type="hidden" value={participantFallbacks(index).tshirt_size} {...register(`participants.${index}.tshirt_size` as const)} />
                         )}
@@ -1231,6 +1250,24 @@ export default function LandingPage() {
         </>
       )}
       </section>
+
+      {/* Size Chart Modal */}
+      <Dialog
+        isOpen={isSizeChartOpen}
+        onClose={() => setIsSizeChartOpen(false)}
+        title="Size Chart Jersey"
+        className="max-w-2xl"
+      >
+        <div className="flex flex-col items-center">
+          <Image
+            src="/images/size.jpg"
+            alt="Size Chart Jersey"
+            width={800}
+            height={800}
+            className="w-full h-auto rounded-lg shadow-md"
+          />
+        </div>
+      </Dialog>
 
       {/* ——— FOOTER ——— */}
       <footer className="border-t border-card-border px-4 py-8 z-10 relative bg-white mt-12">
