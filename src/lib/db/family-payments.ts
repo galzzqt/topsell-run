@@ -123,6 +123,7 @@ export async function listFamilyPaymentsWithRelations() {
       registration: registration
         ? {
             family_id: registration.family_id as string,
+            total_participants: Number(registration.total_participants) || 0,
             family: family
               ? {
                   id: family.id as string,

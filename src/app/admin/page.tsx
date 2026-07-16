@@ -115,6 +115,7 @@ export default async function AdminPage() {
     registration: fp.registration
       ? {
         community_id: fp.registration.family_id,
+        total_participants: fp.registration.total_participants,
         community: fp.registration.family
           ? {
             id: fp.registration.family.id,

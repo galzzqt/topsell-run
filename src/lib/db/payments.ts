@@ -123,6 +123,7 @@ export async function listPaymentsWithRelations() {
       registration: registration
         ? {
             community_id: registration.community_id as string,
+            total_participants: Number(registration.total_participants) || 0,
             community: community
               ? {
                   id: community.id as string,

@@ -27,6 +27,31 @@ import {
   X,
 } from 'lucide-react'
 import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js'
+import { Bar, Line } from 'react-chartjs-2'
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend
+)
+
+import {
   logoutAdmin,
   markRacepackPickedUp,
   createManagedAdmin,
@@ -146,6 +171,20 @@ type SummaryDailyParticipant = {
   dateKey: string
   label: string
   count: number
+}
+
+type DailyMetric = {
+  dateKey: string
+  label: string
+  participants: number
+  paidParticipants: number
+  revenue: number
+}
+
+type DashboardSummary = {
+  stats: AdminStats
+  daily: DailyMetric[]
+  updatedAt: string
 }
 
 type AdminTab =
@@ -281,10 +320,40 @@ export function AdminDashboardClient({
   const [logsMessage, setLogsMessage] = useState(axiomLogsError || '')
   const [isPending, startTransition] = useTransition()
   const [paymentStatusChanges, setPaymentStatusChanges] = useState<Map<string, 'pending' | 'paid' | 'failed' | 'expired'>>(new Map())
+  
+  // Real-time dashboard summary state
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(true)
+
+  const communitiesForExport = useMemo(() => {
+    const targetCommunities = packageType === 'community' ? communities : families
+    const isExportParticipants = activeTab === 'export_participants'
+    const isExportPayments = activeTab === 'export_payments'
+    if (exportPaymentFilter === 'all' || (!isExportParticipants && !isExportPayments)) return targetCommunities
+    const matchingCommunityIds = new Set<string>()
+    if (isExportParticipants) {
+      const targetParticipants = packageType === 'community' ? participants : familyParticipants
+      for (const p of targetParticipants) {
+        const community = getParticipantCommunity(p)
+        if (!community) continue
+        const matches = exportPaymentFilter === 'paid' ? p.payment_status === 'paid' : p.payment_status !== 'paid'
+        if (matches) matchingCommunityIds.add(community.id)
+      }
+    } else {
+      const targetPayments = packageType === 'community' ? payments : familyPayments
+      for (const pay of targetPayments) {
+        const community = getPaymentCommunity(pay)
+        if (!community) continue
+        const matches = exportPaymentFilter === 'paid' ? pay.status === 'paid' : pay.status !== 'paid'
+        if (matches) matchingCommunityIds.add(community.id)
+      }
+    }
+    return targetCommunities.filter((c) => matchingCommunityIds.has(c.id))
+  }, [packageType, communities, families, participants, familyParticipants, payments, familyPayments, activeTab, exportPaymentFilter])
 
   const resolvedSelection = useMemo(() => {
-    return selectedExportCommunities ?? new Set((packageType === 'community' ? communities : families).map((c) => c.id))
-  }, [selectedExportCommunities, packageType, communities, families])
+    return selectedExportCommunities ?? new Set(communitiesForExport.map((c) => c.id))
+  }, [selectedExportCommunities, communitiesForExport])
 
   const filteredParticipants = useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -518,6 +587,12 @@ export function AdminDashboardClient({
     return rows
   }
 
+  const applyPaymentFilter = (rows: AdminPayment[]) => {
+    if (exportPaymentFilter === 'paid') return rows.filter((pay) => pay.status === 'paid')
+    if (exportPaymentFilter === 'unpaid') return rows.filter((pay) => pay.status !== 'paid')
+    return rows
+  }
+
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
     const XLSX = await import('xlsx')
     const today = new Date().toISOString().slice(0, 10)
@@ -543,7 +618,9 @@ export function AdminDashboardClient({
         const communityParticipants = applyParticipantFilter(
           targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
         )
-        const communityPayments = targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+        const communityPayments = applyPaymentFilter(
+          targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+        )
 
         allParticipantsRows.push(...buildParticipantExportRows(communityParticipants))
         allPaymentsRows.push(...buildPaymentExportRows(communityPayments))
@@ -564,7 +641,9 @@ export function AdminDashboardClient({
         const communityParticipants = applyParticipantFilter(
           targetParticipants.filter((participant) => getParticipantCommunity(participant)?.id === community.id)
         )
-        const communityPayments = targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+        const communityPayments = applyPaymentFilter(
+          targetPayments.filter((payment) => getPaymentCommunity(payment)?.id === community.id)
+        )
         const workbook = XLSX.utils.book_new()
 
         if (type === 'participants' || type === 'all') {
@@ -578,6 +657,27 @@ export function AdminDashboardClient({
       }
     }
   }
+
+  // Function to fetch dashboard summary
+  const fetchDashboardSummary = async () => {
+    try {
+      const response = await fetch('/admin/dashboard-summary')
+      if (!response.ok) throw new Error('Failed to fetch summary')
+      const data = await response.json()
+      setDashboardSummary(data)
+      setSummaryLoading(false)
+    } catch (error) {
+      console.error('Error fetching dashboard summary:', error)
+      setSummaryLoading(false)
+    }
+  }
+
+  // Fetch summary on mount and refresh every 10 seconds
+  useEffect(() => {
+    fetchDashboardSummary()
+    const intervalId = setInterval(fetchDashboardSummary, 10000) // 10 seconds
+    return () => clearInterval(intervalId)
+  }, [])
 
   useEffect(() => {
     return () => stopCamera()
@@ -913,7 +1013,8 @@ export function AdminDashboardClient({
 
   const toggleExportCommunity = (communityId: string) => {
     setSelectedExportCommunities((current) => {
-      const next = new Set(current)
+      const base = current ?? new Set(communitiesForExport.map((c) => c.id))
+      const next = new Set(base)
       if (next.has(communityId)) next.delete(communityId)
       else next.add(communityId)
       return next
@@ -921,8 +1022,7 @@ export function AdminDashboardClient({
   }
 
   const setAllExportCommunities = (checked: boolean) => {
-    const targetCommunities = packageType === 'community' ? communities : families
-    setSelectedExportCommunities(checked ? new Set(targetCommunities.map((community) => community.id)) : new Set())
+    setSelectedExportCommunities(checked ? new Set(communitiesForExport.map((c) => c.id)) : new Set())
   }
 
   const fetchLogs = (mode: 'silent' | 'manual' = 'manual') => {
@@ -1146,27 +1246,27 @@ export function AdminDashboardClient({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <label className="relative w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={
-                  activeTab === 'summary'
-                    ? 'Cari data peserta, komunitas, pembayaran...'
-                    : activeTab === 'payments'
-                    ? 'Cari pembayaran...'
-                    : 'Cari peserta, komunitas...'
-                }
-                className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
-              />
-            </label>
-          </div>
+          {(activeTab === 'participants' || activeTab === 'payments') && (
+            <div className="flex items-center gap-3">
+              <label className="relative w-64">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={
+                    activeTab === 'payments'
+                      ? 'Cari pembayaran...'
+                      : 'Cari peserta, komunitas...'
+                  }
+                  className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
+                />
+              </label>
+            </div>
+          )}
         </header>
 
-        {/* Mobile-only Search Bar (Visible under mobile header when not settings tab) */}
-        {activeTab !== 'settings' && (
+        {/* Mobile-only Search Bar (Visible under mobile header when participants or payments tab) */}
+        {(activeTab === 'participants' || activeTab === 'payments') && (
           <div className="md:hidden px-4 py-3 border-b border-card-border/50 bg-brand-dark/20">
             <label className="relative w-full block">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -1174,9 +1274,7 @@ export function AdminDashboardClient({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={
-                  activeTab === 'summary'
-                    ? 'Cari data peserta, komunitas, pembayaran...'
-                    : activeTab === 'payments'
+                  activeTab === 'payments'
                     ? 'Cari pembayaran...'
                     : 'Cari peserta, komunitas...'
                 }
@@ -1192,12 +1290,12 @@ export function AdminDashboardClient({
             <div className="grid grid-cols-1 gap-4">
               <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
                 {[
-                  { label: 'Komunitas', value: stats.communities, icon: <Activity className="w-4 h-4" /> },
-                  { label: 'Peserta', value: stats.participants, icon: <Users className="w-4 h-4" /> },
-                  { label: 'Lunas', value: stats.paidParticipants, icon: <CheckCircle className="w-4 h-4" /> },
-                  { label: 'Pending', value: stats.pendingParticipants, icon: <CreditCard className="w-4 h-4" /> },
-                  { label: 'Racepack', value: stats.racepacksPickedUp, icon: <TicketCheck className="w-4 h-4" /> },
-                  { label: 'Revenue', value: formatCurrency(stats.revenue), icon: <CreditCard className="w-4 h-4" /> },
+                  { label: 'Komunitas', value: dashboardSummary?.stats.communities ?? stats.communities, icon: <Activity className="w-4 h-4" /> },
+                  { label: 'Peserta', value: dashboardSummary?.stats.participants ?? stats.participants, icon: <Users className="w-4 h-4" /> },
+                  { label: 'Lunas', value: dashboardSummary?.stats.paidParticipants ?? stats.paidParticipants, icon: <CheckCircle className="w-4 h-4" /> },
+                  { label: 'Pending', value: dashboardSummary?.stats.pendingParticipants ?? stats.pendingParticipants, icon: <CreditCard className="w-4 h-4" /> },
+                  { label: 'Racepack', value: dashboardSummary?.stats.racepacksPickedUp ?? stats.racepacksPickedUp, icon: <TicketCheck className="w-4 h-4" /> },
+                  { label: 'Revenue', value: formatCurrency(dashboardSummary?.stats.revenue ?? stats.revenue), icon: <CreditCard className="w-4 h-4" /> },
                 ].map((item) => (
                   <div key={item.label} className="bg-card-bg border border-card-border rounded-lg p-3.5 flex items-center justify-between gap-3 shadow-sm hover:border-sport-orange/30 transition-colors">
                     <div>
@@ -1211,27 +1309,104 @@ export function AdminDashboardClient({
                 ))}
               </div>
 
+              {/* Participants Chart */}
               <section className="bg-card-bg border border-card-border rounded-lg p-4 md:p-5">
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Diagram Peserta</p>
                     <h2 className="text-sm font-black uppercase text-foreground">Jumlah Peserta Per Hari (14 Hari Terakhir)</h2>
                   </div>
-                  <Badge variant="neutral">{dailyParticipants.reduce((sum, item) => sum + item.count, 0)} Peserta</Badge>
+                  <Badge variant="neutral">{dashboardSummary?.daily.reduce((sum, item) => sum + item.participants, 0) ?? dailyParticipants.reduce((sum, item) => sum + item.count, 0)} Peserta</Badge>
                 </div>
                 <div className="h-64 w-full">
-                  <div className="h-full flex items-end gap-1.5">
-                    {dailyParticipants.map((item) => {
-                      const heightPercent = Math.max((item.count / dailyParticipantChartMax) * 100, item.count > 0 ? 8 : 3)
-                      return (
-                        <div key={item.dateKey} className="flex-1 min-w-0 h-full flex flex-col justify-end items-center gap-1.5">
-                          <div className="text-[9px] font-black text-brand-muted">{item.count}</div>
-                          <div className="w-full rounded-t-md bg-linear-to-t from-sport-red/80 to-sport-orange/90 border border-sport-orange/40" style={{ height: `${heightPercent}%` }} />
-                          <div className="text-[9px] font-bold text-brand-muted whitespace-nowrap">{item.label}</div>
-                        </div>
-                      )
-                    })}
+                  {summaryLoading || !dashboardSummary ? (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-brand-muted text-sm">Memuat data...</div>
+                    </div>
+                  ) : (
+                    <Bar
+                      data={{
+                        labels: dashboardSummary.daily.map(d => d.label),
+                        datasets: [
+                          {
+                            label: 'Peserta Baru',
+                            data: dashboardSummary.daily.map(d => d.participants),
+                            backgroundColor: 'rgba(255, 107, 53, 0.8)',
+                            borderColor: 'rgba(255, 69, 0, 1)',
+                            borderWidth: 1,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                        },
+                        scales: {
+                          y: { beginAtZero: true },
+                        },
+                      }}
+                    />
+                  )}
+                </div>
+              </section>
+
+              {/* Revenue Chart */}
+              <section className="bg-card-bg border border-card-border rounded-lg p-4 md:p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Diagram Pendapatan</p>
+                    <h2 className="text-sm font-black uppercase text-foreground">Pendapatan Per Hari (14 Hari Terakhir)</h2>
                   </div>
+                  <Badge variant="neutral">{formatCurrency(dashboardSummary?.daily.reduce((sum, item) => sum + item.revenue, 0) ?? 0)}</Badge>
+                </div>
+                <div className="h-64 w-full">
+                  {summaryLoading || !dashboardSummary ? (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-brand-muted text-sm">Memuat data...</div>
+                    </div>
+                  ) : (
+                    <Line
+                      data={{
+                        labels: dashboardSummary.daily.map(d => d.label),
+                        datasets: [
+                          {
+                            label: 'Revenue',
+                            data: dashboardSummary.daily.map(d => d.revenue),
+                            borderColor: 'rgba(34, 197, 94, 1)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                            tension: 0.4,
+                            fill: true,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: function(context) {
+                                return formatCurrency(context.parsed.y ?? 0)
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              callback: function(value) {
+                                return formatCurrency(value as number)
+                              }
+                            }
+                          },
+                        },
+                      }}
+                    />
+                  )}
                 </div>
               </section>
             </div>
@@ -2140,13 +2315,13 @@ export function AdminDashboardClient({
                   <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={resolvedSelection.size === (packageType === 'community' ? communities : families).length && (packageType === 'community' ? communities : families).length > 0}
+                      checked={communitiesForExport.length > 0 && resolvedSelection.size === communitiesForExport.length}
                       onChange={(event) => setAllExportCommunities(event.target.checked)}
                     />
                     Pilih semua {packageType === 'community' ? 'komunitas' : 'grup Bro & Sist'}
                   </label>
                 </div>
-              {activeTab === 'export_participants' && (
+              {(activeTab === 'export_participants' || activeTab === 'export_payments') && (
                 <div className="flex items-center gap-1.5 bg-brand-gray/30 border border-card-border rounded-lg px-3 py-1.5">
                   <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted mr-2">Filter Status:</span>
                   {(['all', 'paid', 'unpaid'] as const).map((opt) => (
@@ -2156,7 +2331,7 @@ export function AdminDashboardClient({
                         name="exportPaymentFilter"
                         value={opt}
                         checked={exportPaymentFilter === opt}
-                        onChange={() => setExportPaymentFilter(opt)}
+                        onChange={() => { setExportPaymentFilter(opt); setSelectedExportCommunities(null) }}
                         className="accent-sport-orange"
                       />
                       <span className={`text-[10px] font-black uppercase tracking-wide ${
@@ -2170,7 +2345,16 @@ export function AdminDashboardClient({
               )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
-                {(packageType === 'community' ? communities : families).map((community) => (
+                {communitiesForExport.length === 0 && (
+                  <p className="col-span-full text-xs text-brand-muted py-2">
+                    {exportPaymentFilter === 'paid'
+                      ? (activeTab === 'export_payments' ? 'Tidak ada grup dengan pembayaran lunas.' : 'Tidak ada grup dengan peserta lunas.')
+                      : exportPaymentFilter === 'unpaid'
+                        ? (activeTab === 'export_payments' ? 'Tidak ada grup dengan pembayaran belum lunas.' : 'Tidak ada grup dengan peserta belum lunas.')
+                        : 'Tidak ada grup ditemukan.'}
+                  </p>
+                )}
+                {communitiesForExport.map((community) => (
                   <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
                     <input
                       type="checkbox"
