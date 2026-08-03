@@ -71,12 +71,66 @@ export async function createCommunity(input: {
     provinsi: input.provinsi,
     kota: input.kota,
     kecamatan: input.kecamatan,
+    email_verified: false,
+    verification_token: null,
+    verification_token_expires: null,
+    verification_sent_at: null,
     created_at: timestamp,
     updated_at: timestamp,
   }
 
   await db.collection('communities').insertOne({ ...community })
   return community
+}
+
+export async function setCommunityVerificationToken(communityId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('communities').updateOne(
+    { id: communityId },
+    {
+      $set: {
+        verification_token: token,
+        verification_token_expires: expiresAt.toISOString(),
+        verification_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findCommunityByVerificationToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<CommunityDoc>('communities').findOne({ verification_token: token })
+  return stripMongoId(doc) as Community | null
+}
+
+export async function verifyCommunityEmail(communityId: string) {
+  const db = await getDb()
+  await db.collection('communities').updateOne(
+    { id: communityId },
+    {
+      $set: {
+        email_verified: true,
+        verification_token: null,
+        verification_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function clearCommunityVerificationToken(communityId: string) {
+  const db = await getDb()
+  await db.collection('communities').updateOne(
+    { id: communityId },
+    {
+      $set: {
+        verification_token: null,
+        verification_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
 }
 
 export async function updateCommunity(id: string, values: Partial<Community>) {

@@ -189,6 +189,7 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
         email: values.email,
         name: values.leader_name || values.name,
         verificationUrl,
+        packageType: 'family',
       })
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError)

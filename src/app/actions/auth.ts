@@ -17,11 +17,13 @@ import {
   saveCommunityAuth,
   updateCommunity,
   findActiveCrossParticipant,
+  setCommunityVerificationToken,
 } from '@/lib/db'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
+import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 
 export async function signUpCommunity(values: RegisterFormValues) {
   const limit = rateLimit('community-signup', 5, 10 * 60 * 1000)
@@ -134,11 +136,28 @@ export async function signUpCommunity(values: RegisterFormValues) {
     console.error('Failed to send registration confirmation WhatsApp:', sendError)
   }
 
-  await createCommunitySession({
-    id: community.id,
-    phone: community.phone,
-    name: community.name,
-  })
+  if (values.email) {
+    try {
+      const verificationToken = generateVerificationToken()
+      const tokenExpiry = getVerificationTokenExpiry()
+
+      await setCommunityVerificationToken(community.id, verificationToken, tokenExpiry)
+
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
+      const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`
+
+      await sendVerificationEmail({
+        email: values.email,
+        name: values.leader_name || values.name,
+        verificationUrl,
+        packageType: 'community',
+      })
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError)
+    }
+  }
+
+  // Session baru dibuat setelah email berhasil diverifikasi.
 
   try {
     await ingestAdminLog({
@@ -193,6 +212,14 @@ export async function signInCommunity(values: LoginFormValues) {
 
   if (!community || !auth || !verifyPassword(values.password, auth)) {
     return { error: 'Nomor HP/Email atau password salah' }
+  }
+
+  if (community.email && community.email_verified === false) {
+    return {
+      error: 'Email belum diverifikasi. Silakan cek email Anda untuk link aktivasi atau minta kirim ulang.',
+      needsVerification: true,
+      communityId: community.id,
+    }
   }
 
   clearRateLimit('community-login')

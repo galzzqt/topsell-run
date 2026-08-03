@@ -13,6 +13,10 @@ export {
   updateCommunityAuthPhone,
   updateCommunityAuthPassword,
   deleteCommunityAuth,
+  setCommunityVerificationToken,
+  findCommunityByVerificationToken,
+  verifyCommunityEmail,
+  clearCommunityVerificationToken,
 } from './communities'
 
 export {

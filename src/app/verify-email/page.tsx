@@ -18,7 +18,9 @@ function VerifyEmailContent() {
   const [message, setMessage] = useState(
     token ? '' : 'Token verifikasi tidak ditemukan.'
   )
-  const [familyName, setFamilyName] = useState('')
+  const [accountName, setAccountName] = useState('')
+  const [redirectPath, setRedirectPath] = useState('/login')
+  const [packageLabel, setPackageLabel] = useState('TOPSELL RUN 2026')
   const [isResending, setIsResending] = useState(false)
 
   useEffect(() => {
@@ -32,12 +34,14 @@ function VerifyEmailContent() {
         setMessage(result.error)
       } else if (result.success) {
         setStatus('success')
-        setFamilyName(result.familyName || '')
+        setAccountName(result.accountName || '')
+        setRedirectPath(result.redirectPath || '/login')
+        setPackageLabel(result.packageLabel || 'TOPSELL RUN 2026')
         setMessage('Email berhasil diverifikasi!')
         
         // Redirect to dashboard after 3 seconds
         setTimeout(() => {
-          router.push('/dashboard')
+          router.push(result.redirectPath || '/login')
         }, 3000)
       }
     }
@@ -105,9 +109,9 @@ function VerifyEmailContent() {
                   <p className="text-lg font-black text-foreground mb-2">
                     Berhasil Diverifikasi!
                   </p>
-                  {familyName && (
+                  {accountName && (
                     <p className="text-sm font-bold text-sport-orange mb-3">
-                      {familyName}
+                      {accountName}
                     </p>
                   )}
                   <p className="text-xs text-brand-muted mb-4">
@@ -120,7 +124,7 @@ function VerifyEmailContent() {
                   </div>
                 </div>
                 <Button
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push(redirectPath)}
                   variant="primary"
                   className="w-full"
                 >
@@ -162,7 +166,7 @@ function VerifyEmailContent() {
                   <p className="text-xs text-brand-muted mt-4">
                     Butuh bantuan? Hubungi{' '}
                     <a
-                      href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20verifikasi%20email%20dengan%20token%20saya."
+                      href="https://wa.me/6282119227871?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20verifikasi%20email%20dengan%20token%20saya."
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sport-orange hover:text-sport-red font-bold transition-colors hover:underline"
@@ -172,7 +176,7 @@ function VerifyEmailContent() {
                   </p>
                 </div>
                 <Button
-                  onClick={() => router.push('/login')}
+                  onClick={() => router.push(redirectPath)}
                   variant="ghost"
                   className="w-full"
                 >
@@ -186,7 +190,7 @@ function VerifyEmailContent() {
         {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-xs text-brand-muted">
-            Bro & Sist Package • TOPSELL RUN 2026
+            {packageLabel} • TOPSELL RUN 2026
           </p>
         </div>
       </div>

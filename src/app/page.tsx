@@ -507,7 +507,7 @@ export default function LandingPage() {
             <p className="text-xs text-center text-brand-muted leading-relaxed px-4 mt-0.5">
               Mengalami kesulitan? Hubungi kami via{' '}
               <a
-                href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
+                href="https://wa.me/6282119227871?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sport-orange hover:text-sport-red font-bold transition-colors hover:underline"
@@ -1230,6 +1230,7 @@ export default function LandingPage() {
                   </div>
                 )}
 
+              {/* 
                 <Button
                   type="submit"
                   variant="primary"
@@ -1238,7 +1239,8 @@ export default function LandingPage() {
                   isLoading={isSubmitting}
                 >
                   <Trophy className="w-4 h-4 mr-2" />Daftar Bro & Sist Package Sekarang
-                </Button>
+                </Button> 
+                */}
               </form>
 
               <p className="text-xs text-center text-brand-muted mt-2">

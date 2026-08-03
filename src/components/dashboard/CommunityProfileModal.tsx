@@ -50,6 +50,16 @@ export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModal
       return
     }
 
+    if ('message' in result && result.message) {
+      alert(result.message)
+    }
+
+    if ('requiresVerification' in result && result.requiresVerification) {
+      handleClose()
+      window.location.href = result.redirectTo || '/community-login'
+      return
+    }
+
     if (user?.id) {
       await fetchCommunityData()
     }
@@ -67,7 +77,7 @@ export function CommunityProfileModal({ isOpen, onClose }: CommunityProfileModal
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <KeyRound className="w-4 h-4 text-sport-orange shrink-0" />
           <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-            Komunitas hanya dapat mengubah nomor HP, email, dan password akun. Data peserta dikelola oleh admin.
+            Komunitas hanya dapat mengubah nomor HP, email, dan password akun. Jika email diubah, akun wajib aktivasi ulang melalui email baru. Data peserta dikelola oleh admin.
           </p>
         </div>
 

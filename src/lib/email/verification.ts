@@ -7,6 +7,7 @@ type VerificationEmailParams = {
   email: string
   name: string
   verificationUrl: string
+  packageType: 'community' | 'family'
 }
 
 function getSmtpConfig() {
@@ -49,19 +50,24 @@ export function getVerificationTokenExpiry(): Date {
   return expiry
 }
 
-function renderVerificationEmail(name: string, verificationUrl: string): string {
+function renderVerificationEmail(name: string, verificationUrl: string, packageType: 'community' | 'family'): string {
+  const packageName = packageType === 'community' ? 'Community Package' : 'Bro & Sist Package'
+  const waLinkText = packageType === 'community' 
+    ? 'Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Community%20Package.'
+    : 'Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package.'
+  
   return `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:600px;margin:0 auto">
       <div style="background:linear-gradient(135deg, #ff2a44 0%, #ff6a00 100%);padding:30px;text-align:center;border-radius:8px 8px 0 0">
         <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:bold">TOPSELL RUN 2026</h1>
-        <p style="color:#ffffff;margin:8px 0 0;font-size:14px">Aktivasi Akun Bro & Sist Package</p>
+        <p style="color:#ffffff;margin:8px 0 0;font-size:14px">Aktivasi Akun ${packageName}</p>
       </div>
       
       <div style="background:#ffffff;padding:40px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px">Halo ${name},</h2>
         
         <p style="margin:0 0 16px;color:#374151">
-          Terima kasih telah mendaftar TOPSELL RUN 2026 Bro & Sist Package! 
+          Terima kasih telah mendaftar TOPSELL RUN 2026 ${packageName}! 
           Untuk melanjutkan dan mengakses dashboard, silakan aktivasi akun Anda dengan mengklik tombol di bawah ini:
         </p>
         
@@ -91,7 +97,7 @@ function renderVerificationEmail(name: string, verificationUrl: string): string 
           <p style="margin:8px 0 0;color:#166534;font-size:13px">
             Jika mengalami kesulitan dalam proses aktivasi, hubungi tim kami:
           </p>
-          <a href="https://wa.me/6285892599688?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
+          <a href="https://wa.me/6282119227871?text=${waLinkText}"
              style="display:inline-block;margin-top:10px;background:#25d366;color:#ffffff;text-decoration:none;padding:8px 18px;border-radius:6px;font-weight:bold;font-size:13px">
             💬 Chat WhatsApp CS
           </a>
@@ -118,13 +124,14 @@ export async function sendVerificationEmail(params: VerificationEmailParams): Pr
 
   const config = getSmtpConfig()
   const transporter = createTransporter()
+  const packageName = params.packageType === 'community' ? 'Community Package' : 'Bro & Sist Package'
 
   try {
     await transporter.sendMail({
       from: config.from,
       to: params.email,
-      subject: 'Aktivasi Akun TOPSELL RUN 2026 - Bro & Sist Package',
-      html: renderVerificationEmail(params.name, params.verificationUrl),
+      subject: `Aktivasi Akun TOPSELL RUN 2026 - ${packageName}`,
+      html: renderVerificationEmail(params.name, params.verificationUrl, params.packageType),
     })
 
     return { success: true }

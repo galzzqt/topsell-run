@@ -13,6 +13,10 @@ export interface Community {
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
+  email_verified: boolean
+  verification_token: string | null
+  verification_token_expires: string | null
+  verification_sent_at: string | null
   created_at: string
   updated_at: string
 }
