@@ -69,6 +69,7 @@ export async function ensureIndexes() {
       { key: { registration_id: 1 } },
       { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
       { key: { payment_status: 1 } },
+      { key: { period_key: 1 } },
     ]),
     db.collection('registrations').createIndexes([
       { key: { id: 1 }, unique: true },
@@ -81,6 +82,7 @@ export async function ensureIndexes() {
       { key: { payment_reference: 1 }, unique: true },
       { key: { xendit_session_id: 1 }, sparse: true },
       { key: { status: 1 } },
+      { key: { period_key: 1 } },
     ]),
     db.collection('app_settings').createIndexes([{ key: { key: 1 }, unique: true }]),
     db.collection('community_auth').createIndexes([
@@ -98,6 +100,7 @@ export async function ensureIndexes() {
       { key: { registration_id: 1 } },
       { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
       { key: { payment_status: 1 } },
+      { key: { period_key: 1 } },
     ]),
     db.collection('family_registrations').createIndexes([
       { key: { id: 1 }, unique: true },
@@ -110,10 +113,47 @@ export async function ensureIndexes() {
       { key: { payment_reference: 1 }, unique: true },
       { key: { xendit_session_id: 1 }, sparse: true },
       { key: { status: 1 } },
+      { key: { period_key: 1 } },
     ]),
     db.collection('family_auth').createIndexes([
       { key: { id: 1 }, unique: true },
       { key: { phone: 1 }, unique: true },
+    ]),
+    db.collection('individuals').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { phone: 1 }, unique: true },
+      { key: { individual_code: 1 }, unique: true },
+    ]),
+    db.collection('individual_participants').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { individual_id: 1 } },
+      { key: { registration_id: 1 } },
+      { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
+      { key: { payment_status: 1 } },
+      { key: { period_key: 1 } },
+    ]),
+    db.collection('individual_registrations').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { individual_id: 1 } },
+      { key: { status: 1 } },
+    ]),
+    db.collection('individual_payments').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { registration_id: 1 } },
+      { key: { payment_reference: 1 }, unique: true },
+      { key: { xendit_session_id: 1 }, sparse: true },
+      { key: { status: 1 } },
+      { key: { period_key: 1 } },
+    ]),
+    db.collection('individual_auth').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { phone: 1 }, unique: true },
+    ]),
+    db.collection('vouchers').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { code: 1 } },
+      { key: { type: 1 } },
+      { key: { enabled: 1 } },
     ]),
   ])
 }

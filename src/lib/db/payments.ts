@@ -44,6 +44,7 @@ export async function createPayment(input: {
   amount: number
   payment_reference: string
   status?: Payment['status']
+  period_key?: string | null
 }) {
   const db = await getDb()
   const id = newId()
@@ -59,6 +60,7 @@ export async function createPayment(input: {
     xendit_session_id: null,
     checkout_url: null,
     status: input.status || 'pending',
+    period_key: input.period_key ?? null,
     paid_at: null,
     created_at: timestamp,
     updated_at: timestamp,

@@ -4,19 +4,25 @@ import {
   markPaymentsPaidBySessionId,
   markFamilyPaymentsPaidByReference,
   markFamilyPaymentsPaidBySessionId,
+  markIndividualPaymentsPaidByReference,
+  markIndividualPaymentsPaidBySessionId,
   markPaymentFailed,
   markPaymentExpired,
   markFamilyPaymentFailed,
   markFamilyPaymentExpired,
+  markIndividualPaymentFailed,
+  markIndividualPaymentExpired,
 } from '@/lib/db'
 import {
   sendRacepackEmailsForRegistration,
   sendFamilyRacepackEmailsForRegistration,
 } from '@/lib/email/racepack'
+import { sendIndividualRacepackEmailsForRegistration, sendIndividualReceiptEmail } from '@/lib/email/individual'
 import {
   sendRacepackWhatsappsForRegistration,
   sendFamilyRacepackWhatsappsForRegistration,
 } from '@/lib/whatsapp/racepack'
+import { sendIndividualRacepackWhatsappsForRegistration } from '@/lib/whatsapp/individual'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId } from '@/lib/utils/xendit'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { getDb } from '@/lib/mongodb/client'
@@ -217,6 +223,24 @@ export async function POST(request: Request) {
           processedAny = true
         }
 
+        // Update individual payments
+        const individualPayments = await db.collection('individual_payments').find({ $or: orQuery }).toArray()
+        for (const p of individualPayments) {
+          if (isExpired) {
+            await markIndividualPaymentExpired(p.id)
+          } else {
+            await markIndividualPaymentFailed(p.id)
+          }
+          await ingestAdminLog({
+            level: 'warning',
+            source: 'payment',
+            event: isExpired ? 'individual_payment_webhook_expired' : 'individual_payment_webhook_failed',
+            message: `Pembayaran individu ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
+            data: { paymentId: p.id, reference: p.payment_reference, amount: p.amount, status }
+          })
+          processedAny = true
+        }
+
         if (processedAny) {
           return NextResponse.json({ received: true, processed: true })
         }
@@ -269,6 +293,24 @@ export async function POST(request: Request) {
       })
       return NextResponse.json({ received: true })
     }
+
+    // Try individual next
+    const individualPayments = await markIndividualPaymentsPaidBySessionId(sessionId, update)
+    if (individualPayments.length > 0) {
+      await Promise.all(individualPayments.flatMap((payment) => [
+        sendIndividualReceiptEmail(payment.registration_id),
+        sendIndividualRacepackEmailsForRegistration(payment.registration_id),
+        sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'individual_payment_webhook_paid',
+        message: `Pembayaran individu sukses via webhook (Session: ${sessionId}).`,
+        data: { sessionId, reference: individualPayments[0]?.payment_reference, amount: individualPayments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
   }
 
   for (const referenceId of referenceCandidates) {
@@ -302,6 +344,24 @@ export async function POST(request: Request) {
         event: 'family_payment_webhook_paid',
         message: `Pembayaran Bro & Sist Package sukses via webhook (Ref: ${referenceId}).`,
         data: { referenceId, amount: familyPayments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Try individual next
+    const individualPayments = await markIndividualPaymentsPaidByReference(referenceId, update)
+    if (individualPayments.length > 0) {
+      await Promise.all(individualPayments.flatMap((payment) => [
+        sendIndividualReceiptEmail(payment.registration_id),
+        sendIndividualRacepackEmailsForRegistration(payment.registration_id),
+        sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'individual_payment_webhook_paid',
+        message: `Pembayaran individu sukses via webhook (Ref: ${referenceId}).`,
+        data: { referenceId, amount: individualPayments[0]?.amount }
       })
       return NextResponse.json({ received: true })
     }

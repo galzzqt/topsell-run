@@ -11,9 +11,21 @@ import {
   setFamilyVerificationToken,
   verifyCommunityEmail,
   verifyFamilyEmail,
+  findIndividualById,
+  findIndividualByPhone,
+  findIndividualByVerificationToken,
+  setIndividualVerificationToken,
+  verifyIndividualEmail,
+  findPacerById,
+  findPacerByPhone,
+  findPacerByVerificationToken,
+  setPacerVerificationToken,
+  verifyPacerEmail,
 } from '@/lib/db'
 import { createCommunitySession } from '@/lib/auth/community'
 import { createFamilySession } from '@/lib/auth/family'
+import { createIndividualSession } from '@/lib/auth/individual'
+import { createPacerSession } from '@/lib/auth/pacer'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
@@ -31,6 +43,76 @@ function isResendLimited(sentAt: string | null) {
 export async function verifyEmailToken(token: string) {
   if (!token) {
     return { error: 'Token verifikasi tidak valid.' }
+  }
+
+  const individual = await findIndividualByVerificationToken(token)
+  if (individual) {
+    if (individual.email_verified) {
+      return { error: 'Email sudah diverifikasi sebelumnya. Silakan login.' }
+    }
+    if (individual.verification_token_expires) {
+      const expiresAt = new Date(individual.verification_token_expires)
+      if (expiresAt < new Date()) {
+        return { error: 'Token verifikasi sudah kedaluwarsa. Silakan minta kirim ulang.' }
+      }
+    }
+
+    await verifyIndividualEmail(individual.id)
+    await createIndividualSession({ id: individual.id, phone: individual.phone, name: individual.name })
+
+    try {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'auth',
+        event: 'individual_email_verified',
+        message: `Email berhasil diverifikasi untuk peserta individu: ${individual.name} (${individual.email}).`,
+        data: { individualId: individual.id, name: individual.name, email: individual.email },
+      })
+    } catch (logError) {
+      console.error('Failed to log email verification:', logError)
+    }
+
+    return {
+      success: true,
+      accountName: individual.name,
+      redirectPath: '/individu-dashboard',
+      packageLabel: 'Pendaftaran Individu',
+    }
+  }
+
+  const pacer = await findPacerByVerificationToken(token)
+  if (pacer) {
+    if (pacer.email_verified) {
+      return { error: 'Email sudah diverifikasi sebelumnya. Silakan login.' }
+    }
+    if (pacer.verification_token_expires) {
+      const expiresAt = new Date(pacer.verification_token_expires)
+      if (expiresAt < new Date()) {
+        return { error: 'Token verifikasi sudah kedaluwarsa. Silakan minta kirim ulang.' }
+      }
+    }
+
+    await verifyPacerEmail(pacer.id)
+    await createPacerSession({ id: pacer.id, phone: pacer.phone, name: pacer.name })
+
+    try {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'auth',
+        event: 'pacer_email_verified',
+        message: `Email berhasil diverifikasi untuk pacer: ${pacer.name} (${pacer.email}).`,
+        data: { pacerId: pacer.id, name: pacer.name, email: pacer.email },
+      })
+    } catch (logError) {
+      console.error('Failed to log email verification:', logError)
+    }
+
+    return {
+      success: true,
+      accountName: pacer.name,
+      redirectPath: '/pacer-dashboard',
+      packageLabel: 'Pendaftaran Pacer',
+    }
   }
 
   const family = await findFamilyByVerificationToken(token)
@@ -125,6 +207,63 @@ export async function verifyEmailToken(token: string) {
 }
 
 export async function resendVerificationEmail(identifier: string) {
+  let pacer = await findPacerById(identifier)
+  if (!pacer) pacer = await findPacerByPhone(identifier)
+  if (!pacer) pacer = await findPacerByVerificationToken(identifier)
+
+  if (pacer) {
+    if (pacer.email_verified) return { error: 'Email sudah diverifikasi. Silakan login.' }
+
+    const waitSeconds = isResendLimited(pacer.verification_sent_at)
+    if (waitSeconds) return { error: `Silakan tunggu ${waitSeconds} detik sebelum meminta kirim ulang.` }
+
+    const verificationToken = generateVerificationToken()
+    const tokenExpiry = getVerificationTokenExpiry()
+    await setPacerVerificationToken(pacer.id, verificationToken, tokenExpiry)
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
+    const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}&type=pacer`
+
+    const result = await sendVerificationEmail({
+      email: pacer.email,
+      name: pacer.name,
+      verificationUrl,
+      packageType: 'pacer',
+    })
+
+    if (!result.success) return { error: result.error || 'Gagal mengirim email. Silakan coba lagi.' }
+    return { success: true }
+  }
+
+  let individual = await findIndividualById(identifier)
+  if (!individual) individual = await findIndividualByPhone(identifier)
+  if (!individual) individual = await findIndividualByVerificationToken(identifier)
+
+  if (individual) {
+    if (individual.email_verified) return { error: 'Email sudah diverifikasi. Silakan login.' }
+    if (!individual.email) return { error: 'Email tidak terdaftar untuk akun ini.' }
+
+    const waitSeconds = isResendLimited(individual.verification_sent_at)
+    if (waitSeconds) return { error: `Silakan tunggu ${waitSeconds} detik sebelum meminta kirim ulang.` }
+
+    const verificationToken = generateVerificationToken()
+    const tokenExpiry = getVerificationTokenExpiry()
+    await setIndividualVerificationToken(individual.id, verificationToken, tokenExpiry)
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
+    const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}&type=individual`
+
+    const result = await sendVerificationEmail({
+      email: individual.email,
+      name: individual.leader_name || individual.name,
+      verificationUrl,
+      packageType: 'individual',
+    })
+
+    if (!result.success) return { error: result.error || 'Gagal mengirim email. Silakan coba lagi.' }
+    return { success: true }
+  }
+
   let family = await findFamilyById(identifier)
   if (!family) {
     family = await findFamilyByPhone(identifier)

@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Activity, Lock, ArrowLeft, Mail } from 'lucide-react'
 import { loginSchema, LoginFormValues } from '@/lib/validations/auth'
 import { signInFamily } from '@/app/actions/family-auth'
+import { signInIndividual } from '@/app/actions/individual-auth'
+import { signInPacer } from '@/app/actions/pacer-auth'
 import { resendVerificationEmail } from '@/app/actions/email-verification'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -16,7 +18,7 @@ export default function LoginPage() {
   const router = useRouter()
   const [authError, setAuthError] = useState<string | null>(null)
   const [needsVerification, setNeedsVerification] = useState(false)
-  const [familyIdForResend, setFamilyIdForResend] = useState<string | null>(null)
+  const [resendId, setResendId] = useState<string | null>(null)
   const [isResending, setIsResending] = useState(false)
   const [resendMessage, setResendMessage] = useState<string | null>(null)
 
@@ -30,28 +32,57 @@ export default function LoginPage() {
     setNeedsVerification(false)
     setResendMessage(null)
     
-    const result = await signInFamily(values)
-    
-    if (result.error) {
-      setAuthError(result.error)
-      
-      if ('needsVerification' in result && result.needsVerification) {
-        setNeedsVerification(true)
-        setFamilyIdForResend(result.familyId || null)
-      }
-    } else {
+    // Coba akun Bro & Sist dulu, lalu peserta individu (kredensial disimpan terpisah).
+    const familyResult = await signInFamily(values)
+    if (familyResult.success) {
       router.refresh()
       router.push('/dashboard')
+      return
     }
+    if ('needsVerification' in familyResult && familyResult.needsVerification) {
+      setAuthError(familyResult.error || null)
+      setNeedsVerification(true)
+      setResendId(familyResult.familyId || null)
+      return
+    }
+
+    const individualResult = await signInIndividual(values)
+    if (individualResult.success) {
+      router.refresh()
+      router.push('/individu-dashboard')
+      return
+    }
+    if ('needsVerification' in individualResult && individualResult.needsVerification) {
+      setAuthError(individualResult.error || null)
+      setNeedsVerification(true)
+      setResendId(individualResult.individualId || null)
+      return
+    }
+
+    // Pacer — verifikasi email juga diperlukan.
+    const pacerResult = await signInPacer(values)
+    if (pacerResult.success) {
+      router.refresh()
+      router.push('/pacer-dashboard')
+      return
+    }
+    if ('needsVerification' in pacerResult && pacerResult.needsVerification) {
+      setAuthError(pacerResult.error || null)
+      setNeedsVerification(true)
+      setResendId(pacerResult.pacerId || null)
+      return
+    }
+
+    setAuthError(pacerResult.error || individualResult.error || familyResult.error || 'Login gagal.')
   }
 
   const handleResendVerification = async () => {
-    if (!familyIdForResend) return
-    
+    if (!resendId) return
+
     setIsResending(true)
     setResendMessage(null)
-    
-    const result = await resendVerificationEmail(familyIdForResend)
+
+    const result = await resendVerificationEmail(resendId)
     setIsResending(false)
     
     if (result.error) {
@@ -81,8 +112,8 @@ export default function LoginPage() {
             <Activity className="w-5 h-5 text-white" />
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-sport-purple">TOPSELL RUN 2026</p>
-          <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk Bro & Sist Package</h1>
-          <p className="text-xs text-brand-muted font-medium">Login untuk mengelola peserta Bro & Sist Package Anda</p>
+          <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk ke Akun Anda</h1>
+          <p className="text-xs text-brand-muted font-medium">Login peserta Individu atau Bro & Sist Package</p>
         </div>
 
         {/* Card */}
@@ -106,7 +137,7 @@ export default function LoginPage() {
                   <p className="text-[10px] text-amber-800 leading-relaxed">
                     Silakan cek email Anda dan klik link aktivasi. Jika tidak menerima email, kirim ulang di bawah ini atau hubungi{' '}
                     <a
-                      href="https://wa.me/6282119227871?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package."
+                      href="https://wa.me/6282119227871?text=Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20TOPSELL%20RUN%202026."
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sport-orange hover:text-sport-red font-bold transition-colors hover:underline"
@@ -145,8 +176,8 @@ export default function LoginPage() {
         </div>
 
         <p className="text-xs text-center text-brand-muted">
-          Belum punya akun Bro & Sist Package?{' '}
-          <Link href="/#register-section" className="font-bold hover:underline text-sport-purple">Daftar Sekarang</Link>
+          Belum punya akun?{' '}
+          <Link href="/#daftar" className="font-bold hover:underline text-sport-purple">Daftar Sekarang</Link>
         </p>
       </div>
     </div>

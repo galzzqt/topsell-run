@@ -17,6 +17,7 @@ export type StoredAdminAccount = {
   password_hash: string
   password_salt: string
   is_active: boolean
+  allowed_tabs?: string[]
   created_at: string
   updated_at: string
 }
@@ -65,6 +66,7 @@ function normalizeStoredAccount(value: PersistedAdminAccount): StoredAdminAccoun
     password_hash: value.password_hash,
     password_salt: value.password_salt,
     is_active: value.is_active !== false,
+    allowed_tabs: Array.isArray(value.allowed_tabs) ? value.allowed_tabs.map(String) : [],
     created_at: value.created_at,
     updated_at: value.updated_at,
   }
@@ -136,6 +138,7 @@ export async function getAdminPublicAccounts(): Promise<AdminAccountPublic[]> {
     name: account.name,
     role: account.role,
     is_active: account.is_active,
+    allowed_tabs: account.allowed_tabs || [],
     created_at: account.created_at,
     updated_at: account.updated_at,
   }))
@@ -183,6 +186,7 @@ export async function resolveAdminLogin(usernameInput: string, password: string)
       username: superAdmin.username,
       name: superAdmin.name,
       role: superAdmin.role,
+      allowed_tabs: [],
     }
   }
 
@@ -193,6 +197,15 @@ export async function resolveAdminLogin(usernameInput: string, password: string)
       username: envAdmin.username,
       name: envAdmin.name,
       role: envAdmin.role,
+      allowed_tabs: [
+        'summary',
+        'participants',
+        'payments',
+        'scanner',
+        'export_participants',
+        'export_payments',
+        'pacer'
+      ],
     }
   }
 
@@ -207,6 +220,7 @@ export async function resolveAdminLogin(usernameInput: string, password: string)
     username: account.username,
     name: account.name,
     role: account.role,
+    allowed_tabs: account.allowed_tabs || [],
   }
 }
 

@@ -16,7 +16,8 @@ import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
 import { signOutFamily } from '@/app/actions/family-auth'
 import { createFamilyPayment, simulateFamilyPaymentSuccess, syncXenditFamilyPaymentStatus } from '@/app/actions/family-payments'
-import { FamilyParticipant, FamilyPayment, TOPSELL_RUN_EVENT } from '@/lib/types'
+import { FamilyParticipant, FamilyPayment, TOPSELL_RUN_EVENT, priceForCategory } from '@/lib/types'
+import { usePackagesSettings, resolveCategoryLabel } from '@/lib/hooks/usePackagesSettings'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ParticipantDetailModal } from '@/components/dashboard/ParticipantDetailModal'
@@ -39,7 +40,8 @@ type CheckoutPayload = {
 function DashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, family, participants, payments, isLoading, setUser, fetchFamilyData, getStats, clearStore } = useFamilyStore()
+  const { user, family, participants, registrations, payments, isLoading, setUser, fetchFamilyData, getStats, clearStore } = useFamilyStore()
+  const packages = usePackagesSettings()
 
   const [selectedParticipant, setSelectedParticipant] = useState<FamilyParticipant | null>(null)
   const [receiptData, setReceiptData] = useState<{
@@ -303,7 +305,16 @@ function DashboardContent() {
       : participants
 
   const pendingParticipants = participants.filter((p) => p.payment_status === 'pending')
-  const checkoutTotal = pendingParticipants.length * TOPSELL_RUN_EVENT.price_per_participant
+  // Biaya per peserta: pakai registrasi pending kalau ada (checkout aktif), lalu registrasi
+  // paid terakhir (harga yang benar-benar sudah dibayar), baru fallback ke map hardcoded.
+  const activeReg = registrations.find((r) => r.status === 'pending') || registrations.find((r) => r.status === 'paid')
+  const unitPrice = activeReg && activeReg.total_participants > 0
+    ? Math.round(activeReg.total_amount / activeReg.total_participants)
+    : priceForCategory(family?.category)
+  const checkoutTotal = pendingParticipants.length * unitPrice
+  const isIndividual = family?.registration_type === 'individual'
+  const peserta = isIndividual ? 'Peserta' : 'Anggota'
+  const categoryLabel = resolveCategoryLabel(packages, 'family', family?.category, unitPrice) || TOPSELL_RUN_EVENT.category
 
   if (isLoading) {
     return <DashboardSkeleton />
@@ -325,14 +336,14 @@ function DashboardContent() {
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">TOPSELL RUN 2026</p>
               <p className="text-xs font-black uppercase tracking-wide text-foreground hidden sm:block">
-                {family?.name || 'Dashboard Bro & Sist Package'}
+                {family?.name || (isIndividual ? 'Dashboard Peserta Individu' : 'Dashboard Bro & Sist Package')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Family Code Badge */}
-            {family?.family_code && (
+            {/* Family Code Badge — grup only */}
+            {family?.family_code && !isIndividual && (
               <button
                 onClick={handleCopyCode}
                 className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-brand-gray border border-card-border rounded-lg text-[10px] font-black uppercase tracking-wider text-brand-muted hover:text-foreground cursor-pointer transition-colors"
@@ -341,15 +352,17 @@ function DashboardContent() {
                 {family.family_code}
               </button>
             )}
-            <Link
-              href="/#register-section"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white rounded-lg transition-all active:scale-95 shadow-md shadow-sport-purple/10 cursor-pointer"
-              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 100%)' }}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">Daftarkan Anggota</span>
-              <span className="xs:hidden">Daftar</span>
-            </Link>
+            {!isIndividual && (
+              <Link
+                href="/bro-and-sist#register-section"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white rounded-lg transition-all active:scale-95 shadow-md shadow-sport-purple/10 cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 100%)' }}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Daftarkan Anggota</span>
+                <span className="xs:hidden">Daftar</span>
+              </Link>
+            )}
             <button
               onClick={() => setIsProfileModalOpen(true)}
               className="p-2 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded-lg transition-colors cursor-pointer"
@@ -371,7 +384,7 @@ function DashboardContent() {
         {/* STATS TILES */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Total Anggota', value: stats.totalParticipants, icon: <Users className="w-4 h-4 text-brand-muted" />, color: 'bg-brand-gray border-card-border' },
+            { label: `Total ${peserta}`, value: stats.totalParticipants, icon: <Users className="w-4 h-4 text-brand-muted" />, color: 'bg-brand-gray border-card-border' },
             { label: 'Sudah Lunas', value: stats.paidParticipants, icon: <Trophy className="w-4 h-4 text-green-400" />, color: 'bg-green-500/5 border-green-500/20', valueClass: 'text-green-400' },
             { label: 'Belum Bayar', value: stats.pendingParticipants, icon: <Clock className="w-4 h-4 text-amber-400" />, color: 'bg-amber-500/5 border-amber-500/20', valueClass: 'text-amber-400' },
             { label: 'Total Terbayar', value: formatCurrency(stats.totalAmountPaid), icon: <TrendingUp className="w-4 h-4 text-sport-orange" />, color: 'bg-sport-orange/5 border-sport-orange/20', valueClass: 'text-sport-orange text-base' },
@@ -396,13 +409,13 @@ function DashboardContent() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Event Aktif</p>
               <p className="text-sm font-black uppercase text-foreground">{TOPSELL_RUN_EVENT.name}</p>
               <p className="text-[10px] text-brand-muted font-medium">
-                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Bro & Sist Package / {TOPSELL_RUN_EVENT.category}
+                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • {categoryLabel}
               </p>
             </div>
           </div>
            <div className="text-left sm:text-right shrink-0">
-            <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Biaya/Anggota</p>
-            <p className="text-base font-black text-foreground">{formatCurrency(TOPSELL_RUN_EVENT.price_per_participant)}</p>
+            <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Biaya/Peserta</p>
+            <p className="text-base font-black text-foreground">{formatCurrency(unitPrice)}</p>
           </div>
         </div>
 
@@ -413,12 +426,12 @@ function DashboardContent() {
               <CreditCard className="w-4 h-4 text-sport-orange" />
             </div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pembayaran Bro & Sist Package</p>
-              <p className="text-sm font-black uppercase text-foreground">Bayar semua anggota sekaligus</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">{isIndividual ? 'Pembayaran Individu' : 'Pembayaran Bro & Sist Package'}</p>
+              <p className="text-sm font-black uppercase text-foreground">{isIndividual ? 'Selesaikan pembayaran Anda' : 'Bayar semua anggota sekaligus'}</p>
               <p className="text-[10px] text-brand-muted font-medium mt-1">
                 {pendingParticipants.length > 0
-                  ? `${pendingParticipants.length} anggota pending akan dibayar dalam satu checkout Xendit VA / QRIS.`
-                  : 'Semua anggota sudah lunas atau belum ada anggota pending.'}
+                  ? `${pendingParticipants.length} ${peserta.toLowerCase()} pending akan dibayar dalam satu checkout Xendit VA / QRIS.`
+                  : `Semua ${peserta.toLowerCase()} sudah lunas atau belum ada yang pending.`}
               </p>
             </div>
           </div>
@@ -435,7 +448,7 @@ function DashboardContent() {
               disabled={pendingParticipants.length === 0 && !payments.some(p => p.status === 'pending')}
             >
               <CreditCard className="w-4 h-4 mr-2" />
-              {payments.some(p => p.status === 'pending') ? 'Lanjutkan Pembayaran' : 'Bayar Semua Anggota'}
+              {payments.some(p => p.status === 'pending') ? 'Lanjutkan Pembayaran' : (isIndividual ? 'Bayar Sekarang' : 'Bayar Semua Anggota')}
             </Button>
           </div>
         </div>
@@ -469,7 +482,7 @@ function DashboardContent() {
             </div>
 
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">
-              Pembayaran dilakukan kolektif oleh grup Bro & Sist
+              {isIndividual ? 'Pendaftaran peserta individu' : 'Pembayaran dilakukan kolektif oleh grup Bro & Sist'}
             </p>
           </div>
 
@@ -479,9 +492,9 @@ function DashboardContent() {
               <div className="p-4 bg-brand-gray border border-card-border rounded-full">
                 <Users className="w-8 h-8 text-brand-muted" />
               </div>
-              <h4 className="text-sm font-bold text-foreground uppercase">Belum ada anggota</h4>
+              <h4 className="text-sm font-bold text-foreground uppercase">Belum ada {peserta.toLowerCase()}</h4>
               <p className="text-xs text-brand-muted text-center max-w-xs">
-                Anggota didaftarkan melalui form registrasi di halaman utama.
+                {peserta} didaftarkan melalui form registrasi di halaman utama.
               </p>
             </div>
           )}
@@ -493,7 +506,7 @@ function DashboardContent() {
                 <thead>
                   <tr className="border-b border-card-border bg-brand-dark/20">
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">#</th>
-                    <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Anggota / BIB</th>
+                    <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">{peserta} / BIB</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted hidden md:table-cell">Gender</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Jersey</th>
                     <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted hidden lg:table-cell">Medis</th>
@@ -575,7 +588,7 @@ function DashboardContent() {
                 </div>
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Riwayat Pembayaran</p>
-                  <p className="text-sm font-black uppercase text-foreground">Semua transaksi Bro & Sist</p>
+                  <p className="text-sm font-black uppercase text-foreground">{isIndividual ? 'Transaksi Anda' : 'Semua transaksi Bro & Sist'}</p>
                 </div>
               </div>
             </div>
@@ -602,7 +615,7 @@ function DashboardContent() {
                         </Badge>
                         <p className="text-[10px] font-black text-brand-muted uppercase">Ref: {payment.payment_reference}</p>
                       </div>
-                      <p className="text-sm font-black text-foreground">{paymentParticipants.length} Anggota</p>
+                      <p className="text-sm font-black text-foreground">{paymentParticipants.length} {peserta}</p>
                       <p className="text-[10px] text-brand-muted">{formatDate(payment.created_at)}</p>
                     </div>
 
@@ -661,7 +674,7 @@ function DashboardContent() {
           setHasOpenedCheckout(false)
           setPaymentSyncMessage('')
         }}
-        title="Pembayaran Bro & Sist Package"
+        title={isIndividual ? 'Pembayaran Individu' : 'Pembayaran Bro & Sist Package'}
         className="max-w-md"
       >
         {checkoutPayload && (
@@ -683,9 +696,9 @@ function DashboardContent() {
             <div className="flex flex-col gap-3 border-y border-card-border py-4">
               {[
                 { label: 'Referensi', value: checkoutPayload.reference },
-                { label: 'Grup', value: family?.name },
-                { label: 'Jumlah Anggota', value: `${checkoutPayload.participantCount} orang` },
-                { label: 'Kategori', value: 'TOPSELL RUN 6K' },
+                { label: isIndividual ? 'Nama' : 'Grup', value: family?.name },
+                { label: isIndividual ? 'Jumlah Peserta' : 'Jumlah Anggota', value: `${checkoutPayload.participantCount} orang` },
+                { label: 'Kategori', value: categoryLabel },
                 { label: 'Metode', value: 'Xendit VA / QRIS' },
               ].map((r) => (
                 <div key={r.label} className="flex justify-between items-center text-xs">

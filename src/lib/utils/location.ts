@@ -1,26 +1,14 @@
-// Binderbyte Location API Service (via Next.js API Routes)
-// This uses server-side API routes to avoid CORS issues
+// Location API Service (via Next.js API Routes)
+// Backend: emsifa/api-wilayah-indonesia (static GitHub Pages, free, no API key)
+// Response format: [{ id: string, name: string }, ...]
 
 interface LocationOption {
   value: string
   label: string
 }
 
-interface RawProvinsiResponse {
-  id: string
-  name: string
-}
-
-interface RawKotaResponse extends RawProvinsiResponse {
-  id_provinsi: string
-}
-
-interface RawKecamatanResponse extends RawProvinsiResponse {
-  id_kabupaten: string
-}
-
-function normalizeLocationOptions<T extends { id?: string; name?: string; value?: string; label?: string }>(
-  items: T[] | undefined
+function normalizeLocationOptions(
+  items: Array<{ id?: string; name?: string; value?: string; label?: string }> | undefined
 ): LocationOption[] {
   if (!Array.isArray(items)) {
     return []
@@ -34,89 +22,54 @@ function normalizeLocationOptions<T extends { id?: string; name?: string; value?
     .filter((item) => item.value && item.label)
 }
 
-/**
- * Fetch all provinces from Binderbyte API
- */
-export async function fetchProvinsi(): Promise<LocationOption[]> {
+async function fetchLocationJson(url: string): Promise<LocationOption[]> {
   try {
-    console.log('[Location Client] Fetching provinsi from /api/location/provinsi')
-    const response = await fetch('/api/location/provinsi', {
+    const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     })
-    
-    console.log('[Location Client] Response status:', response.status)
-    
+
     if (!response.ok) {
       console.error('[Location Client] API returned error status:', response.status)
       return []
     }
-    
-    const data = await response.json()
-    console.log('[Location Client] Parsed provinsi data, count:', data.value?.length || 0)
-    
-    if (!data.value || data.value.length === 0) {
-      console.warn('[Location Client] No data returned from API')
+
+    const text = await response.text()
+    if (!text || text.trim().length === 0) {
+      console.warn('[Location Client] Empty response body')
       return []
     }
-    
-    return normalizeLocationOptions<RawProvinsiResponse>(data.value)
+
+    const data = JSON.parse(text)
+
+    // Emsifa API returns a direct array: [{ id, name }, ...]
+    // Binderbyte API returned: { value: [{ id, name }, ...] }
+    // Handle both formats for backward compatibility
+    const items = Array.isArray(data) ? data : data.value
+    return normalizeLocationOptions(items)
   } catch (error) {
-    console.error('[Location Client] Error fetching provinsi:', error)
+    console.error('[Location Client] Error fetching location:', error)
     return []
   }
+}
+
+/**
+ * Fetch all provinces
+ */
+export async function fetchProvinsi(): Promise<LocationOption[]> {
+  return fetchLocationJson('/api/location/provinsi')
 }
 
 /**
  * Fetch cities/regencies by province ID
  */
 export async function fetchKota(provinsiId: string): Promise<LocationOption[]> {
-  try {
-    console.log('[Location Client] Fetching kota for provinsi:', provinsiId)
-    const response = await fetch(
-      `/api/location/kota?id_provinsi=${encodeURIComponent(provinsiId)}`,
-      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-    )
-    
-    console.log('[Location Client] Response status:', response.status)
-    
-    if (!response.ok) {
-      console.error('[Location Client] API returned error status:', response.status)
-      return []
-    }
-    
-    const data = await response.json()
-    console.log('[Location Client] Parsed kota data, count:', data.value?.length || 0)
-    return normalizeLocationOptions<RawKotaResponse>(data.value)
-  } catch (error) {
-    console.error('[Location Client] Error fetching kota:', error)
-    return []
-  }
+  return fetchLocationJson(`/api/location/kota?id_provinsi=${encodeURIComponent(provinsiId)}`)
 }
 
 /**
  * Fetch districts by city/regency ID
  */
 export async function fetchKecamatan(kotaId: string): Promise<LocationOption[]> {
-  try {
-    console.log('[Location Client] Fetching kecamatan for kota:', kotaId)
-    const response = await fetch(
-      `/api/location/kecamatan?id_kabupaten=${encodeURIComponent(kotaId)}`,
-      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-    )
-    
-    console.log('[Location Client] Response status:', response.status)
-    
-    if (!response.ok) {
-      console.error('[Location Client] API returned error status:', response.status)
-      return []
-    }
-    
-    const data = await response.json()
-    console.log('[Location Client] Parsed kecamatan data, count:', data.value?.length || 0)
-    return normalizeLocationOptions<RawKecamatanResponse>(data.value)
-  } catch (error) {
-    console.error('[Location Client] Error fetching kecamatan:', error)
-    return []
-  }
+  return fetchLocationJson(`/api/location/kecamatan?id_kabupaten=${encodeURIComponent(kotaId)}`)
 }

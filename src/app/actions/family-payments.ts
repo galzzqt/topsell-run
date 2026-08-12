@@ -6,7 +6,7 @@ import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificP
 import { sendFamilyRacepackEmailsForRegistration } from '@/lib/email/racepack'
 import { sendFamilyReceiptEmail } from '@/lib/email/receipt'
 import { sendFamilyRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
-import { TOPSELL_RUN_EVENT } from '@/lib/types'
+import { resolvePackagePrice, checkPaymentWindow, resolvePeriodForCategory } from '@/lib/admin/settings'
 import { revalidatePath } from 'next/cache'
 import {
   createFamilyPayment as dbCreateFamilyPayment,
@@ -209,8 +209,15 @@ export async function createFamilyPayment() {
     return { error: 'Tidak ada anggota baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
   }
 
+  const paymentWindow = await checkPaymentWindow('family', family?.category)
+  if (!paymentWindow.ok) {
+    return { error: paymentWindow.reason || 'Jendela pembayaran periode ini sedang tidak buka.' }
+  }
+
+  const period = await resolvePeriodForCategory('family', family?.category)
   const participantIds = participants.map((participant) => participant.id)
-  const totalAmount = participants.length * TOPSELL_RUN_EVENT.price_per_participant
+  const unitPrice = await resolvePackagePrice('family', family?.category)
+  const totalAmount = participants.length * unitPrice
   const paymentRefRaw = generateRandomReference('FAM')
   const paymentRef = toXenditReference(paymentRefRaw)
 
@@ -240,6 +247,7 @@ export async function createFamilyPayment() {
       amount: totalAmount,
       payment_reference: paymentRef,
       status: 'pending',
+      period_key: period?.key ?? null,
     })
   } catch {
     await deleteFamilyRegistration(registration.id)
@@ -288,9 +296,9 @@ export async function createFamilyPayment() {
             reference_id: p.id,
             type: 'DIGITAL_PRODUCT',
             category: 'EVENT_TICKET',
-            name: `TOPSELL RUN 6K - ${p.full_name.substring(0, 40)}`,
+            name: `TOPSELL RUN ${family?.category || ''} - ${p.full_name.substring(0, 40)}`.trim(),
             quantity: 1,
-            net_unit_amount: TOPSELL_RUN_EVENT.price_per_participant,
+            net_unit_amount: unitPrice,
             currency: 'IDR',
           })),
           ...getFamilyReturnUrls(paymentRef),

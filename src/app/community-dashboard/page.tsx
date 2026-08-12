@@ -17,6 +17,7 @@ import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
 import { signOutCommunity } from '@/app/actions/auth'
 import { createCommunityPayment, simulatePaymentSuccess, syncXenditPaymentStatus } from '@/app/actions/payments'
 import { Participant, Payment, TOPSELL_RUN_EVENT } from '@/lib/types'
+import { usePackagesSettings, resolveCategoryLabel } from '@/lib/hooks/usePackagesSettings'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ParticipantDetailModal } from '@/components/dashboard/ParticipantDetailModal'
@@ -39,7 +40,8 @@ type CheckoutPayload = {
 function DashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, community, participants, payments, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useCommunityStore()
+  const { user, community, participants, registrations, payments, isLoading, setUser, fetchCommunityData, getStats, clearStore } = useCommunityStore()
+  const packages = usePackagesSettings()
 
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null)
   const [receiptData, setReceiptData] = useState<{
@@ -303,7 +305,14 @@ function DashboardContent() {
       : participants
 
   const pendingParticipants = participants.filter((p) => p.payment_status === 'pending')
-  const checkoutTotal = pendingParticipants.length * TOPSELL_RUN_EVENT.price_per_participant
+  // Biaya per peserta: pakai registrasi pending kalau ada (checkout aktif), lalu registrasi
+  // paid terakhir (harga yang benar-benar sudah dibayar), baru fallback ke map hardcoded.
+  const activeReg = registrations.find((r) => r.status === 'pending') || registrations.find((r) => r.status === 'paid')
+  const unitPrice = activeReg && activeReg.total_participants > 0
+    ? Math.round(activeReg.total_amount / activeReg.total_participants)
+    : TOPSELL_RUN_EVENT.price_per_participant
+  const checkoutTotal = pendingParticipants.length * unitPrice
+  const categoryLabel = resolveCategoryLabel(packages, 'community', community?.category, unitPrice) || TOPSELL_RUN_EVENT.category
 
   if (isLoading) {
     return <DashboardSkeleton />
@@ -342,7 +351,7 @@ function DashboardContent() {
               </button>
             )}
             <Link
-              href="/#register-section"
+              href="/bro-and-sist#register-section"
               className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white rounded-lg transition-all active:scale-95 shadow-md shadow-sport-purple/10 cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 100%)' }}
             >
@@ -396,13 +405,13 @@ function DashboardContent() {
               <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Event Aktif</p>
               <p className="text-sm font-black uppercase text-foreground">{TOPSELL_RUN_EVENT.name}</p>
               <p className="text-[10px] text-brand-muted font-medium">
-                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Kategori {TOPSELL_RUN_EVENT.category}
+                {TOPSELL_RUN_EVENT.location} • 18 Oktober 2026 • Kategori {categoryLabel}
               </p>
             </div>
           </div>
            <div className="text-left sm:text-right shrink-0">
             <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Biaya/Peserta</p>
-            <p className="text-base font-black text-foreground">{formatCurrency(TOPSELL_RUN_EVENT.price_per_participant)}</p>
+            <p className="text-base font-black text-foreground">{formatCurrency(unitPrice)}</p>
           </div>
         </div>
 
@@ -685,7 +694,7 @@ function DashboardContent() {
                 { label: 'Referensi', value: checkoutPayload.reference },
                 { label: 'Komunitas', value: community?.name },
                 { label: 'Jumlah Peserta', value: `${checkoutPayload.participantCount} orang` },
-                { label: 'Kategori', value: 'TOPSELL RUN 6K' },
+                { label: 'Kategori', value: categoryLabel },
                 { label: 'Metode', value: 'Xendit VA / QRIS' },
               ].map((r) => (
                 <div key={r.label} className="flex justify-between items-center text-xs">

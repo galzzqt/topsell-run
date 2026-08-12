@@ -7,7 +7,7 @@ type VerificationEmailParams = {
   email: string
   name: string
   verificationUrl: string
-  packageType: 'community' | 'family'
+  packageType: 'community' | 'family' | 'individual' | 'pacer'
 }
 
 function getSmtpConfig() {
@@ -50,11 +50,9 @@ export function getVerificationTokenExpiry(): Date {
   return expiry
 }
 
-function renderVerificationEmail(name: string, verificationUrl: string, packageType: 'community' | 'family'): string {
-  const packageName = packageType === 'community' ? 'Community Package' : 'Bro & Sist Package'
-  const waLinkText = packageType === 'community' 
-    ? 'Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Community%20Package.'
-    : 'Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran%20Bro%20%26%20Sist%20Package.'
+function renderVerificationEmail(name: string, verificationUrl: string, packageType: 'community' | 'family' | 'individual' | 'pacer'): string {
+  const packageName = packageType === 'community' ? 'Community Package' : packageType === 'individual' ? 'Pendaftaran Individu' : packageType === 'pacer' ? 'Pendaftaran Pacer' : 'Bro & Sist Package'
+  const waLinkText = 'Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran.'
   
   return `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:600px;margin:0 auto">
@@ -124,7 +122,7 @@ export async function sendVerificationEmail(params: VerificationEmailParams): Pr
 
   const config = getSmtpConfig()
   const transporter = createTransporter()
-  const packageName = params.packageType === 'community' ? 'Community Package' : 'Bro & Sist Package'
+  const packageName = params.packageType === 'community' ? 'Community Package' : params.packageType === 'individual' ? 'Pendaftaran Individu' : params.packageType === 'pacer' ? 'Pendaftaran Pacer' : 'Bro & Sist Package'
 
   try {
     await transporter.sendMail({

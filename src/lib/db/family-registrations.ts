@@ -35,6 +35,8 @@ export async function createFamilyRegistration(input: {
   total_participants: number
   total_amount: number
   status?: FamilyRegistration['status']
+  voucher_code?: string | null
+  voucher_discount?: number
 }) {
   const db = await getDb()
   const id = newId()
@@ -44,6 +46,8 @@ export async function createFamilyRegistration(input: {
     family_id: input.family_id,
     total_participants: input.total_participants,
     total_amount: input.total_amount,
+    voucher_code: input.voucher_code ?? null,
+    voucher_discount: input.voucher_discount ?? 0,
     status: input.status || 'pending',
     created_at: timestamp,
     updated_at: timestamp,

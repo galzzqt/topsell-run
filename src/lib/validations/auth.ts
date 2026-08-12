@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
 const phoneRegex = /^08[1-9][0-9]{8,11}$/
+const ktpNumberSchema = z
+  .string()
+  .min(1, 'Nomor KTP wajib diisi')
+  .regex(/^\d{16}$/, 'Nomor KTP harus 16 digit angka')
 const emailDomainRegex = /@(gmail\.com|yahoo\.com|yahoo\.co\.id|icloud\.com|hotmail\.com|outlook\.com)$/i
 const emailSchema = z
   .string()
@@ -45,6 +49,7 @@ export const loginSchema = z.object({
 export const participantItemSchema = z.object({
   full_name: z.string().min(3, 'Nama lengkap minimal 3 karakter').max(50, 'Nama lengkap maksimal 50 karakter'),
   bib_name: z.string().min(2, 'Nama BIB minimal 2 karakter').max(20, 'Nama BIB maksimal 20 karakter'),
+  ktp_number: ktpNumberSchema,
   email: emailSchema,
   phone: z
     .string()
@@ -111,7 +116,13 @@ export const registerSchema = z
     path: ['participants'],
   })
 
-export const registerFamilySchema = z
+// Kategori Bro & Sist / Komunitas tetap flat 135.000; individu punya 2 kategori berharga beda.
+const familyCategorySchema = z.literal('6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', { message: 'Kategori wajib dipilih' })
+// Kategori individu dikelola admin (Kelola Paket), jadi terima string apa pun yang terisi.
+const individualCategorySchema = z.string().min(1, 'Kategori wajib dipilih')
+
+// Bro & Sist butuh minimal 3 peserta, pendaftaran individu cukup 1.
+const makeFamilySchema = <C extends z.ZodTypeAny>(minParticipants: number, categorySchema: C) => z
   .object({
     name: z.string().min(3, 'Nama grup minimal 3 karakter').max(50, 'Nama grup maksimal 50 karakter'),
     leader_name: z.string().min(3, 'Nama perwakilan minimal 3 karakter').max(50, 'Nama perwakilan maksimal 50 karakter'),
@@ -120,7 +131,7 @@ export const registerFamilySchema = z
       .min(1, 'Nomor HP wajib diisi')
       .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
     email: emailSchema,
-    category: z.literal('6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', { message: 'Kategori wajib dipilih' }),
+    category: categorySchema,
     provinsi: z
       .string()
       .min(1, 'Provinsi wajib dipilih'),
@@ -132,7 +143,7 @@ export const registerFamilySchema = z
       .min(1, 'Kecamatan wajib dipilih'),
     password: z.string().min(6, 'Password minimal 6 karakter'),
     confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
-    participants: z.array(participantItemSchema).min(3, 'Minimal 3 peserta harus didaftarkan'),
+    participants: z.array(participantItemSchema).min(minParticipants, `Minimal ${minParticipants} peserta harus didaftarkan`),
     agreement_safety: z.boolean().refine(val => val === true, 'Persetujuan risiko wajib dicentang'),
     agreement_data: z.boolean().refine(val => val === true, 'Persetujuan data wajib dicentang'),
     agreement_refund: z.boolean().refine(val => val === true, 'Persetujuan pembatalan/S&K wajib dicentang'),
@@ -160,7 +171,65 @@ export const registerFamilySchema = z
     path: ['participants'],
   })
 
+export const registerFamilySchema = makeFamilySchema(3, familyCategorySchema)
+export const registerSoloSchema = makeFamilySchema(1, individualCategorySchema)
+
+// Form pendaftaran individu: data grup & data peserta digabung jadi satu level.
+export const registerIndividualSchema = participantItemSchema
+  .extend({
+    category: individualCategorySchema,
+    provinsi: z.string().min(1, 'Provinsi wajib dipilih'),
+    kota: z.string().min(1, 'Kota/Kabupaten wajib dipilih'),
+    kecamatan: z.string().min(1, 'Kecamatan wajib dipilih'),
+    password: z.string().min(6, 'Password minimal 6 karakter'),
+    confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
+    agreement_safety: z.boolean().refine(val => val === true, 'Persetujuan risiko wajib dicentang'),
+    agreement_data: z.boolean().refine(val => val === true, 'Persetujuan data wajib dicentang'),
+    agreement_refund: z.boolean().refine(val => val === true, 'Persetujuan pembatalan/S&K wajib dicentang'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Konfirmasi password tidak cocok',
+    path: ['confirmPassword'],
+  })
+
+// Kategori pacer dikelola admin (Kelola Paket), sama seperti individu.
+const pacerCategorySchema = z.string().min(1, 'Kategori wajib dipilih')
+
+// Form pendaftaran pacer: field individu + field khusus pacer (sosmed, strava, rekening, smartwatch, usia, foto).
+export const registerPacerSchema = participantItemSchema
+  .extend({
+    category: pacerCategorySchema,
+    provinsi: z.string().min(1, 'Provinsi wajib dipilih'),
+    kota: z.string().min(1, 'Kota/Kabupaten wajib dipilih'),
+    kecamatan: z.string().min(1, 'Kecamatan wajib dipilih'),
+    age: z.coerce.number({ message: 'Usia wajib diisi' }).int('Usia harus bilangan bulat').min(10, 'Usia tidak valid').max(100, 'Usia tidak valid'),
+    sosmed_instagram: z.string().min(1, 'Link Instagram wajib diisi').url('Link Instagram tidak valid (contoh: https://instagram.com/username)'),
+    sosmed_tiktok: z.string().url('Link TikTok tidak valid (contoh: https://tiktok.com/@username)').optional().or(z.literal('')),
+    strava_link: z.string().min(1, 'Link Strava wajib diisi').url('Link Strava tidak valid (contoh: https://strava.com/athletes/username)'),
+    strava_username: z.string().min(1, 'Username Strava wajib diisi').max(50, 'Maksimal 50 karakter'),
+    bank_name: z.string().min(1, 'Nama bank wajib diisi').max(50, 'Maksimal 50 karakter'),
+    bank_account_number: z.string().min(1, 'Nomor rekening wajib diisi').max(30, 'Maksimal 30 karakter'),
+    bank_account_holder: z.string().min(1, 'Nama pemilik rekening wajib diisi').max(50, 'Maksimal 50 karakter'),
+    has_smartwatch: z.enum(['yes', 'no'], { message: 'Wajib dipilih' }),
+    media_urls: z.array(z.string().url()).min(1, 'Minimal 1 foto portofolio wajib diupload').max(5, 'Maksimal 5 foto'),
+    pb_media_urls: z.array(z.string().url()).min(1, 'Minimal 1 foto Personal Best (PB) wajib diupload').max(5, 'Maksimal 5 foto'),
+    password: z.string().min(6, 'Password minimal 6 karakter'),
+    confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
+    agreement_safety: z.boolean().refine((val) => val === true, 'Persetujuan risiko wajib dicentang'),
+    agreement_data: z.boolean().refine((val) => val === true, 'Persetujuan data wajib dicentang'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Konfirmasi password tidak cocok',
+    path: ['confirmPassword'],
+  })
+
 export type LoginFormValues = z.infer<typeof loginSchema>
 export type RegisterFormValues = z.infer<typeof registerSchema>
 export type RegisterFamilyFormValues = z.infer<typeof registerFamilySchema>
+export type RegisterSoloFormValues = z.infer<typeof registerSoloSchema>
+export type RegisterIndividualFormValues = z.infer<typeof registerIndividualSchema>
+export type RegisterPacerFormValues = z.infer<typeof registerPacerSchema>
+// Input type (pre-coerce/pre-default) — dipakai sebagai generic useForm karena `age` (coerce)
+// dan `media_urls` (default) membuat input/output schema berbeda secara struktural.
+export type RegisterPacerFormInput = z.input<typeof registerPacerSchema>
 export type ParticipantItemValues = z.infer<typeof participantItemSchema>

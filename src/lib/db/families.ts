@@ -53,9 +53,12 @@ export async function createFamily(input: {
   email: string | null
   phone: string
   category: string
+  registration_type?: 'individual' | 'family'
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
+  voucher_code?: string | null
+  voucher_discount?: number
 }) {
   const db = await getDb()
   const id = newId()
@@ -67,6 +70,7 @@ export async function createFamily(input: {
     email: input.email ? normalizeEmail(input.email) : null,
     phone: input.phone,
     category: input.category,
+    registration_type: input.registration_type ?? 'family',
     family_code: await createUniqueFamilyCode(),
     provinsi: input.provinsi,
     kota: input.kota,
@@ -75,6 +79,8 @@ export async function createFamily(input: {
     verification_token: null,
     verification_token_expires: null,
     verification_sent_at: null,
+    voucher_code: input.voucher_code ?? null,
+    voucher_discount: input.voucher_discount ?? 0,
     created_at: timestamp,
     updated_at: timestamp,
   }

@@ -56,6 +56,8 @@ export async function createCommunity(input: {
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
+  voucher_code?: string | null
+  voucher_discount?: number
 }) {
   const db = await getDb()
   const id = newId()
@@ -75,6 +77,8 @@ export async function createCommunity(input: {
     verification_token: null,
     verification_token_expires: null,
     verification_sent_at: null,
+    voucher_code: input.voucher_code ?? null,
+    voucher_discount: input.voucher_discount ?? 0,
     created_at: timestamp,
     updated_at: timestamp,
   }

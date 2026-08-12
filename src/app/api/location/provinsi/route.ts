@@ -1,5 +1,7 @@
-import { fetchBinderbyte } from '@/lib/location/binderbyte'
+import { fetchLocationData } from '@/lib/location/binderbyte'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  return fetchBinderbyte('provinsi')
+  return fetchLocationData('provinces.json')
 }

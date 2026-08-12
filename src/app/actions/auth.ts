@@ -18,14 +18,17 @@ import {
   updateCommunity,
   findActiveCrossParticipant,
   setCommunityVerificationToken,
+  findVoucherByCode,
+  findBestAutoVoucher,
 } from '@/lib/db'
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
+import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory, resolvePackagePrice } from '@/lib/admin/settings'
 
-export async function signUpCommunity(values: RegisterFormValues) {
+export async function signUpCommunity(values: RegisterFormValues, voucherCode?: string) {
   const limit = rateLimit('community-signup', 5, 10 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
@@ -35,6 +38,16 @@ export async function signUpCommunity(values: RegisterFormValues) {
   if (!validated.success) {
     const errorMsg = validated.error.issues[0]?.message || 'Data registrasi tidak valid'
     return { error: errorMsg }
+  }
+
+  const gate = await isPackageOpen('community')
+  if (!gate.open) {
+    return { error: gate.reason || 'Pendaftaran komunitas sedang ditutup.' }
+  }
+
+  const quota = await checkPackageQuota('community', values.participants.length, values.category)
+  if (!quota.ok) {
+    return { error: quota.reason || 'Kuota peserta komunitas sudah penuh.' }
   }
 
   const existingCommunity = await findCommunityByPhone(values.phone)
@@ -60,6 +73,37 @@ export async function signUpCommunity(values: RegisterFormValues) {
     }
   }
 
+  const basePrice = await resolvePackagePrice('community', values.category)
+  const totalAmount = values.participants.length * basePrice
+
+  let voucherDiscount = 0
+  let finalVoucherCode = voucherCode || null
+
+  const now = new Date().toISOString().slice(0, 16)
+  if (finalVoucherCode) {
+    const voucher = await findVoucherByCode(finalVoucherCode, 'community', values.category, now)
+    if (voucher) {
+      if (voucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
+      }
+    } else {
+      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
+    }
+  } else {
+    // Try to auto-apply
+    const autoVoucher = await findBestAutoVoucher('community', values.category, now)
+    if (autoVoucher) {
+      finalVoucherCode = autoVoucher.code || 'AUTO'
+      if (autoVoucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * autoVoucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
+      }
+    }
+  }
+
   let community
   try {
     community = await createCommunity({
@@ -71,6 +115,8 @@ export async function signUpCommunity(values: RegisterFormValues) {
       provinsi: values.provinsi,
       kota: values.kota,
       kecamatan: values.kecamatan,
+      voucher_code: finalVoucherCode,
+      voucher_discount: voucherDiscount,
     })
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Gagal membuat profil komunitas.' }
@@ -90,13 +136,17 @@ export async function signUpCommunity(values: RegisterFormValues) {
     return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil komunitas.' }
   }
 
+  const period = await resolvePeriodForCategory('community', values.category)
+
   try {
     await insertParticipants(
       values.participants.map((p) => ({
         community_id: community.id,
         registration_id: null,
+        period_key: period?.key ?? null,
         full_name: p.full_name,
         bib_name: p.bib_name,
+        ktp_number: p.ktp_number,
         email: p.email,
         phone: p.phone,
         date_of_birth: p.date_of_birth,

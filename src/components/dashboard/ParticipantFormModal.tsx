@@ -37,6 +37,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
     defaultValues: {
       full_name: '',
       bib_name: '',
+      ktp_number: '',
       email: '',
       phone: '',
       date_of_birth: '',
@@ -60,6 +61,7 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
 
     setValue('full_name', editParticipant.full_name)
     setValue('bib_name', editParticipant.bib_name)
+    setValue('ktp_number', editParticipant.ktp_number)
     setValue('email', editParticipant.email)
     setValue('phone', editParticipant.phone)
     setValue('date_of_birth', editParticipant.date_of_birth || '')
@@ -123,6 +125,13 @@ export function ParticipantFormModal({ isOpen, onClose, editParticipant }: Parti
                 error={errors.bib_name?.message}
                 disabled={isSubmitting}
                 {...register('bib_name')}
+              />
+              <Input
+                label="No. KTP"
+                placeholder="Nomor KTP 16 digit"
+                error={errors.ktp_number?.message}
+                disabled={isSubmitting}
+                {...register('ktp_number')}
               />
               <Input
                 label="Email"

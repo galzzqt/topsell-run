@@ -6,7 +6,7 @@ import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificP
 import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
 import { sendCommunityReceiptEmail } from '@/lib/email/receipt'
 import { sendRacepackWhatsappsForRegistration } from '@/lib/whatsapp/racepack'
-import { TOPSELL_RUN_EVENT } from '@/lib/types'
+import { resolvePackagePrice, checkPaymentWindow, resolvePeriodForCategory } from '@/lib/admin/settings'
 import { revalidatePath } from 'next/cache'
 import {
   createPayment,
@@ -18,11 +18,16 @@ import {
   findPendingParticipantsWithoutRegistration,
   findPendingPaymentByRegistrationIds,
   findPendingRegistrationsByCommunityId,
+  findRegistrationById,
   linkParticipantsToRegistration,
   markPaymentPaid,
   updatePayment,
   markPaymentFailed,
   markPaymentExpired,
+  findVoucherByCode,
+  findBestAutoVoucher,
+  incrementVoucherUsage,
+  updateRegistration,
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
@@ -208,8 +213,46 @@ export async function createCommunityPayment() {
     return { error: 'Tidak ada peserta baru yang perlu dibayar. Jika sudah pernah membuat checkout, refresh dashboard untuk melihat invoice pending.' }
   }
 
+  const paymentWindow = await checkPaymentWindow('community', community?.category)
+  if (!paymentWindow.ok) {
+    return { error: paymentWindow.reason || 'Jendela pembayaran periode ini sedang tidak buka.' }
+  }
+
+  const period = await resolvePeriodForCategory('community', community?.category)
   const participantIds = participants.map((participant) => participant.id)
-  const totalAmount = participants.length * TOPSELL_RUN_EVENT.price_per_participant
+  const unitPrice = await resolvePackagePrice('community', community?.category)
+  const totalAmount = participants.length * unitPrice
+
+  let voucherDiscount = 0
+  let voucherId = null
+  let finalVoucherCode = community?.voucher_code || null
+
+  const now = new Date().toISOString().slice(0, 16)
+  if (finalVoucherCode) {
+    const voucher = await findVoucherByCode(finalVoucherCode, 'community', community?.category || '', now)
+    if (voucher) {
+      voucherId = voucher.id
+      if (voucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
+      }
+    }
+  } else {
+    // Try to auto-apply
+    const autoVoucher = await findBestAutoVoucher('community', community?.category || '', now)
+    if (autoVoucher) {
+      voucherId = autoVoucher.id
+      finalVoucherCode = autoVoucher.code || 'AUTO'
+      if (autoVoucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * autoVoucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
+      }
+    }
+  }
+
+  const finalAmount = Math.max(0, totalAmount - voucherDiscount)
   const paymentRefRaw = generateRandomReference('TSR')
   const paymentRef = toXenditReference(paymentRefRaw)
 
@@ -218,7 +261,9 @@ export async function createCommunityPayment() {
     registration = await createRegistration({
       community_id: session.id,
       total_participants: participants.length,
-      total_amount: totalAmount,
+      total_amount: finalAmount,
+      voucher_code: finalVoucherCode,
+      voucher_discount: voucherDiscount,
       status: 'pending',
     })
   } catch (error) {
@@ -236,10 +281,15 @@ export async function createCommunityPayment() {
   try {
     payment = await createPayment({
       registration_id: registration.id,
-      amount: totalAmount,
+      amount: finalAmount,
       payment_reference: paymentRef,
       status: 'pending',
+      period_key: period?.key ?? null,
     })
+
+    if (voucherId) {
+      await incrementVoucherUsage(voucherId)
+    }
   } catch {
     await deleteRegistration(registration.id)
     return { error: 'Gagal membuat invoice pembayaran.' }
@@ -287,9 +337,9 @@ export async function createCommunityPayment() {
             reference_id: p.id,
             type: 'DIGITAL_PRODUCT',
             category: 'EVENT_TICKET',
-            name: `TOPSELL RUN 6K - ${p.full_name.substring(0, 40)}`,
+            name: `TOPSELL RUN ${community?.category || ''} - ${p.full_name.substring(0, 40)}`.trim(),
             quantity: 1,
-            net_unit_amount: TOPSELL_RUN_EVENT.price_per_participant,
+            net_unit_amount: unitPrice,
             currency: 'IDR',
           })),
           ...getReturnUrls(paymentRef),

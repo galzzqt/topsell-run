@@ -21,11 +21,14 @@ import {
   createFamilyPayment,
   linkFamilyParticipantsToRegistration,
   setFamilyVerificationToken,
+  findVoucherByCode,
+  findBestAutoVoucher,
+  incrementVoucherUsage,
 } from '@/lib/db'
-import { registerFamilySchema, loginSchema, RegisterFamilyFormValues, LoginFormValues } from '@/lib/validations/auth'
+import { registerFamilySchema, registerSoloSchema, loginSchema, RegisterFamilyFormValues, RegisterSoloFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendFamilyRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
-import { TOPSELL_RUN_EVENT } from '@/lib/types'
+import { resolvePackagePrice, isPackageOpen, checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
 import { generateRandomReference } from '@/lib/utils/format'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
@@ -34,16 +37,32 @@ function toXenditReference(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
 }
 
-export async function signUpFamily(values: RegisterFamilyFormValues) {
+export async function signUpFamily(
+  values: RegisterFamilyFormValues | RegisterSoloFormValues,
+  registrationType: 'individual' | 'family' = 'family',
+  voucherCode?: string,
+) {
   const limit = rateLimit('family-signup', 5, 10 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
   }
 
-  const validated = registerFamilySchema.safeParse(values)
+  // Individu pakai schema solo (1 peserta, kategori 3K/6K); Bro & Sist minimal 3.
+  const schema = registrationType === 'individual' ? registerSoloSchema : registerFamilySchema
+  const validated = schema.safeParse(values)
   if (!validated.success) {
     const errorMsg = validated.error.issues[0]?.message || 'Data registrasi tidak valid'
     return { error: errorMsg }
+  }
+
+  const gate = await isPackageOpen(registrationType)
+  if (!gate.open) {
+    return { error: gate.reason || 'Pendaftaran paket ini sedang ditutup.' }
+  }
+
+  const quota = await checkPackageQuota(registrationType, values.participants.length, values.category)
+  if (!quota.ok) {
+    return { error: quota.reason || 'Kuota peserta paket ini sudah penuh.' }
   }
 
   const existingFamily = await findFamilyByPhone(values.phone)
@@ -69,6 +88,42 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
     }
   }
 
+  const basePrice = await resolvePackagePrice('family', values.category)
+  const totalAmount = values.participants.length * basePrice
+
+  let voucherDiscount = 0
+  let voucherId = null
+  let finalVoucherCode = voucherCode || null
+
+  const now = new Date().toISOString().slice(0, 16)
+  if (finalVoucherCode) {
+    const voucher = await findVoucherByCode(finalVoucherCode, 'family', values.category, now)
+    if (voucher) {
+      voucherId = voucher.id
+      if (voucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
+      }
+    } else {
+      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
+    }
+  } else {
+    // Try to auto-apply
+    const autoVoucher = await findBestAutoVoucher('family', values.category, now)
+    if (autoVoucher) {
+      voucherId = autoVoucher.id
+      finalVoucherCode = autoVoucher.code || 'AUTO'
+      if (autoVoucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * autoVoucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
+      }
+    }
+  }
+
+  const finalAmount = Math.max(0, totalAmount - voucherDiscount)
+
   let family
   try {
     family = await createFamily({
@@ -77,9 +132,12 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
       email: values.email,
       phone: values.phone,
       category: values.category,
+      registration_type: registrationType,
       provinsi: values.provinsi,
       kota: values.kota,
       kecamatan: values.kecamatan,
+      voucher_code: finalVoucherCode,
+      voucher_discount: voucherDiscount,
     })
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Gagal membuat profil Bro & Sist Package.' }
@@ -99,14 +157,18 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
     return { error: error instanceof Error ? error.message : 'Gagal memperbarui profil Bro & Sist Package.' }
   }
 
+  const period = await resolvePeriodForCategory(registrationType, values.category)
+
   let participantIds: string[] = []
   try {
     const insertedParticipants = await insertFamilyParticipants(
       values.participants.map((p) => ({
         family_id: family.id,
         registration_id: null,
+        period_key: period?.key ?? null,
         full_name: p.full_name,
         bib_name: p.bib_name,
+        ktp_number: p.ktp_number,
         email: p.email,
         phone: p.phone,
         date_of_birth: p.date_of_birth,
@@ -136,8 +198,6 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
     return { error: error instanceof Error ? error.message : 'Gagal menyimpan data anggota.' }
   }
 
-  // Auto-create registration and payment record with status "pending"
-  const totalAmount = values.participants.length * TOPSELL_RUN_EVENT.price_per_participant
   const paymentRefRaw = generateRandomReference('FAM')
   const paymentRef = toXenditReference(paymentRefRaw)
 
@@ -145,7 +205,9 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
     const registration = await createFamilyRegistration({
       family_id: family.id,
       total_participants: values.participants.length,
-      total_amount: totalAmount,
+      total_amount: finalAmount,
+      voucher_code: finalVoucherCode,
+      voucher_discount: voucherDiscount,
       status: 'pending',
     })
 
@@ -153,14 +215,17 @@ export async function signUpFamily(values: RegisterFamilyFormValues) {
 
     await createFamilyPayment({
       registration_id: registration.id,
-      amount: totalAmount,
+      amount: finalAmount,
       payment_reference: paymentRef,
       status: 'pending',
+      period_key: period?.key ?? null,
     })
+
+    if (voucherId) {
+      await incrementVoucherUsage(voucherId)
+    }
   } catch (error) {
     console.error('Failed to create auto-payment record:', error)
-    // Don't fail the registration if payment creation fails
-    // Admin can manually create payment later
   }
 
   try {

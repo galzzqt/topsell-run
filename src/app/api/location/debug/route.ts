@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { fetchBinderbyte } from '@/lib/location/binderbyte'
+import { fetchLocationData } from '@/lib/location/binderbyte'
 
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === 'production') {
@@ -12,5 +12,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return fetchBinderbyte('provinsi')
+  return fetchLocationData('provinces.json')
 }

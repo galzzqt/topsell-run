@@ -1,7 +1,9 @@
 import { randomBytes } from 'crypto'
 import type {
   Community, Participant, Payment, Registration,
-  Family, FamilyParticipant, FamilyRegistration, FamilyPayment
+  Family, FamilyParticipant, FamilyRegistration, FamilyPayment,
+  Individual, IndividualParticipant, IndividualRegistration, IndividualPayment,
+  PacerRegistration, PacerParticipant
 } from '@/lib/types'
 
 export function nowIso() {
@@ -27,6 +29,14 @@ export function generateCommunityCode() {
 
 export function generateFamilyCode() {
   return `FAM-${randomBytes(3).toString('hex').toUpperCase()}`
+}
+
+export function generateIndividualCode() {
+  return `IND-${randomBytes(3).toString('hex').toUpperCase()}`
+}
+
+export function generatePacerCode() {
+  return `PCR-${randomBytes(3).toString('hex').toUpperCase()}`
 }
 
 export function docToCommunity(doc: Record<string, unknown>): Community {
@@ -59,6 +69,30 @@ export function docToFamilyRegistration(doc: Record<string, unknown>): FamilyReg
 
 export function docToFamilyPayment(doc: Record<string, unknown>): FamilyPayment {
   return doc as unknown as FamilyPayment
+}
+
+export function docToIndividual(doc: Record<string, unknown>): Individual {
+  return doc as unknown as Individual
+}
+
+export function docToIndividualParticipant(doc: Record<string, unknown>): IndividualParticipant {
+  return doc as unknown as IndividualParticipant
+}
+
+export function docToIndividualRegistration(doc: Record<string, unknown>): IndividualRegistration {
+  return doc as unknown as IndividualRegistration
+}
+
+export function docToIndividualPayment(doc: Record<string, unknown>): IndividualPayment {
+  return doc as unknown as IndividualPayment
+}
+
+export function docToPacer(doc: Record<string, unknown>): PacerRegistration {
+  return doc as unknown as PacerRegistration
+}
+
+export function docToPacerParticipant(doc: Record<string, unknown>): PacerParticipant {
+  return doc as unknown as PacerParticipant
 }
 
 export function stripMongoId<T extends Record<string, unknown>>(doc: T | null) {

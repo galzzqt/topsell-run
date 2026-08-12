@@ -10,6 +10,7 @@ interface DateInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement
   error?: string
   value?: string
   onChange?: (value: string) => void
+  required?: boolean
 }
 
 function todayIso() {
@@ -21,7 +22,7 @@ function todayIso() {
 }
 
 export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
-  ({ className, label, error, value, onChange, placeholder = 'DD/MM/YYYY', disabled, id, onBlur, ...props }, ref) => {
+  ({ className, label, error, value, onChange, placeholder = 'DD/MM/YYYY', disabled, id, onBlur, required, ...props }, ref) => {
     const [displayValue, setDisplayValue] = React.useState('')
     const pickerRef = useRef<HTMLInputElement>(null)
     const generatedId = useId()
@@ -89,7 +90,7 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
       <div className="w-full flex flex-col gap-1.5">
         {label && (
           <label htmlFor={inputId} className="text-xs font-bold uppercase tracking-wider text-brand-muted">
-            {label}
+            {label}{required && <span className="text-sport-orange ml-0.5">*</span>}
           </label>
         )}
         <div className="relative">

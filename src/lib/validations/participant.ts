@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
 const phoneRegex = /^08[1-9][0-9]{8,11}$/
+const ktpNumberSchema = z
+  .string()
+  .min(1, 'Nomor KTP wajib diisi')
+  .regex(/^\d{16}$/, 'Nomor KTP harus 16 digit angka')
 const emailDomainRegex = /@(gmail\.com|yahoo\.com|yahoo\.co\.id|icloud\.com|hotmail\.com|outlook\.com)$/i
 const emailSchema = z
   .string()
@@ -35,6 +39,7 @@ export const participantSchema = z.object({
     .string()
     .min(2, 'Nama BIB minimal 2 karakter')
     .max(20, 'Nama BIB maksimal 20 karakter'),
+  ktp_number: ktpNumberSchema,
   email: emailSchema,
   phone: z
     .string()
@@ -74,6 +79,7 @@ export const participantFormSchema = z.object({
     .string()
     .min(2, 'Nama BIB minimal 2 karakter')
     .max(20, 'Nama BIB maksimal 20 karakter'),
+  ktp_number: ktpNumberSchema,
   email: emailSchema,
   phone: z
     .string()
@@ -107,6 +113,7 @@ export const participantEditSchema = z.object({
     .string()
     .min(2, 'Nama BIB minimal 2 karakter')
     .max(20, 'Nama BIB maksimal 20 karakter'),
+  ktp_number: ktpNumberSchema,
   email: emailSchema,
   phone: z
     .string()

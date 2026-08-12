@@ -7,7 +7,7 @@ export default function RegisterRedirectPage() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace('/#register-section')
+    router.replace('/#daftar')
   }, [router])
 
   return (

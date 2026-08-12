@@ -19,16 +19,34 @@ import {
   updateFamilyAuthPhone,
   updateFamilyAuthPassword,
   findFamilyByPhoneExcept,
+  // individual database imports
+  findIndividualParticipantWithIndividualById,
+  findIndividualParticipantById,
+  markIndividualParticipantCheckedIn,
+  updateIndividualParticipantById,
+  updateIndividual,
+  updateIndividualAuthPhone,
+  updateIndividualAuthPassword,
+  findIndividualByPhoneExcept,
+  // pacer database imports
+  findPacerParticipantById,
+  updatePacerParticipantById,
+  updatePacer,
+  findPacerByPhoneExcept,
+  findPacerById,
+  findPacerParticipantByPacerId,
 } from '@/lib/db'
+import { sendPacerRegistrationWebhook } from '@/lib/ghl/webhook'
 import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
 import { queryAdminLogs } from '@/lib/axiom/logs'
-import { readEditableEnvSnapshot, updateEditableEnvValues, updateWebhookSettings, writeAdminSettings } from '@/lib/admin/settings'
+import { readEditableEnvSnapshot, updateEditableEnvValues, writeAdminSettings } from '@/lib/admin/settings'
 import { clearRateLimit, rateLimit } from '@/lib/security/rate-limit'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { revalidatePath } from 'next/cache'
 import type { AdminSettings } from '@/lib/admin/settings-schema'
+import { sendPacerApprovalEmail } from '@/lib/email/pacer'
 
 function parseParticipantId(scanValue: string) {
   const value = scanValue.trim()
@@ -108,6 +126,7 @@ export async function markRacepackPickedUp(scanValue: string) {
 
   let participant = (await findParticipantWithCommunityById(participantId)) as ScannedParticipantType | null
   let isFamily = false
+  let isIndividual = false
 
   if (!participant) {
     const familyParticipant = await findFamilyParticipantWithFamilyById(participantId)
@@ -116,6 +135,17 @@ export async function markRacepackPickedUp(scanValue: string) {
       participant = {
         ...familyParticipant,
         community: familyParticipant.family ? { name: familyParticipant.family.name, community_code: familyParticipant.family.family_code } : null
+      } as unknown as ScannedParticipantType
+    }
+  }
+
+  if (!participant) {
+    const individualParticipant = await findIndividualParticipantWithIndividualById(participantId)
+    if (individualParticipant) {
+      isIndividual = true
+      participant = {
+        ...individualParticipant,
+        community: individualParticipant.individual ? { name: individualParticipant.individual.name, community_code: individualParticipant.individual.individual_code } : null
       } as unknown as ScannedParticipantType
     }
   }
@@ -160,12 +190,22 @@ export async function markRacepackPickedUp(scanValue: string) {
     }
   }
 
-  const pickedUpAt = isFamily
+  const pickedUpAt = isIndividual
+    ? await markIndividualParticipantCheckedIn(participantId)
+    : isFamily
     ? await markFamilyParticipantCheckedIn(participantId)
     : await markParticipantCheckedIn(participantId)
 
   let updated = null
-  if (isFamily) {
+  if (isIndividual) {
+    const individualParticipant = await findIndividualParticipantWithIndividualById(participantId)
+    if (individualParticipant) {
+      updated = {
+        ...individualParticipant,
+        community: individualParticipant.individual ? { name: individualParticipant.individual.name, community_code: individualParticipant.individual.individual_code } : null
+      } as unknown as ScannedParticipantType
+    }
+  } else if (isFamily) {
     const familyParticipant = await findFamilyParticipantWithFamilyById(participantId)
     if (familyParticipant) {
       updated = {
@@ -214,6 +254,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export type AdminParticipantUpdateValues = {
   full_name: string
   bib_name: string
+  ktp_number: string
   email: string
   phone: string
   date_of_birth: string
@@ -232,6 +273,7 @@ export async function updateAdminParticipant(participantId: string, values: Admi
   }
 
   if (!values.full_name.trim() || !values.bib_name.trim()) return { error: 'Nama peserta dan BIB wajib diisi.' }
+  if (!/^\d{16}$/.test(values.ktp_number.trim())) return { error: 'Nomor KTP peserta harus 16 digit angka.' }
   if (!emailRegex.test(values.email)) return { error: 'Email peserta tidak valid.' }
   if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP peserta tidak valid.' }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date_of_birth)) return { error: 'Tanggal lahir peserta tidak valid.' }
@@ -242,6 +284,7 @@ export async function updateAdminParticipant(participantId: string, values: Admi
   const payload = {
     full_name: values.full_name.trim(),
     bib_name: values.bib_name.trim(),
+    ktp_number: values.ktp_number.trim(),
     email: values.email.trim(),
     phone: values.phone.trim(),
     date_of_birth: values.date_of_birth,
@@ -261,7 +304,12 @@ export async function updateAdminParticipant(participantId: string, values: Admi
     if (existingFamily) {
       await updateFamilyParticipantById(participantId, payload)
     } else {
-      return { error: 'Peserta tidak ditemukan.' }
+      const existingIndividual = await findIndividualParticipantById(participantId)
+      if (existingIndividual) {
+        await updateIndividualParticipantById(participantId, payload)
+      } else {
+        return { error: 'Peserta tidak ditemukan.' }
+      }
     }
   }
 
@@ -357,6 +405,53 @@ export async function updateAdminFamily(values: AdminFamilyUpdateValues) {
   return { success: true }
 }
 
+export async function updateAdminIndividual(values: AdminFamilyUpdateValues) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  if (!values.name.trim() || !values.leader_name.trim()) return { error: 'Nama peserta wajib diisi.' }
+  if (!emailRegex.test(values.email)) return { error: 'Email peserta tidak valid.' }
+  if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP peserta tidak valid.' }
+  if (values.password && values.password.length < 6) return { error: 'Password minimal 6 karakter.' }
+
+  const duplicate = await findIndividualByPhoneExcept(values.phone, values.id)
+  if (duplicate) return { error: 'Nomor HP sudah digunakan peserta individu lain.' }
+
+  await updateIndividual(values.id, {
+    name: values.name.trim(),
+    leader_name: values.leader_name.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+    provinsi: values.provinsi.trim() || null,
+    kota: values.kota.trim() || null,
+    kecamatan: values.kecamatan.trim() || null,
+  })
+
+  await updateIndividualAuthPhone(values.id, values.phone)
+
+  if (values.password) {
+    await updateIndividualAuthPassword(values.id, createCommunityPasswordRecord(values.password))
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_individual_updated',
+      message: `Admin ${session.name} memperbarui data peserta individu: ${values.name} (HP: ${values.phone}).`,
+      actor: session,
+      data: { individualId: values.id, name: values.name, phone: values.phone, email: values.email },
+    })
+  } catch (logError) {
+    console.error('Failed to log admin individual update:', logError)
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
 export type AdminCommunityUpdateValues = {
   id: string
   name: string
@@ -441,29 +536,6 @@ export async function saveRegistrationFormSettings(settings: AdminSettings) {
   return { success: true }
 }
 
-export async function saveWebhookSettings(webhookSettings: AdminSettings['webhookSettings']) {
-  const session = await getAdminSession()
-  if (!session) return { error: 'Sesi admin habis. Silakan login ulang.' }
-  if (session.role !== 'superadmin') return { error: 'Akses ditolak. Fitur ini hanya untuk superadmin.' }
-
-  try {
-    await updateWebhookSettings(webhookSettings)
-    await ingestAdminLog({
-      level: 'info',
-      source: 'admin',
-      event: 'webhook_settings_updated',
-      message: `Admin ${session.name} memperbarui pengaturan webhook.`,
-      actor: session,
-      data: webhookSettings,
-    })
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Gagal menyimpan pengaturan webhook.' }
-  }
-
-  revalidatePath('/admin')
-  return { success: true, message: 'Pengaturan webhook berhasil disimpan.' }
-}
-
 export async function saveEditableEnvValues(values: Record<string, string>) {
   const session = await getAdminSession()
   if (!session) return { error: 'Sesi admin habis. Silakan login ulang.' }
@@ -495,6 +567,7 @@ type AdminAccountInput = {
   username: string
   password: string
   role: 'admin' | 'superadmin'
+  allowed_tabs?: string[]
 }
 
 type AdminAccountUpdateInput = {
@@ -504,6 +577,7 @@ type AdminAccountUpdateInput = {
   password?: string
   is_active: boolean
   role: 'admin' | 'superadmin'
+  allowed_tabs?: string[]
 }
 
 async function requireSuperAdmin() {
@@ -548,6 +622,7 @@ export async function createManagedAdmin(values: AdminAccountInput) {
     name: values.name.trim(),
     role: values.role,
     is_active: true,
+    allowed_tabs: Array.isArray(values.allowed_tabs) ? values.allowed_tabs : [],
     created_at: now,
     updated_at: now,
     ...passwordRecord,
@@ -581,6 +656,7 @@ export async function updateManagedAdmin(values: AdminAccountUpdateInput) {
   next.username = username
   next.is_active = values.is_active
   next.role = values.role
+  next.allowed_tabs = Array.isArray(values.allowed_tabs) ? values.allowed_tabs : []
   next.updated_at = new Date().toISOString()
   if (values.password) {
     Object.assign(next, createPasswordRecord(values.password))
@@ -624,8 +700,8 @@ export async function refreshAxiomLogs() {
 
 export type UpdatePaymentStatusValues = {
   paymentId: string
-  packageType: 'community' | 'family'
-  status: 'pending' | 'paid' | 'failed' | 'expired'
+  packageType: 'community' | 'family' | 'individual'
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   paymentMethod?: string
 }
 
@@ -637,167 +713,135 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
 
   const { paymentId, packageType, status, paymentMethod } = values
 
-  if (!['pending', 'paid', 'failed', 'expired'].includes(status)) {
+  if (!['pending', 'paid', 'failed', 'expired', 'testing'].includes(status)) {
     return { error: 'Status pembayaran tidak valid.' }
   }
 
   try {
     // Dynamic imports to avoid circular dependencies
-    const {
-      findPaymentById,
-      markPaymentPaid,
-      markPaymentFailed,
-      markPaymentExpired,
-      updatePayment,
-      // Family functions
-      findFamilyPaymentById,
-      markFamilyPaymentPaid,
-      markFamilyPaymentFailed,
-      markFamilyPaymentExpired,
-      updateFamilyPayment,
-    } = await import('@/lib/db')
+    const db = await import('@/lib/db')
 
-    // Get payment data
-    const payment = packageType === 'community'
-      ? await findPaymentById(paymentId)
-      : await findFamilyPaymentById(paymentId)
+    const findPaymentByPackage = {
+      community: db.findPaymentById,
+      family: db.findFamilyPaymentById,
+      individual: db.findIndividualPaymentById,
+    }[packageType]
+    const markPaid = {
+      community: db.markPaymentPaid,
+      family: db.markFamilyPaymentPaid,
+      individual: db.markIndividualPaymentPaid,
+    }[packageType]
+    const markFailed = {
+      community: db.markPaymentFailed,
+      family: db.markFamilyPaymentFailed,
+      individual: db.markIndividualPaymentFailed,
+    }[packageType]
+    const markExpired = {
+      community: db.markPaymentExpired,
+      family: db.markFamilyPaymentExpired,
+      individual: db.markIndividualPaymentExpired,
+    }[packageType]
+    const updatePaymentPending = {
+      community: db.updatePayment,
+      family: db.updateFamilyPayment,
+      individual: db.updateIndividualPayment,
+    }[packageType]
 
+    const payment = await findPaymentByPackage(paymentId)
     if (!payment) {
       return { error: 'Pembayaran tidak ditemukan.' }
     }
 
     const oldStatus = payment.status
-    const packageName = packageType === 'community' ? 'komunitas' : 'Bro & Sist Package'
+    const packageName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'Individu' : 'Bro & Sist Package'
+    const eventPrefix = packageType === 'community' ? 'admin_payment' : packageType === 'individual' ? 'admin_individual_payment' : 'admin_family_payment'
 
-    // Handle status change
     if (status === 'paid') {
-      // Mark as paid - this will trigger participant activation and generate QR codes
       const updateValues = {
         payment_method: paymentMethod || payment.payment_method || 'manual_admin',
         paid_at: new Date().toISOString(),
       }
+      await markPaid(paymentId, updateValues)
 
-      if (packageType === 'community') {
-        await markPaymentPaid(paymentId, updateValues)
-      } else {
-        await markFamilyPaymentPaid(paymentId, updateValues)
-      }
-
-      // Send email and WhatsApp notifications
       if (oldStatus !== 'paid') {
-        const {
-          sendRacepackEmailsForRegistration,
-          sendFamilyRacepackEmailsForRegistration,
-        } = await import('@/lib/email/racepack')
-
-        const {
-          sendCommunityReceiptEmail,
-          sendFamilyReceiptEmail,
-        } = await import('@/lib/email/receipt')
-
-        const {
-          sendRacepackWhatsappsForRegistration,
-          sendFamilyRacepackWhatsappsForRegistration,
-        } = await import('@/lib/whatsapp/racepack')
+        const racepackEmail = await import('@/lib/email/racepack')
+        const receiptEmail = await import('@/lib/email/receipt')
+        const racepackWa = await import('@/lib/whatsapp/racepack')
+        const individualEmail = await import('@/lib/email/individual')
+        const individualWa = await import('@/lib/whatsapp/individual')
 
         try {
           if (packageType === 'community') {
             await Promise.all([
-              sendRacepackEmailsForRegistration(payment.registration_id),
-              sendRacepackWhatsappsForRegistration(payment.registration_id),
-              sendCommunityReceiptEmail(payment.registration_id),
+              racepackEmail.sendRacepackEmailsForRegistration(payment.registration_id),
+              racepackWa.sendRacepackWhatsappsForRegistration(payment.registration_id),
+              receiptEmail.sendCommunityReceiptEmail(payment.registration_id),
+            ])
+          } else if (packageType === 'individual') {
+            await Promise.all([
+              individualEmail.sendIndividualRacepackEmailsForRegistration(payment.registration_id),
+              individualEmail.sendIndividualReceiptEmail(payment.registration_id),
+              individualWa.sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
             ])
           } else {
             await Promise.all([
-              sendFamilyRacepackEmailsForRegistration(payment.registration_id),
-              sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
-              sendFamilyReceiptEmail(payment.registration_id),
+              racepackEmail.sendFamilyRacepackEmailsForRegistration(payment.registration_id),
+              racepackWa.sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
+              receiptEmail.sendFamilyReceiptEmail(payment.registration_id),
             ])
           }
         } catch (notifError) {
           console.error('Failed to send notifications:', notifError)
-          // Don't fail the whole operation if notifications fail
         }
       }
 
       await ingestAdminLog({
         level: 'info',
         source: 'payment',
-        event: packageType === 'community' ? 'admin_payment_marked_paid' : 'admin_family_payment_marked_paid',
+        event: `${eventPrefix}_marked_paid`,
         message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi PAID (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
         actor: session,
-        data: {
-          paymentId,
-          packageType,
-          reference: payment.payment_reference,
-          oldStatus,
-          newStatus: 'paid',
-          paymentMethod: paymentMethod || 'manual_admin',
-        }
+        data: { paymentId, packageType, reference: payment.payment_reference, oldStatus, newStatus: 'paid', paymentMethod: paymentMethod || 'manual_admin' }
       })
     } else if (status === 'failed') {
-      if (packageType === 'community') {
-        await markPaymentFailed(paymentId)
-      } else {
-        await markFamilyPaymentFailed(paymentId)
-      }
-
+      await markFailed(paymentId)
       await ingestAdminLog({
         level: 'warning',
         source: 'payment',
-        event: packageType === 'community' ? 'admin_payment_marked_failed' : 'admin_family_payment_marked_failed',
+        event: `${eventPrefix}_marked_failed`,
         message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi FAILED (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
         actor: session,
-        data: {
-          paymentId,
-          packageType,
-          reference: payment.payment_reference,
-          oldStatus,
-          newStatus: 'failed',
-        }
+        data: { paymentId, packageType, reference: payment.payment_reference, oldStatus, newStatus: 'failed' }
       })
     } else if (status === 'expired') {
-      if (packageType === 'community') {
-        await markPaymentExpired(paymentId)
-      } else {
-        await markFamilyPaymentExpired(paymentId)
-      }
-
+      await markExpired(paymentId)
       await ingestAdminLog({
         level: 'warning',
         source: 'payment',
-        event: packageType === 'community' ? 'admin_payment_marked_expired' : 'admin_family_payment_marked_expired',
+        event: `${eventPrefix}_marked_expired`,
         message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi EXPIRED (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
         actor: session,
-        data: {
-          paymentId,
-          packageType,
-          reference: payment.payment_reference,
-          oldStatus,
-          newStatus: 'expired',
-        }
+        data: { paymentId, packageType, reference: payment.payment_reference, oldStatus, newStatus: 'expired' }
       })
     } else if (status === 'pending') {
-      // Just update to pending without triggering any side effects
-      if (packageType === 'community') {
-        await updatePayment(paymentId, { status: 'pending' })
-      } else {
-        await updateFamilyPayment(paymentId, { status: 'pending' })
-      }
-
+      await updatePaymentPending(paymentId, { status: 'pending' })
       await ingestAdminLog({
         level: 'info',
         source: 'payment',
-        event: packageType === 'community' ? 'admin_payment_marked_pending' : 'admin_family_payment_marked_pending',
+        event: `${eventPrefix}_marked_pending`,
         message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi PENDING (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
         actor: session,
-        data: {
-          paymentId,
-          packageType,
-          reference: payment.payment_reference,
-          oldStatus,
-          newStatus: 'pending',
-        }
+        data: { paymentId, packageType, reference: payment.payment_reference, oldStatus, newStatus: 'pending' }
+      })
+    } else if (status === 'testing') {
+      await updatePaymentPending(paymentId, { status: 'testing' })
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: `${eventPrefix}_marked_testing`,
+        message: `Admin ${session.name} mengubah status pembayaran ${packageName} menjadi TESTING (Ref: ${payment.payment_reference}, Status lama: ${oldStatus}).`,
+        actor: session,
+        data: { paymentId, packageType, reference: payment.payment_reference, oldStatus, newStatus: 'testing' }
       })
     }
 
@@ -815,4 +859,165 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
     })
     return { error: 'Gagal mengubah status pembayaran. Silakan coba lagi.' }
   }
+}
+
+export async function updateAdminPacerStatus(pacerId: string, status: 'approved' | 'rejected', note?: string) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  if (!['approved', 'rejected'].includes(status)) {
+    return { error: 'Status tidak valid.' }
+  }
+
+  await updatePacer(pacerId, {
+    status,
+    status_note: note?.trim() || null,
+    reviewed_at: new Date().toISOString(),
+  })
+
+  try {
+    const pacer = await findPacerById(pacerId)
+    if (pacer) {
+      const participant = await findPacerParticipantByPacerId(pacerId)
+      await sendPacerRegistrationWebhook({
+        phone: pacer.phone,
+        email: pacer.email,
+        fullName: pacer.name,
+        category: pacer.category,
+        pacerCode: pacer.pacer_code,
+        status: status,
+        instagram: participant?.sosmed_instagram || undefined,
+        tiktok: participant?.sosmed_tiktok || undefined,
+        stravaLink: participant?.strava_link || undefined,
+        stravaUsername: participant?.strava_username || undefined,
+        bankName: participant?.bank_name || undefined,
+        bankAccountNumber: participant?.bank_account_number || undefined,
+        bankAccountHolder: participant?.bank_account_holder || undefined,
+        hasSmartwatch: participant?.has_smartwatch || undefined,
+        age: participant?.age || undefined,
+        provinsi: pacer.provinsi || undefined,
+        kota: pacer.kota || undefined,
+        kecamatan: pacer.kecamatan || undefined,
+        mediaUrls: participant?.media_urls,
+        pbMediaUrls: participant?.pb_media_urls,
+      })
+    }
+  } catch (webhookError) {
+    console.error('Failed to send pacer status update webhook to GHL:', webhookError)
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_pacer_status_updated',
+      message: `Admin ${session.name} mengubah status pacer menjadi ${status.toUpperCase()} (ID: ${pacerId}).`,
+      actor: session,
+      data: { pacerId, status, note: note?.trim() || null },
+    })
+  } catch (logError) {
+    console.error('Failed to log admin pacer status update:', logError)
+  }
+
+  // Kirim email notifikasi ke pacer jika status disetujui (approved)
+  if (status === 'approved') {
+    try {
+      const emailResult = await sendPacerApprovalEmail(pacerId)
+      if (!emailResult.success) {
+        console.warn('Pacer approval email not sent:', emailResult.error)
+      }
+    } catch (emailError) {
+      console.error('Failed to send pacer approval email:', emailError)
+    }
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export type AdminPacerParticipantUpdateValues = AdminParticipantUpdateValues & {
+  age: number
+  sosmed_instagram: string
+  sosmed_tiktok: string
+  strava_link: string
+  strava_username: string
+  bank_name: string
+  bank_account_number: string
+  bank_account_holder: string
+  has_smartwatch: 'yes' | 'no'
+}
+
+export async function updateAdminPacerParticipant(participantId: string, values: AdminPacerParticipantUpdateValues) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  if (!values.full_name.trim() || !values.bib_name.trim()) return { error: 'Nama peserta dan BIB wajib diisi.' }
+  if (!/^\d{16}$/.test(values.ktp_number.trim())) return { error: 'Nomor KTP peserta harus 16 digit angka.' }
+  if (!emailRegex.test(values.email)) return { error: 'Email peserta tidak valid.' }
+  if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP peserta tidak valid.' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date_of_birth)) return { error: 'Tanggal lahir peserta tidak valid.' }
+  if (!values.emergency_contact_name.trim()) return { error: 'Nama kontak darurat wajib diisi.' }
+  if (!phoneRegex.test(values.emergency_contact_phone)) return { error: 'Nomor kontak darurat tidak valid.' }
+  if (!['male', 'female'].includes(values.gender)) return { error: 'Gender tidak valid.' }
+  if (!Number.isFinite(values.age) || values.age < 10 || values.age > 100) return { error: 'Usia tidak valid.' }
+  if (!values.bank_name.trim() || !values.bank_account_number.trim() || !values.bank_account_holder.trim()) {
+    return { error: 'Data rekening wajib diisi.' }
+  }
+  if (!['yes', 'no'].includes(values.has_smartwatch)) return { error: 'Data smartwatch tidak valid.' }
+
+  const existing = await findPacerParticipantById(participantId)
+  if (!existing) return { error: 'Peserta pacer tidak ditemukan.' }
+
+  const duplicate = await findPacerByPhoneExcept(values.phone, existing.pacer_id)
+  if (duplicate) return { error: 'Nomor HP sudah digunakan pacer lain.' }
+
+  await updatePacerParticipantById(participantId, {
+    full_name: values.full_name.trim(),
+    bib_name: values.bib_name.trim(),
+    ktp_number: values.ktp_number.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+    date_of_birth: values.date_of_birth,
+    gender: values.gender,
+    tshirt_size: values.tshirt_size as 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL' | '4XL' | '5XL',
+    blood_type: values.blood_type as 'A' | 'B' | 'AB' | 'O',
+    medical_condition: values.medical_condition.trim() || null,
+    emergency_contact_name: values.emergency_contact_name.trim(),
+    emergency_contact_phone: values.emergency_contact_phone.trim(),
+    age: values.age,
+    sosmed_instagram: values.sosmed_instagram.trim() || null,
+    sosmed_tiktok: values.sosmed_tiktok.trim() || null,
+    strava_link: values.strava_link.trim() || null,
+    strava_username: values.strava_username.trim() || null,
+    bank_name: values.bank_name.trim(),
+    bank_account_number: values.bank_account_number.trim(),
+    bank_account_holder: values.bank_account_holder.trim(),
+    has_smartwatch: values.has_smartwatch,
+  })
+
+  await updatePacer(existing.pacer_id, {
+    name: values.full_name.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+  })
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_pacer_participant_updated',
+      message: `Admin ${session.name} memperbarui data pacer: ${values.full_name} (BIB: ${values.bib_name}, HP: ${values.phone}).`,
+      actor: session,
+      data: { participantId, full_name: values.full_name, bib_name: values.bib_name, phone: values.phone },
+    })
+  } catch (logError) {
+    console.error('Failed to log admin pacer participant update:', logError)
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
 }

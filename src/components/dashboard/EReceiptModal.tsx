@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import type { Payment, FamilyPayment, Participant, FamilyParticipant, Community, Family } from '@/lib/types'
 import { TOPSELL_RUN_EVENT } from '@/lib/types'
+import { usePackagesSettings, resolvePackageLabel, resolveCategoryLabel } from '@/lib/hooks/usePackagesSettings'
 
 interface EReceiptModalProps {
   isOpen: boolean
@@ -14,7 +15,7 @@ interface EReceiptModalProps {
   payment: Payment | FamilyPayment
   participants: (Participant | FamilyParticipant)[]
   payer: Community | Family
-  type: 'community' | 'family'
+  type: 'community' | 'family' | 'individual'
 }
 
 export function EReceiptModal({
@@ -26,6 +27,17 @@ export function EReceiptModal({
   type
 }: EReceiptModalProps) {
   const receiptRef = useRef<HTMLDivElement>(null)
+  const packages = usePackagesSettings()
+
+  // Harga per peserta & kategori dari data pembayaran aktual (bukan konstanta hardcoded).
+  const perParticipantPrice = participants.length > 0
+    ? Math.round(payment.amount / participants.length)
+    : payment.amount
+  const rawCategory = (payer as { category?: string }).category
+  const eventCategory = resolveCategoryLabel(packages, type, rawCategory, perParticipantPrice) || TOPSELL_RUN_EVENT.category
+  const packageLabel = resolvePackageLabel(packages, type)
+  const nameLabel = type === 'community' ? 'Nama Komunitas' : type === 'individual' ? 'Nama Peserta' : 'Nama Keluarga'
+  const codeLabel = type === 'community' ? 'Kode Komunitas' : type === 'individual' ? 'Kode Peserta' : 'Kode Keluarga'
 
   const handleDownload = () => {
     window.print()
@@ -179,13 +191,13 @@ export function EReceiptModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">
-                  {type === 'community' ? 'Nama Komunitas' : 'Nama Keluarga'}
+                  {nameLabel}
                 </p>
                 <p className="text-sm font-black text-black truncate">{payer.name}</p>
               </div>
               <div>
                 <p className="text-[9px] font-bold text-gray-600 uppercase tracking-wider">
-                  {type === 'community' ? 'Kode Komunitas' : 'Kode Keluarga'}
+                  {codeLabel}
                 </p>
                 <p className="text-sm font-black" style={{ color: '#ff6a00' }}>
                   {type === 'community' 
@@ -223,10 +235,11 @@ export function EReceiptModal({
                 <div>
                   <p className="text-[10px] font-medium text-gray-700">{TOPSELL_RUN_EVENT.name}</p>
                   <p className="text-[10px] text-gray-600">{TOPSELL_RUN_EVENT.location}</p>
+                  <p className="text-[10px] text-gray-600">Paket: {packageLabel}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-medium text-gray-700">{formatDate(TOPSELL_RUN_EVENT.date)}</p>
-                  <p className="text-[10px]" style={{ color: '#ff6a00' }}>Kategori {TOPSELL_RUN_EVENT.category}</p>
+                  <p className="text-[10px]" style={{ color: '#ff6a00' }}>Kategori {eventCategory}</p>
                 </div>
               </div>
             </div>
@@ -253,7 +266,7 @@ export function EReceiptModal({
                       </div>
                     </div>
                     <p className="text-xs font-bold" style={{ color: '#ff6a00' }}>
-                      {formatCurrency(TOPSELL_RUN_EVENT.price_per_participant)}
+                      {formatCurrency(perParticipantPrice)}
                     </p>
                   </div>
                 ))}

@@ -3,19 +3,23 @@
 import { z } from 'zod'
 import { getFamilySession } from '@/lib/auth/family'
 import { getCommunitySession } from '@/lib/auth/community'
-import { 
-  insertFamilyParticipants, 
-  insertParticipants, 
+import {
+  insertFamilyParticipants,
+  insertParticipants,
   findActiveCrossParticipant,
   findActiveCrossFamilyParticipant,
   findParticipantsByCommunityId,
   findFamilyParticipantsByFamilyId,
+  findFamilyById,
+  findCommunityById,
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
+import { checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
 
 const participantInput = z.object({
   full_name: z.string().min(2, 'Nama lengkap minimal 2 karakter'),
   bib_name: z.string().min(2, 'Nama BIB minimal 2 karakter').max(20, 'Nama BIB maksimal 20 karakter'),
+  ktp_number: z.string().regex(/^\d{16}$/, 'Nomor KTP harus 16 digit angka'),
   email: z.string().email('Email tidak valid'),
   phone: z.string().min(9, 'Nomor HP tidak valid'),
   date_of_birth: z.string().min(1, 'Tanggal lahir wajib diisi'),
@@ -63,6 +67,11 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
   const session = await getFamilySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
+  const family = await findFamilyById(session.id)
+  const familyQuota = await checkPackageQuota('family', validated.data.participants.length, family?.category)
+  if (!familyQuota.ok) return { error: familyQuota.reason || 'Kuota peserta sudah penuh.' }
+  const period = await resolvePeriodForCategory('family', family?.category)
+
   // BUSINESS LOGIC: Check for ACTIVE participants only (pending/paid status)
   // Allow duplicates if existing participant has failed/expired payment status
   // CRITICAL FIX: Check ACROSS BOTH community and family participants
@@ -96,8 +105,10 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
       validated.data.participants.map((p) => ({
         family_id: session.id,
         registration_id: null,
+        period_key: period?.key ?? null,
         full_name: p.full_name,
         bib_name: p.bib_name,
+        ktp_number: p.ktp_number,
         email: p.email,
         phone: p.phone,
         date_of_birth: p.date_of_birth,
@@ -152,6 +163,11 @@ export async function addCommunityParticipantsAction(values: AddParticipantsValu
   const session = await getCommunitySession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
+  const community = await findCommunityById(session.id)
+  const communityQuota = await checkPackageQuota('community', validated.data.participants.length, community?.category)
+  if (!communityQuota.ok) return { error: communityQuota.reason || 'Kuota peserta sudah penuh.' }
+  const period = await resolvePeriodForCategory('community', community?.category)
+
   // BUSINESS LOGIC: Check for ACTIVE participants only (pending/paid status)
   // Allow duplicates if existing participant has failed/expired payment status
   // CRITICAL FIX: Check ACROSS BOTH community and family participants
@@ -185,8 +201,10 @@ export async function addCommunityParticipantsAction(values: AddParticipantsValu
       validated.data.participants.map((p) => ({
         community_id: session.id,
         registration_id: null,
+        period_key: period?.key ?? null,
         full_name: p.full_name,
         bib_name: p.bib_name,
+        ktp_number: p.ktp_number,
         email: p.email,
         phone: p.phone,
         date_of_birth: p.date_of_birth,

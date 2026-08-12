@@ -39,6 +39,7 @@ export type AdminSession = {
   username: string
   name: string
   role: AdminRole
+  allowed_tabs?: string[]
 }
 
 type EncodedSession = AdminSession & {
@@ -46,7 +47,13 @@ type EncodedSession = AdminSession & {
 }
 
 function encode(payload: EncodedSession) {
-  return Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const json = JSON.stringify(payload)
+  const bytes = new TextEncoder().encode(json)
+  let binaryString = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binaryString += String.fromCharCode(bytes[i])
+  }
+  return btoa(binaryString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 function decode(raw: string) {
@@ -84,7 +91,7 @@ export async function createAdminSession(session: AdminSession) {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production' && isHttps,
-    path: '/admin',
+    path: '/',
     maxAge: 60 * 60 * 8,
   })
 }
@@ -98,7 +105,7 @@ export async function clearAdminSession() {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production' && isHttps,
-    path: '/admin',
+    path: '/',
     maxAge: 0,
   })
 }

@@ -1,4 +1,6 @@
-import { fetchBinderbyte, validateLocationId } from '@/lib/location/binderbyte'
+import { fetchLocationData, validateLocationId } from '@/lib/location/binderbyte'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -6,5 +8,5 @@ export async function GET(request: Request) {
 
   if (kotaId.error) return kotaId.error
 
-  return fetchBinderbyte('kecamatan', { id_kabupaten: kotaId.value })
+  return fetchLocationData(`districts/${kotaId.value}.json`)
 }
