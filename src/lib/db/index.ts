@@ -69,6 +69,7 @@ export {
   markPaymentPaid,
   markPaymentFailed,
   markPaymentExpired,
+  markPaymentTesting,
   markPaymentsPaidBySessionId,
   markPaymentsPaidByReference,
 } from './payment-sync'
@@ -140,6 +141,7 @@ export {
   markFamilyPaymentPaid,
   markFamilyPaymentFailed,
   markFamilyPaymentExpired,
+  markFamilyPaymentTesting,
   markFamilyPaymentsPaidBySessionId,
   markFamilyPaymentsPaidByReference,
 } from './family-payment-sync'
@@ -208,6 +210,7 @@ export {
   markIndividualPaymentPaid,
   markIndividualPaymentFailed,
   markIndividualPaymentExpired,
+  markIndividualPaymentTesting,
   markIndividualPaymentsPaidBySessionId,
   markIndividualPaymentsPaidByReference,
 } from './individual-payment-sync'

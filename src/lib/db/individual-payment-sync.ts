@@ -72,6 +72,19 @@ export async function markIndividualPaymentExpired(paymentId: string) {
   return findIndividualPaymentById(paymentId)
 }
 
+async function testingIndividualRegistrationParticipants(registrationId: string) {
+  await updateIndividualRegistration(registrationId, { status: 'testing' })
+  await updateIndividualParticipants({ registration_id: registrationId }, { payment_status: 'testing' })
+}
+
+export async function markIndividualPaymentTesting(paymentId: string) {
+  const payment = await findIndividualPaymentById(paymentId)
+  if (!payment) return null
+  await updateIndividualPayment(paymentId, { status: 'testing' })
+  await testingIndividualRegistrationParticipants(payment.registration_id)
+  return findIndividualPaymentById(paymentId)
+}
+
 export async function markIndividualPaymentsPaidBySessionId(sessionId: string, values: Partial<IndividualPayment>) {
   const { updateIndividualPaymentsBySessionId } = await import('./individual-payments')
   const payments = await updateIndividualPaymentsBySessionId(sessionId, {

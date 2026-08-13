@@ -46,7 +46,7 @@ export interface Participant {
   kecamatan: string | null
   participant_code: string | null // e.g. TSR-6K-10023 (assigned after payment)
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   checked_in: boolean
   checked_in_at: string | null
   racepack_email_sent_at: string | null
@@ -84,7 +84,7 @@ export interface Registration {
   voucher_code: string | null
   /** Potongan harga dalam Rp dari voucher; 0 jika tidak ada. */
   voucher_discount: number
-  status: 'pending' | 'paid' | 'failed' | 'expired'
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   created_at: string
   updated_at: string
 }
@@ -192,7 +192,7 @@ export interface FamilyParticipant {
   kecamatan: string | null
   participant_code: string | null
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   checked_in: boolean
   checked_in_at: string | null
   racepack_email_sent_at: string | null
@@ -212,7 +212,7 @@ export interface FamilyRegistration {
   voucher_code: string | null
   /** Potongan harga dalam Rp dari voucher; 0 jika tidak ada. */
   voucher_discount: number
-  status: 'pending' | 'paid' | 'failed' | 'expired'
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   created_at: string
   updated_at: string
 }
@@ -290,7 +290,7 @@ export interface IndividualParticipant {
   kecamatan: string | null
   participant_code: string | null
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   checked_in: boolean
   checked_in_at: string | null
   racepack_email_sent_at: string | null
@@ -310,7 +310,7 @@ export interface IndividualRegistration {
   voucher_code: string | null
   /** Potongan harga dalam Rp dari voucher; 0 jika tidak ada. */
   voucher_discount: number
-  status: 'pending' | 'paid' | 'failed' | 'expired'
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   created_at: string
   updated_at: string
 }

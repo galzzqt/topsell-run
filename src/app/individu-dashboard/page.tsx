@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity, LogOut, User, CreditCard,
   Trophy, Clock, CheckCircle, AlertCircle,
-  TrendingUp, ExternalLink, Receipt, Settings,
+  TrendingUp, ExternalLink, Receipt, Settings, Plus,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useIndividualStore } from '@/lib/store/useIndividualStore'
@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { ParticipantDetailModal } from '@/components/dashboard/ParticipantDetailModal'
 import { EReceiptModal } from '@/components/dashboard/EReceiptModal'
 import { IndividualProfileModal } from '@/components/dashboard/IndividualProfileModal'
+import { ReRegisterModal } from '@/components/dashboard/ReRegisterModal'
 import { Dialog } from '@/components/ui/dialog'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
 
@@ -54,6 +55,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid' | 'expired'>('all')
   const [hasCelebratedPayment, setHasCelebratedPayment] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [isReRegisterModalOpen, setIsReRegisterModalOpen] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -238,7 +240,15 @@ function DashboardContent() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsReRegisterModalOpen(true)}
+              className="text-xs font-bold border-sport-orange/30 text-sport-orange hover:bg-sport-orange/10"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Daftar Kembali / Periode Baru
+            </Button>
             <button
               onClick={() => setIsProfileModalOpen(true)}
               className="p-2 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded-lg transition-colors cursor-pointer"
@@ -270,6 +280,26 @@ function DashboardContent() {
             </div>
           ))}
         </div>
+
+        {/* RE-REGISTER ALERT BANNER (If all expired / no paid or pending) */}
+        {stats.pendingParticipants === 0 && stats.paidParticipants === 0 && (
+          <div className="bg-card-bg border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-amber-500/5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg shrink-0">
+                <AlertCircle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-300 uppercase">Status Pendaftaran Expired / Ingin Daftar Periode Baru</p>
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  Tagihan sebelumnya telah kadaluarsa atau Anda ingin mendaftar di periode/kategori baru.
+                </p>
+              </div>
+            </div>
+            <Button variant="primary" size="sm" onClick={() => setIsReRegisterModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" /> Daftar Kembali Sekarang
+            </Button>
+          </div>
+        )}
 
         {/* EVENT INFO STRIP */}
         <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -368,38 +398,43 @@ function DashboardContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredParticipants.map((p) => (
-                    <tr key={p.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
-                      <td className="px-4 py-3.5">
-                        <p className="text-sm font-bold text-foreground">{p.full_name}</p>
-                        <p className="text-[10px] text-brand-muted">{p.email}</p>
-                        <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {p.bib_name}</p>
-                      </td>
-                      <td className="px-4 py-3.5 hidden md:table-cell">
-                        <span className="text-[10px] font-bold text-brand-muted">{p.gender === 'male' ? '♂ L' : '♀ P'}</span>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="text-xs font-black bg-brand-dark border border-card-border px-2 py-0.5 rounded text-foreground">{p.tshirt_size}</span>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Badge variant={p.payment_status === 'paid' ? 'success' : p.payment_status === 'failed' ? 'danger' : p.payment_status === 'expired' ? 'neutral' : 'warning'}>
-                          {p.payment_status.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        {p.payment_status === 'paid' ? (
-                          <button
-                            onClick={() => setSelectedParticipant(p)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sport-orange/10 hover:bg-sport-orange/20 border border-sport-orange/25 text-sport-orange rounded text-[9px] font-black uppercase cursor-pointer active:scale-95 transition-all"
-                          >
-                            <User className="w-3 h-3" />Detail
-                          </button>
-                        ) : (
-                          <span className="text-[9px] text-brand-muted font-bold uppercase">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredParticipants.map((p) => {
+                    const isParticipantTesting = p.payment_status === 'testing' || payments.some((pay) => pay.registration_id === p.registration_id && pay.status === 'testing')
+                    const statusKey = isParticipantTesting ? 'testing' : p.payment_status
+
+                    return (
+                      <tr key={p.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
+                        <td className="px-4 py-3.5">
+                          <p className="text-sm font-bold text-foreground">{p.full_name}</p>
+                          <p className="text-[10px] text-brand-muted">{p.email}</p>
+                          <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {p.bib_name}</p>
+                        </td>
+                        <td className="px-4 py-3.5 hidden md:table-cell">
+                          <span className="text-[10px] font-bold text-brand-muted">{p.gender === 'male' ? '♂ L' : '♀ P'}</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <span className="text-xs font-black bg-brand-dark border border-card-border px-2 py-0.5 rounded text-foreground">{p.tshirt_size}</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <Badge variant={statusKey === 'testing' ? 'warning' : statusKey === 'paid' ? 'success' : statusKey === 'failed' ? 'danger' : statusKey === 'expired' ? 'neutral' : 'warning'}>
+                            {statusKey.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          {statusKey === 'paid' || statusKey === 'testing' ? (
+                            <button
+                              onClick={() => setSelectedParticipant(p)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sport-orange/10 hover:bg-sport-orange/20 border border-sport-orange/25 text-sport-orange rounded text-[9px] font-black uppercase cursor-pointer active:scale-95 transition-all"
+                            >
+                              <User className="w-3 h-3" />Detail
+                            </button>
+                          ) : (
+                            <span className="text-[9px] text-brand-muted font-bold uppercase">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -471,6 +506,15 @@ function DashboardContent() {
       <IndividualProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      <ReRegisterModal
+        isOpen={isReRegisterModalOpen}
+        onClose={() => setIsReRegisterModalOpen(false)}
+        packageKey="individual"
+        userProfile={individual}
+        existingParticipants={participants}
+        onSuccess={() => fetchIndividualData(true)}
       />
 
       {/* PAYMENT DIALOG */}

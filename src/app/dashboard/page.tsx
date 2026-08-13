@@ -7,7 +7,7 @@ import {
   Activity, LogOut, Users, CreditCard, User,
   Trophy, Clock, CheckCircle, AlertCircle,
   TrendingUp, Copy, Check, ExternalLink, Settings,
-  Receipt,
+  Receipt, Plus,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useFamilyStore } from '@/lib/store/useFamilyStore'
@@ -24,6 +24,7 @@ import { ParticipantDetailModal } from '@/components/dashboard/ParticipantDetail
 import { EReceiptModal } from '@/components/dashboard/EReceiptModal'
 import { Dialog } from '@/components/ui/dialog'
 import { FamilyProfileModal } from '@/components/dashboard/FamilyProfileModal'
+import { ReRegisterModal } from '@/components/dashboard/ReRegisterModal'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
 
 type CheckoutPayload = {
@@ -58,6 +59,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid' | 'expired'>('all')
   const [hasCelebratedPayment, setHasCelebratedPayment] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [isReRegisterModalOpen, setIsReRegisterModalOpen] = useState(false)
 
   // Auth init
   useEffect(() => {
@@ -363,6 +365,14 @@ function DashboardContent() {
                 <span className="xs:hidden">Daftar</span>
               </Link>
             )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsReRegisterModalOpen(true)}
+              className="text-xs font-bold border-sport-orange/30 text-sport-orange hover:bg-sport-orange/10"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Daftar Kembali / Periode Baru
+            </Button>
             <button
               onClick={() => setIsProfileModalOpen(true)}
               className="p-2 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded-lg transition-colors cursor-pointer"
@@ -515,7 +525,11 @@ function DashboardContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredParticipants.map((p, i) => (
+                  {filteredParticipants.map((p, i) => {
+                    const isParticipantTesting = p.payment_status === 'testing' || payments.some((pay) => pay.registration_id === p.registration_id && pay.status === 'testing')
+                    const statusKey = isParticipantTesting ? 'testing' : p.payment_status
+
+                    return (
                       <tr key={p.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
                         <td className="px-4 py-3.5 text-[10px] font-bold text-brand-muted">{i + 1}</td>
                         <td className="px-4 py-3.5">
@@ -540,26 +554,30 @@ function DashboardContent() {
                         <td className="px-4 py-3.5 text-center">
                           <Badge
                             variant={
-                              p.payment_status === 'paid'
+                              statusKey === 'testing'
+                                ? 'warning'
+                                : statusKey === 'paid'
                                 ? 'success'
-                                : p.payment_status === 'failed'
+                                : statusKey === 'failed'
                                 ? 'danger'
-                                : p.payment_status === 'expired'
+                                : statusKey === 'expired'
                                 ? 'neutral'
                                 : 'warning'
                             }
                           >
-                            {p.payment_status === 'paid'
+                            {statusKey === 'testing'
+                              ? 'TESTING'
+                              : statusKey === 'paid'
                               ? 'PAID'
-                              : p.payment_status === 'failed'
+                              : statusKey === 'failed'
                               ? 'FAILED'
-                              : p.payment_status === 'expired'
+                              : statusKey === 'expired'
                               ? 'EXPIRED'
                               : 'PENDING'}
                           </Badge>
                         </td>
                         <td className="px-4 py-3.5 text-center">
-                          {p.payment_status === 'paid' ? (
+                          {statusKey === 'paid' || statusKey === 'testing' ? (
                             <button
                               onClick={() => setSelectedParticipant(p)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sport-orange/10 hover:bg-sport-orange/20 border border-sport-orange/25 text-sport-orange rounded text-[9px] font-black uppercase cursor-pointer active:scale-95 transition-all"
@@ -571,7 +589,8 @@ function DashboardContent() {
                           )}
                         </td>
                       </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -664,6 +683,15 @@ function DashboardContent() {
       <FamilyProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      <ReRegisterModal
+        isOpen={isReRegisterModalOpen}
+        onClose={() => setIsReRegisterModalOpen(false)}
+        packageKey="family"
+        userProfile={family}
+        existingParticipants={participants}
+        onSuccess={() => fetchFamilyData(true)}
       />
 
       {/* PAYMENT DIALOG */}

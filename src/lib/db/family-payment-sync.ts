@@ -76,6 +76,20 @@ export async function markFamilyPaymentExpired(paymentId: string) {
   return findFamilyPaymentById(paymentId)
 }
 
+async function testingFamilyRegistrationParticipants(registrationId: string) {
+  await updateFamilyRegistration(registrationId, { status: 'testing' })
+  await updateFamilyParticipants({ registration_id: registrationId }, { payment_status: 'testing' })
+}
+
+export async function markFamilyPaymentTesting(paymentId: string) {
+  const payment = await findFamilyPaymentById(paymentId)
+  if (!payment) return null
+
+  await updateFamilyPayment(paymentId, { status: 'testing' })
+  await testingFamilyRegistrationParticipants(payment.registration_id)
+  return findFamilyPaymentById(paymentId)
+}
+
 export async function markFamilyPaymentsPaidBySessionId(sessionId: string, values: Partial<FamilyPayment>) {
   const { updateFamilyPaymentsBySessionId } = await import('./family-payments')
   const payments = await updateFamilyPaymentsBySessionId(sessionId, {

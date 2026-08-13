@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import type { VoucherDoc } from '@/lib/types/voucher'
 import type { AdminSettings, PackageKey } from '@/lib/admin/settings-schema'
+import { getWibNowString } from '@/lib/utils/format'
 
 type VoucherFormState = {
   name: string
@@ -42,11 +43,13 @@ const ALL_PACKAGES = [
 
 function formatDate(iso: string) {
   if (!iso) return '-'
-  return new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-    timeZone: 'Asia/Jakarta',
-  }).format(new Date(iso))
+  const [datePart, timePart] = iso.split('T')
+  if (!datePart) return iso
+  const [y, m, d] = datePart.split('-')
+  if (!y || !m || !d) return iso
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+  const monthName = months[parseInt(m, 10) - 1] || m
+  return `${d} ${monthName} ${y} ${timePart || ''}`.trim()
 }
 
 export function VouchersTab({
@@ -236,7 +239,7 @@ export function VouchersTab({
     })
   }
 
-  const now = new Date().toISOString()
+  const now = getWibNowString()
   const getStatus = (v: VoucherDoc) => {
     if (!v.enabled) return { label: 'Nonaktif', color: 'bg-brand-muted/20 text-brand-muted' }
     if (v.validUntil < now) return { label: 'Expired', color: 'bg-red-500/20 text-red-400' }

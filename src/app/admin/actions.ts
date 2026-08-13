@@ -741,6 +741,11 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
       family: db.markFamilyPaymentExpired,
       individual: db.markIndividualPaymentExpired,
     }[packageType]
+    const markTesting = {
+      community: db.markPaymentTesting,
+      family: db.markFamilyPaymentTesting,
+      individual: db.markIndividualPaymentTesting,
+    }[packageType]
     const updatePaymentPending = {
       community: db.updatePayment,
       family: db.updateFamilyPayment,
@@ -834,7 +839,7 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
         data: { paymentId, packageType, reference: payment.payment_reference, oldStatus, newStatus: 'pending' }
       })
     } else if (status === 'testing') {
-      await updatePaymentPending(paymentId, { status: 'testing' })
+      await markTesting(paymentId)
       await ingestAdminLog({
         level: 'info',
         source: 'payment',

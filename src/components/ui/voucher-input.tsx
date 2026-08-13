@@ -26,12 +26,26 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
   const [code, setCode] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [applied, setApplied] = useState<AppliedVoucher | null>(null)
+  const [autoVoucher, setAutoVoucher] = useState<AppliedVoucher | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
-  const autoChecked = useRef(false)
 
-  // ── Auto-apply & Re-validation: cek saat komponen mount & saat category/basePrice berubah ──
+  const autoChecked = useRef(false)
+  const isDismissed = useRef(false)
+  const prevCategory = useRef(category)
+  const prevPkg = useRef(packageKey)
+
+  // ── Auto-apply & Re-validation: cek saat komponen mount & saat category/basePrice/packageKey berubah ──
   useEffect(() => {
     if (!category || !basePrice) return
+
+    // Jika kategori atau paket berubah, reset status dismissal agar auto-apply bisa dicek untuk opsi baru
+    if (prevCategory.current !== category || prevPkg.current !== packageKey) {
+      isDismissed.current = false
+      autoChecked.current = false
+      setAutoVoucher(null)
+      prevCategory.current = category
+      prevPkg.current = packageKey
+    }
 
     const revalidateCurrentVoucher = async (currApplied: AppliedVoucher) => {
       const codeToValidate = currApplied.code === 'AUTO' ? 'AUTO' : currApplied.code
@@ -42,10 +56,10 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
         if (data.valid) {
           applyResult(codeToValidate, data)
         } else {
-          handleRemove()
+          handleRemove(false)
         }
       } catch {
-        handleRemove()
+        handleRemove(false)
       }
     }
 
@@ -56,7 +70,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
       checkAutoVoucher()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, basePrice])
+  }, [category, basePrice, packageKey])
 
   async function checkAutoVoucher() {
     if (autoChecked.current) return
@@ -66,7 +80,19 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
       const res = await fetch(url)
       const data: VoucherValidation = await res.json()
       if (data.valid && data.finalDiscount > 0) {
-        applyResult('AUTO', data)
+        const autoV: AppliedVoucher = {
+          code: 'AUTO',
+          name: data.name || 'Voucher Auto',
+          discountType: data.discountType!,
+          discountValue: data.discountValue!,
+          finalDiscount: data.finalDiscount,
+        }
+        setAutoVoucher(autoV)
+        if (!isDismissed.current) {
+          applyResult('AUTO', data)
+        }
+      } else {
+        setAutoVoucher(null)
       }
     } catch {
       // Diam — auto-apply gagal tidak perlu error ke user
@@ -88,6 +114,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
       const res = await fetch(url)
       const data: VoucherValidation = await res.json()
       if (data.valid) {
+        isDismissed.current = false
         applyResult(trimmed, data)
       } else {
         setStatus('invalid')
@@ -97,6 +124,14 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
       setStatus('invalid')
       setErrorMsg('Gagal menghubungi server. Coba lagi.')
     }
+  }
+
+  function handleApplyAuto(v: AppliedVoucher) {
+    isDismissed.current = false
+    setApplied(v)
+    setStatus('valid')
+    setErrorMsg('')
+    onApply(v)
   }
 
   function applyResult(usedCode: string, data: VoucherValidation) {
@@ -112,15 +147,15 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
     onApply(v)
   }
 
-  function handleRemove() {
+  function handleRemove(isUserAction = true) {
+    if (isUserAction) {
+      isDismissed.current = true
+    }
     setApplied(null)
     setCode('')
     setStatus('idle')
     setErrorMsg('')
-    autoChecked.current = false
     onRemove()
-    // Re-check auto-apply after manual removal
-    setTimeout(() => checkAutoVoucher(), 0)
   }
 
   const discountLabel =
@@ -137,7 +172,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
 
       {/* ── Voucher sudah di-apply ── */}
       {status === 'valid' && applied && (
-        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-green-50 border border-green-200">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-green-50 border border-green-200 shadow-sm">
           <div className="flex items-center gap-2 min-w-0">
             <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
             <div className="min-w-0">
@@ -149,8 +184,8 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
           </div>
           <button
             type="button"
-            onClick={handleRemove}
-            className="shrink-0 text-green-400 hover:text-red-400 transition-colors"
+            onClick={() => handleRemove(true)}
+            className="shrink-0 text-green-500 hover:text-red-500 p-1 rounded-md hover:bg-green-100/60 transition-all cursor-pointer"
             title="Hapus voucher"
           >
             <X className="w-4 h-4" />
@@ -158,7 +193,37 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
         </div>
       )}
 
-      {/* ── Input kode (tersembunyi jika sudah ada auto-apply) ── */}
+      {/* ── Voucher Auto yang tersedia (tampil jika voucher dilepas / belum terpasang) ── */}
+      {status !== 'valid' && autoVoucher && (
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-white border border-sport-purple/20 shadow-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-6 h-6 rounded-md bg-sport-purple/10 flex items-center justify-center shrink-0">
+              <Tag className="w-3.5 h-3.5 text-sport-purple" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider bg-violet-100 text-sport-purple px-1.5 py-0.5 rounded">Tersedia</span>
+                <p className="text-xs font-black text-foreground truncate">{autoVoucher.name}</p>
+              </div>
+              <p className="text-[10px] text-brand-muted font-medium mt-0.5">
+                {autoVoucher.discountType === 'percent'
+                  ? `${autoVoucher.discountValue}% OFF`
+                  : formatRp(autoVoucher.discountValue) + ' OFF'}{' '}
+                &mdash; hemat {formatRp(autoVoucher.finalDiscount)}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleApplyAuto(autoVoucher)}
+            className="px-3.5 py-1.5 rounded-lg bg-sport-purple text-white text-[10px] font-black uppercase tracking-wide hover:bg-sport-purple/90 active:scale-95 shadow-sm transition-all shrink-0 cursor-pointer"
+          >
+            Pakai
+          </button>
+        </div>
+      )}
+
+      {/* ── Input kode voucher manual ── */}
       {status !== 'valid' && (
         <div className="flex gap-2">
           <input
@@ -169,7 +234,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
               if (status === 'invalid') { setStatus('idle'); setErrorMsg('') }
             }}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleApply())}
-            placeholder="Masukkan kode voucher"
+            placeholder={autoVoucher ? "Atau masukkan kode voucher lain" : "Masukkan kode voucher"}
             disabled={status === 'loading'}
             className="flex-1 px-3 py-2 text-xs font-mono font-bold tracking-widest uppercase rounded-lg border border-card-border bg-white text-foreground placeholder:text-brand-muted/60 focus:outline-none focus:border-sport-purple/60 disabled:opacity-50 transition-colors"
           />
@@ -177,7 +242,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
             type="button"
             onClick={handleApply}
             disabled={!code.trim() || status === 'loading'}
-            className="px-4 py-2 rounded-lg bg-sport-purple text-white text-[10px] font-black uppercase tracking-wide hover:bg-sport-purple/80 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 shrink-0"
+            className="px-4 py-2 rounded-lg bg-sport-purple text-white text-[10px] font-black uppercase tracking-wide hover:bg-sport-purple/80 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
             {status === 'loading' ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

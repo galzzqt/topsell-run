@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { findVoucherByCode, findBestAutoVoucher } from '@/lib/db'
 import type { VoucherPackageKey, VoucherValidation } from '@/lib/types/voucher'
+import { getWibNowString } from '@/lib/utils/format'
 
 function calcDiscount(
   discountType: 'percent' | 'flat',
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const now = new Date().toISOString().slice(0, 16) // YYYY-MM-DDTHH:mm
+  const now = getWibNowString() // YYYY-MM-DDTHH:mm dalam WIB (Asia/Jakarta UTC+7)
 
   try {
     // Auto-apply mode (tidak ada kode / kode = 'AUTO')

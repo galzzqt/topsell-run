@@ -153,7 +153,7 @@ export type AdminParticipant = {
   emergency_contact_phone: string | null
   participant_code: string | null
   qr_code_data: string | null
-  payment_status: 'pending' | 'paid' | 'failed' | 'expired'
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   checked_in: boolean
   checked_in_at: string | null
   created_at: string
@@ -2200,7 +2200,9 @@ export function AdminDashboardClient({
                                     <td className="px-4 py-3">
                                       <Badge
                                         variant={
-                                          participant.payment_status === 'paid'
+                                          participant.payment_status === 'testing'
+                                            ? 'warning'
+                                            : participant.payment_status === 'paid'
                                             ? 'success'
                                             : participant.payment_status === 'failed'
                                             ? 'danger'
@@ -2209,7 +2211,9 @@ export function AdminDashboardClient({
                                             : 'warning'
                                         }
                                       >
-                                        {participant.payment_status === 'paid'
+                                        {participant.payment_status === 'testing'
+                                          ? 'TESTING'
+                                          : participant.payment_status === 'paid'
                                           ? 'Paid'
                                           : participant.payment_status === 'failed'
                                           ? 'Failed'

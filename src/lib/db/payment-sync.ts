@@ -76,6 +76,20 @@ export async function markPaymentExpired(paymentId: string) {
   return findPaymentById(paymentId)
 }
 
+async function testingRegistrationParticipants(registrationId: string) {
+  await updateRegistration(registrationId, { status: 'testing' })
+  await updateParticipants({ registration_id: registrationId }, { payment_status: 'testing' })
+}
+
+export async function markPaymentTesting(paymentId: string) {
+  const payment = await findPaymentById(paymentId)
+  if (!payment) return null
+
+  await updatePayment(paymentId, { status: 'testing' })
+  await testingRegistrationParticipants(payment.registration_id)
+  return findPaymentById(paymentId)
+}
+
 export async function markPaymentsPaidBySessionId(sessionId: string, values: Partial<Payment>) {
   const { updatePaymentsBySessionId } = await import('./payments')
   const payments = await updatePaymentsBySessionId(sessionId, {
