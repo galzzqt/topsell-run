@@ -214,6 +214,12 @@ export async function createIndividualPayment() {
   const participantIds = participants.map((p) => p.id)
   const unitPrice = await resolvePackagePrice('individual', individual?.category)
   const totalAmount = participants.length * unitPrice
+
+  // Terapkan voucher yang sudah tersimpan di profil individual (disimpan saat signup)
+  const voucherDiscount = individual?.voucher_discount ?? 0
+  const voucherCode = individual?.voucher_code ?? null
+  const finalAmount = Math.max(0, totalAmount - voucherDiscount)
+
   const paymentRef = toXenditReference(generateRandomReference('IND'))
 
   let registration
@@ -221,7 +227,9 @@ export async function createIndividualPayment() {
     registration = await createIndividualRegistration({
       individual_id: session.id,
       total_participants: participants.length,
-      total_amount: totalAmount,
+      total_amount: finalAmount,
+      voucher_code: voucherCode,
+      voucher_discount: voucherDiscount,
       status: 'pending',
     })
   } catch (error) {
@@ -239,7 +247,7 @@ export async function createIndividualPayment() {
   try {
     payment = await dbCreateIndividualPayment({
       registration_id: registration.id,
-      amount: totalAmount,
+      amount: finalAmount,
       payment_reference: paymentRef,
       status: 'pending',
       period_key: period?.key ?? null,
@@ -267,7 +275,7 @@ export async function createIndividualPayment() {
           reference_id: paymentRef,
           session_type: 'PAY',
           currency: 'IDR',
-          amount: totalAmount,
+          amount: finalAmount,
           country: 'ID',
           mode: 'PAYMENT_LINK',
           capture_method: 'AUTOMATIC',
@@ -285,7 +293,7 @@ export async function createIndividualPayment() {
             category: 'EVENT_TICKET',
             name: `TOPSELL RUN ${individual?.category || ''} - ${p.full_name.substring(0, 40)}`.trim(),
             quantity: 1,
-            net_unit_amount: unitPrice,
+            net_unit_amount: participants.length > 0 ? Math.round(finalAmount / participants.length) : unitPrice,
             currency: 'IDR',
           })),
           ...getIndividualReturnUrls(paymentRef),
@@ -327,8 +335,8 @@ export async function createIndividualPayment() {
       level: 'info',
       source: 'payment',
       event: 'individual_payment_created',
-      message: `Invoice checkout pendaftaran individu dibuat: ${session.name} (Ref: ${paymentRef}, Total: IDR ${totalAmount.toLocaleString('id-ID')}).`,
-      data: { individualId: session.id, paymentId: payment.id, reference: paymentRef, amount: totalAmount, isDemoMode },
+      message: `Invoice checkout pendaftaran individu dibuat: ${session.name} (Ref: ${paymentRef}, Total: IDR ${finalAmount.toLocaleString('id-ID')}${voucherCode ? `, Voucher: ${voucherCode}, Diskon: ${voucherDiscount.toLocaleString('id-ID')}` : ''}).`,
+      data: { individualId: session.id, paymentId: payment.id, reference: paymentRef, amount: finalAmount, voucherCode, voucherDiscount, isDemoMode },
     })
   } catch (logError) {
     console.error('Failed to log individual payment creation:', logError)
@@ -343,7 +351,7 @@ export async function createIndividualPayment() {
     checkoutUrl,
     xenditSessionId,
     isDemoMode,
-    amount: totalAmount,
+    amount: finalAmount,
     reference: paymentRef,
     participantCount: participants.length,
   }
