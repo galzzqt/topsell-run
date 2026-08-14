@@ -26,16 +26,16 @@ import { registerSoloSchema, loginSchema, RegisterSoloFormValues, LoginFormValue
 import { sendIndividualRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { resolvePackagePrice, isPackageOpen, checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
-import { generateRandomReference } from '@/lib/utils/format'
+import { generateRandomReference, getWibNowString } from '@/lib/utils/format'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
-import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
+import { rateLimit, rateLimitByIp, clearRateLimit } from '@/lib/security/rate-limit'
 
 function toXenditReference(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
 }
 
 export async function signUpIndividual(values: RegisterSoloFormValues, voucherCode?: string) {
-  const limit = rateLimit('individual-signup', 5, 10 * 60 * 1000)
+  const limit = await rateLimitByIp('individual-signup', 20, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
   }
@@ -79,22 +79,12 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
 
   let voucherDiscount = 0
   let voucherId = null
-  let finalVoucherCode = voucherCode || null
+  let finalVoucherCode: string | null = null
 
-  const now = new Date().toISOString().slice(0, 16)
-  if (finalVoucherCode) {
-    const voucher = await findVoucherByCode(finalVoucherCode, 'individual', values.category, now)
-    if (voucher) {
-      voucherId = voucher.id
-      if (voucher.discountType === 'percent') {
-        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
-      } else {
-        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
-      }
-    } else {
-      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
-    }
-  } else {
+  const now = getWibNowString()
+  const isAuto = !voucherCode || voucherCode.trim().toUpperCase() === 'AUTO'
+
+  if (isAuto) {
     // Try to auto-apply
     const autoVoucher = await findBestAutoVoucher('individual', values.category, now)
     if (autoVoucher) {
@@ -105,6 +95,20 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
       } else {
         voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
       }
+    }
+  } else {
+    // Manual voucher code entered
+    const voucher = await findVoucherByCode(voucherCode.trim(), 'individual', values.category, now)
+    if (voucher) {
+      voucherId = voucher.id
+      finalVoucherCode = voucher.code
+      if (voucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
+      }
+    } else {
+      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
     }
   }
 
@@ -262,7 +266,7 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
 }
 
 export async function signInIndividual(values: LoginFormValues) {
-  const limit = rateLimit('individual-login', 10, 5 * 60 * 1000)
+  const limit = await rateLimitByIp('individual-login', 20, 5 * 60 * 1000, values.phone)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
   }

@@ -109,7 +109,7 @@ export async function reRegisterIndividualAction(input: {
   let voucherCodeUsed: string | null = null
   let voucherId: string | null = null
 
-  if (input.voucherCode && input.voucherCode.trim()) {
+  if (input.voucherCode && input.voucherCode.trim() && input.voucherCode.trim().toUpperCase() !== 'AUTO') {
     const code = input.voucherCode.trim().toUpperCase()
     const v = await findVoucherByCode(code, 'individual', category, now)
     if (!v) {
@@ -251,7 +251,7 @@ export async function reRegisterFamilyAction(input: {
   let voucherCodeUsed: string | null = null
   let voucherId: string | null = null
 
-  if (input.voucherCode && input.voucherCode.trim()) {
+  if (input.voucherCode && input.voucherCode.trim() && input.voucherCode.trim().toUpperCase() !== 'AUTO') {
     const code = input.voucherCode.trim().toUpperCase()
     const v = await findVoucherByCode(code, 'family', category, now)
     if (!v) {
@@ -392,7 +392,7 @@ export async function reRegisterCommunityAction(input: {
   let voucherCodeUsed: string | null = null
   let voucherId: string | null = null
 
-  if (input.voucherCode && input.voucherCode.trim()) {
+  if (input.voucherCode && input.voucherCode.trim() && input.voucherCode.trim().toUpperCase() !== 'AUTO') {
     const code = input.voucherCode.trim().toUpperCase()
     const v = await findVoucherByCode(code, 'community', category, now)
     if (!v) {

@@ -42,7 +42,7 @@ import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts,
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
 import { queryAdminLogs } from '@/lib/axiom/logs'
 import { readEditableEnvSnapshot, updateEditableEnvValues, writeAdminSettings } from '@/lib/admin/settings'
-import { clearRateLimit, rateLimit } from '@/lib/security/rate-limit'
+import { clearRateLimit, rateLimit, rateLimitByIp, getClientIp } from '@/lib/security/rate-limit'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { revalidatePath } from 'next/cache'
 import type { AdminSettings } from '@/lib/admin/settings-schema'
@@ -57,7 +57,7 @@ function parseParticipantId(scanValue: string) {
 }
 
 export async function loginAdmin(username: string, password: string) {
-  const limit = rateLimit('admin-login', 10, 5 * 60 * 1000)
+  const limit = await rateLimitByIp('admin-login', 20, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
   }
@@ -67,7 +67,8 @@ export async function loginAdmin(username: string, password: string) {
     return { error: 'Username atau password admin tidak valid.' }
   }
 
-  clearRateLimit('admin-login')
+  const ip = await getClientIp()
+  clearRateLimit(`admin-login:${ip}`)
   await createAdminSession(session)
 
   try {

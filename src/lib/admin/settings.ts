@@ -26,6 +26,7 @@ import {
   type WebhookPackageConfig,
   type WebhookSettings,
 } from './settings-schema'
+import { getWibNowString } from '@/lib/utils/format'
 
 const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
 const ENV_PATH = path.join(process.cwd(), '.env.local')
@@ -459,8 +460,8 @@ export async function isPackageOpen(pkg: PackageKey): Promise<{ open: boolean; r
   const config = packages[pkg]
   if (!config?.enabled) return { open: false, reason: 'Pendaftaran paket ini sedang ditutup.' }
 
-  // Gunakan ISO datetime (YYYY-MM-DDTHH:mm) agar perbandingan string mencakup jam.
-  const now = new Date().toISOString().slice(0, 16)
+  // Gunakan ISO datetime WIB (YYYY-MM-DDTHH:mm) agar perbandingan string mencakup jam.
+  const now = getWibNowString()
   const activePeriod = config.periods.find((period) => {
     if (period.registrationStart && now < period.registrationStart) return false
     if (period.registrationEnd && now > period.registrationEnd) return false
@@ -476,8 +477,8 @@ export async function checkPaymentWindow(pkg: PackageKey, category: string | nul
   const period = await resolvePeriodForCategory(pkg, category)
   if (!period) return { ok: true }
 
-  // Gunakan ISO datetime (YYYY-MM-DDTHH:mm) agar perbandingan string mencakup jam.
-  const now = new Date().toISOString().slice(0, 16)
+  // Gunakan ISO datetime WIB (YYYY-MM-DDTHH:mm) agar perbandingan string mencakup jam.
+  const now = getWibNowString()
   if (period.paymentStart && now < period.paymentStart) {
     return { ok: false, reason: `Pembayaran untuk ${period.label} dibuka mulai ${period.paymentStart.replace('T', ' pukul ')}.` }
   }

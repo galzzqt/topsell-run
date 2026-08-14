@@ -1,7 +1,7 @@
 'use server'
 
 import { getCommunitySession } from '@/lib/auth/community'
-import { generateRandomReference } from '@/lib/utils/format'
+import { generateRandomReference, getWibNowString } from '@/lib/utils/format'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
 import { sendRacepackEmailsForRegistration } from '@/lib/email/racepack'
 import { sendCommunityReceiptEmail } from '@/lib/email/receipt'
@@ -227,18 +227,10 @@ export async function createCommunityPayment() {
   let voucherId = null
   let finalVoucherCode = community?.voucher_code || null
 
-  const now = new Date().toISOString().slice(0, 16)
-  if (finalVoucherCode) {
-    const voucher = await findVoucherByCode(finalVoucherCode, 'community', community?.category || '', now)
-    if (voucher) {
-      voucherId = voucher.id
-      if (voucher.discountType === 'percent') {
-        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
-      } else {
-        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
-      }
-    }
-  } else {
+  const now = getWibNowString()
+  const isAuto = !finalVoucherCode || finalVoucherCode.trim().toUpperCase() === 'AUTO'
+
+  if (isAuto) {
     // Try to auto-apply
     const autoVoucher = await findBestAutoVoucher('community', community?.category || '', now)
     if (autoVoucher) {
@@ -248,6 +240,16 @@ export async function createCommunityPayment() {
         voucherDiscount = Math.round((totalAmount * autoVoucher.discountValue) / 100)
       } else {
         voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
+      }
+    }
+  } else {
+    const voucher = await findVoucherByCode(finalVoucherCode, 'community', community?.category || '', now)
+    if (voucher) {
+      voucherId = voucher.id
+      if (voucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
       }
     }
   }

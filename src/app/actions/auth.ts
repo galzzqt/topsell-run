@@ -24,12 +24,13 @@ import {
 import { registerSchema, loginSchema, RegisterFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
-import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
+import { rateLimit, rateLimitByIp, clearRateLimit } from '@/lib/security/rate-limit'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory, resolvePackagePrice } from '@/lib/admin/settings'
+import { getWibNowString } from '@/lib/utils/format'
 
 export async function signUpCommunity(values: RegisterFormValues, voucherCode?: string) {
-  const limit = rateLimit('community-signup', 5, 10 * 60 * 1000)
+  const limit = await rateLimitByIp('community-signup', 20, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
   }
@@ -77,21 +78,12 @@ export async function signUpCommunity(values: RegisterFormValues, voucherCode?: 
   const totalAmount = values.participants.length * basePrice
 
   let voucherDiscount = 0
-  let finalVoucherCode = voucherCode || null
+  let finalVoucherCode: string | null = null
 
-  const now = new Date().toISOString().slice(0, 16)
-  if (finalVoucherCode) {
-    const voucher = await findVoucherByCode(finalVoucherCode, 'community', values.category, now)
-    if (voucher) {
-      if (voucher.discountType === 'percent') {
-        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
-      } else {
-        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
-      }
-    } else {
-      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
-    }
-  } else {
+  const now = getWibNowString()
+  const isAuto = !voucherCode || voucherCode.trim().toUpperCase() === 'AUTO'
+
+  if (isAuto) {
     // Try to auto-apply
     const autoVoucher = await findBestAutoVoucher('community', values.category, now)
     if (autoVoucher) {
@@ -101,6 +93,18 @@ export async function signUpCommunity(values: RegisterFormValues, voucherCode?: 
       } else {
         voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
       }
+    }
+  } else {
+    const voucher = await findVoucherByCode(voucherCode.trim(), 'community', values.category, now)
+    if (voucher) {
+      finalVoucherCode = voucher.code
+      if (voucher.discountType === 'percent') {
+        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
+      } else {
+        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
+      }
+    } else {
+      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
     }
   }
 
@@ -231,7 +235,7 @@ export async function signUpCommunity(values: RegisterFormValues, voucherCode?: 
 }
 
 export async function signInCommunity(values: LoginFormValues) {
-  const limit = rateLimit('community-login', 10, 5 * 60 * 1000)
+  const limit = await rateLimitByIp('community-login', 20, 5 * 60 * 1000, values.phone)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
   }

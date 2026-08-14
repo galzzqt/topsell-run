@@ -17,12 +17,12 @@ import {
 import { registerPacerSchema, loginSchema, RegisterPacerFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
-import { rateLimit, clearRateLimit } from '@/lib/security/rate-limit'
+import { rateLimit, rateLimitByIp, clearRateLimit } from '@/lib/security/rate-limit'
 import { sendPacerRegistrationWebhook } from '@/lib/ghl/webhook'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 
 export async function signUpPacer(values: RegisterPacerFormValues) {
-  const limit = rateLimit('pacer-signup', 5, 10 * 60 * 1000)
+  const limit = await rateLimitByIp('pacer-signup', 20, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
   }
@@ -187,7 +187,7 @@ export async function signUpPacer(values: RegisterPacerFormValues) {
 }
 
 export async function signInPacer(values: LoginFormValues) {
-  const limit = rateLimit('pacer-login', 10, 5 * 60 * 1000)
+  const limit = await rateLimitByIp('pacer-login', 20, 5 * 60 * 1000, values.phone)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit lagi.' }
   }
