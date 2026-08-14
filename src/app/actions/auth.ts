@@ -29,7 +29,7 @@ import { generateVerificationToken, getVerificationTokenExpiry, sendVerification
 import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory, resolvePackagePrice } from '@/lib/admin/settings'
 import { getWibNowString } from '@/lib/utils/format'
 
-export async function signUpCommunity(values: RegisterFormValues, voucherCode?: string) {
+export async function signUpCommunity(values: RegisterFormValues, voucherCode?: string | null) {
   const limit = await rateLimitByIp('community-signup', 20, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
@@ -81,7 +81,8 @@ export async function signUpCommunity(values: RegisterFormValues, voucherCode?: 
   let finalVoucherCode: string | null = null
 
   const now = getWibNowString()
-  const isAuto = !voucherCode || voucherCode.trim().toUpperCase() === 'AUTO'
+  const cleanVoucherCode = typeof voucherCode === 'string' ? voucherCode.trim() : ''
+  const isAuto = !cleanVoucherCode || cleanVoucherCode.toUpperCase() === 'AUTO'
 
   if (isAuto) {
     // Try to auto-apply
@@ -95,7 +96,7 @@ export async function signUpCommunity(values: RegisterFormValues, voucherCode?: 
       }
     }
   } else {
-    const voucher = await findVoucherByCode(voucherCode.trim(), 'community', values.category, now)
+    const voucher = await findVoucherByCode(cleanVoucherCode, 'community', values.category, now)
     if (voucher) {
       finalVoucherCode = voucher.code
       if (voucher.discountType === 'percent') {

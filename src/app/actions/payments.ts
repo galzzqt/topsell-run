@@ -225,10 +225,11 @@ export async function createCommunityPayment() {
 
   let voucherDiscount = 0
   let voucherId = null
-  let finalVoucherCode = community?.voucher_code || null
+  let finalVoucherCode: string | null = null
 
   const now = getWibNowString()
-  const isAuto = !finalVoucherCode || finalVoucherCode.trim().toUpperCase() === 'AUTO'
+  const rawCode = typeof community?.voucher_code === 'string' ? community.voucher_code.trim() : ''
+  const isAuto = !rawCode || rawCode.toUpperCase() === 'AUTO'
 
   if (isAuto) {
     // Try to auto-apply
@@ -243,9 +244,10 @@ export async function createCommunityPayment() {
       }
     }
   } else {
-    const voucher = await findVoucherByCode(finalVoucherCode, 'community', community?.category || '', now)
+    const voucher = await findVoucherByCode(rawCode, 'community', community?.category || '', now)
     if (voucher) {
       voucherId = voucher.id
+      finalVoucherCode = voucher.code
       if (voucher.discountType === 'percent') {
         voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
       } else {

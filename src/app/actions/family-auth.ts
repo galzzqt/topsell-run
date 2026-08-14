@@ -96,7 +96,8 @@ export async function signUpFamily(
   let finalVoucherCode: string | null = null
 
   const now = getWibNowString()
-  const isAuto = !voucherCode || voucherCode.trim().toUpperCase() === 'AUTO'
+  const cleanVoucherCode = typeof voucherCode === 'string' ? voucherCode.trim() : ''
+  const isAuto = !cleanVoucherCode || cleanVoucherCode.toUpperCase() === 'AUTO'
 
   if (isAuto) {
     // Try to auto-apply
@@ -111,7 +112,7 @@ export async function signUpFamily(
       }
     }
   } else {
-    const voucher = await findVoucherByCode(voucherCode.trim(), 'family', values.category, now)
+    const voucher = await findVoucherByCode(cleanVoucherCode, 'family', values.category, now)
     if (voucher) {
       voucherId = voucher.id
       finalVoucherCode = voucher.code
@@ -247,12 +248,12 @@ export async function signUpFamily(
     try {
       const verificationToken = generateVerificationToken()
       const tokenExpiry = getVerificationTokenExpiry()
-      
+
       await setFamilyVerificationToken(family.id, verificationToken, tokenExpiry)
-      
+
       const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
       const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`
-      
+
       await sendVerificationEmail({
         email: values.email,
         name: values.leader_name || values.name,
@@ -329,7 +330,7 @@ export async function signInFamily(values: LoginFormValues) {
 
   // Check if email is verified
   if (!family.email_verified) {
-    return { 
+    return {
       error: 'Email belum diverifikasi. Silakan cek email Anda untuk link aktivasi atau minta kirim ulang.',
       needsVerification: true,
       familyId: family.id,

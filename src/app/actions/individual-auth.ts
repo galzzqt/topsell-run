@@ -82,7 +82,8 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
   let finalVoucherCode: string | null = null
 
   const now = getWibNowString()
-  const isAuto = !voucherCode || voucherCode.trim().toUpperCase() === 'AUTO'
+  const cleanVoucherCode = typeof voucherCode === 'string' ? voucherCode.trim() : ''
+  const isAuto = !cleanVoucherCode || cleanVoucherCode.toUpperCase() === 'AUTO'
 
   if (isAuto) {
     // Try to auto-apply
@@ -98,7 +99,7 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
     }
   } else {
     // Manual voucher code entered
-    const voucher = await findVoucherByCode(voucherCode.trim(), 'individual', values.category, now)
+    const voucher = await findVoucherByCode(cleanVoucherCode, 'individual', values.category, now)
     if (voucher) {
       voucherId = voucher.id
       finalVoucherCode = voucher.code
