@@ -6,12 +6,15 @@ import { useRouter } from 'next/navigation'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
   Activity,
+  ArrowUpDown,
   BarChart3,
   Calendar,
+  CalendarDays,
   Camera,
   CheckCircle,
   ChevronDown,
   ChevronRight,
+  Clock,
   CreditCard,
   Download,
   LogOut,
@@ -20,6 +23,7 @@ import {
   Plus,
   QrCode,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings,
   TicketCheck,
@@ -130,6 +134,7 @@ type CommunityInfo = {
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
+  created_at?: string
 }
 
 type RegistrationInfo = {
@@ -396,6 +401,45 @@ export function AdminDashboardClient({
   const [query, setQuery] = useState('')
   const [packageType, setPackageType] = useState<'community' | 'family' | 'individual'>('community')
   const [combineFiles, setCombineFiles] = useState(false)
+  const [participantStartDate, setParticipantStartDate] = useState('')
+  const [participantEndDate, setParticipantEndDate] = useState('')
+  const [participantDatePreset, setParticipantDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+  const [participantSort, setParticipantSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
+
+  const handleDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
+    setParticipantDatePreset(preset)
+    const now = new Date()
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'all') {
+      setParticipantStartDate('')
+      setParticipantEndDate('')
+    } else if (preset === 'today') {
+      const todayStr = formatDateForInput(now)
+      setParticipantStartDate(todayStr)
+      setParticipantEndDate(todayStr)
+    } else if (preset === '7d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 6)
+      setParticipantStartDate(formatDateForInput(start))
+      setParticipantEndDate(formatDateForInput(now))
+    } else if (preset === '30d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 29)
+      setParticipantStartDate(formatDateForInput(start))
+      setParticipantEndDate(formatDateForInput(now))
+    } else if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setParticipantStartDate(formatDateForInput(start))
+      setParticipantEndDate(formatDateForInput(end))
+    }
+  }
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     const isSuper = currentAdmin.role === 'superadmin'
     const allowed = currentAdmin.allowed_tabs || []
@@ -612,21 +656,37 @@ export function AdminDashboardClient({
 
   const filteredParticipants = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    const targetParticipants = activeParticipants
-    if (!keyword) return targetParticipants
-    return targetParticipants.filter((participant) => {
-      const community = getParticipantCommunity(participant)
-      return [
-        participant.full_name,
-        participant.bib_name,
-        participant.email,
-        participant.phone,
-        participant.participant_code || '',
-        community?.name || '',
-        community?.community_code || '',
-      ].some((value) => value.toLowerCase().includes(keyword))
-    })
-  }, [activeParticipants, query])
+    let list = activeParticipants
+
+    if (keyword) {
+      list = list.filter((participant) => {
+        const community = getParticipantCommunity(participant)
+        return [
+          participant.full_name,
+          participant.bib_name,
+          participant.email,
+          participant.phone,
+          participant.participant_code || '',
+          community?.name || '',
+          community?.community_code || '',
+        ].some((value) => value.toLowerCase().includes(keyword))
+      })
+    }
+
+    if (participantStartDate || participantEndDate) {
+      const start = participantStartDate ? new Date(`${participantStartDate}T00:00:00`).getTime() : -Infinity
+      const end = participantEndDate ? new Date(`${participantEndDate}T23:59:59.999`).getTime() : Infinity
+
+      list = list.filter((participant) => {
+        if (!participant.created_at) return false
+        const pTime = new Date(participant.created_at).getTime()
+        if (Number.isNaN(pTime)) return false
+        return pTime >= start && pTime <= end
+      })
+    }
+
+    return list
+  }, [activeParticipants, query, participantStartDate, participantEndDate])
 
   const filteredPayments = useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -652,24 +712,99 @@ export function AdminDashboardClient({
   }, [activePayments, query])
 
   const groupedParticipants = useMemo(() => {
-    const groups = new Map<string, { key: string; name: string; code: string; participants: AdminParticipant[] }>()
+    const groups = new Map<
+      string,
+      {
+        key: string
+        name: string
+        code: string
+        earliestCreatedAt: number
+        latestCreatedAt: number
+        participants: AdminParticipant[]
+      }
+    >()
 
     for (const participant of filteredParticipants) {
       const community = getParticipantCommunity(participant)
       const code = community?.community_code || 'TANPA-KODE'
-      const name = community?.name || (packageType === 'community' ? 'Tanpa Komunitas' : packageType === 'individual' ? 'Tanpa Nama' : 'Tanpa Grup')
+      const name =
+        community?.name ||
+        (packageType === 'community'
+          ? 'Tanpa Komunitas'
+          : packageType === 'individual'
+          ? 'Tanpa Nama'
+          : 'Tanpa Grup')
       const key = `${code}:${name}`
+      const pTime = participant.created_at ? new Date(participant.created_at).getTime() : 0
       const current = groups.get(key)
 
       if (current) {
         current.participants.push(participant)
+        if (pTime && (current.earliestCreatedAt === 0 || pTime < current.earliestCreatedAt)) {
+          current.earliestCreatedAt = pTime
+        }
+        if (pTime && pTime > current.latestCreatedAt) {
+          current.latestCreatedAt = pTime
+        }
       } else {
-        groups.set(key, { key, name, code, participants: [participant] })
+        const commTime = community?.created_at ? new Date(community.created_at).getTime() : pTime
+        groups.set(key, {
+          key,
+          name,
+          code,
+          earliestCreatedAt: pTime || commTime || 0,
+          latestCreatedAt: pTime || commTime || 0,
+          participants: [participant],
+        })
       }
     }
 
-    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [filteredParticipants, packageType])
+    const groupArray = Array.from(groups.values())
+
+    // Urutkan peserta di dalam tiap grup
+    groupArray.forEach((group) => {
+      group.participants.sort((a, b) => {
+        if (participantSort === 'name_asc') {
+          return a.full_name.localeCompare(b.full_name, 'id', { sensitivity: 'base' })
+        }
+        if (participantSort === 'name_desc') {
+          return b.full_name.localeCompare(a.full_name, 'id', { sensitivity: 'base' })
+        }
+        if (participantSort === 'oldest') {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+          return timeA - timeB
+        }
+        // default: newest
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return timeB - timeA
+      })
+    })
+
+    // Urutkan grup itu sendiri
+    groupArray.sort((a, b) => {
+      if (participantSort === 'name_asc') {
+        return a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })
+      }
+      if (participantSort === 'name_desc') {
+        return b.name.localeCompare(a.name, 'id', { sensitivity: 'base' })
+      }
+      if (participantSort === 'oldest') {
+        if (a.earliestCreatedAt !== b.earliestCreatedAt) {
+          return a.earliestCreatedAt - b.earliestCreatedAt
+        }
+        return a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })
+      }
+      // default: newest
+      if (a.latestCreatedAt !== b.latestCreatedAt) {
+        return b.latestCreatedAt - a.latestCreatedAt
+      }
+      return a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })
+    })
+
+    return groupArray
+  }, [filteredParticipants, packageType, participantSort])
 
   const dailyParticipants = useMemo<SummaryDailyParticipant[]>(() => {
     const DAYS_TO_SHOW = 14
@@ -2092,6 +2227,97 @@ export function AdminDashboardClient({
                   Individu
                 </button>
               </div>
+
+              {/* Filter Tanggal & Pengurutan Toolbar */}
+              <div className="p-3.5 bg-brand-dark/40 border-b border-card-border flex flex-col xl:flex-row xl:items-center justify-between gap-3 text-xs">
+                {/* Date Filter & Presets */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                    <CalendarDays className="w-3.5 h-3.5 text-sport-orange" />
+                    <span>Tgl Daftar:</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+                    {(
+                      [
+                        { id: 'all', label: 'Semua' },
+                        { id: 'today', label: 'Hari Ini' },
+                        { id: '7d', label: '7 Hari' },
+                        { id: '30d', label: '30 Hari' },
+                        { id: 'this_month', label: 'Bulan Ini' },
+                      ] as const
+                    ).map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleDatePresetChange(preset.id)}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                          participantDatePreset === preset.id
+                            ? 'bg-sport-orange text-white shadow-xs'
+                            : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom date range inputs */}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={participantStartDate}
+                      onChange={(e) => {
+                        setParticipantStartDate(e.target.value)
+                        setParticipantDatePreset('custom')
+                      }}
+                      className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                      title="Dari Tanggal Pendaftaran"
+                    />
+                    <span className="text-[10px] text-brand-muted font-bold">-</span>
+                    <input
+                      type="date"
+                      value={participantEndDate}
+                      onChange={(e) => {
+                        setParticipantEndDate(e.target.value)
+                        setParticipantDatePreset('custom')
+                      }}
+                      className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                      title="Sampai Tanggal Pendaftaran"
+                    />
+
+                    {(participantStartDate || participantEndDate) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDatePresetChange('all')}
+                        className="p-1 text-brand-muted hover:text-sport-red hover:bg-sport-red/10 rounded transition-colors cursor-pointer"
+                        title="Reset Filter Tanggal"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sorting Controls */}
+                <div className="flex items-center gap-2 self-start xl:self-auto">
+                  <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-sport-orange" />
+                    <span>Urutkan:</span>
+                  </div>
+                  <select
+                    value={participantSort}
+                    onChange={(e) => setParticipantSort(e.target.value as 'newest' | 'oldest' | 'name_asc' | 'name_desc')}
+                    className="px-2.5 py-1.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                  >
+                    <option value="newest">⚡ Pendaftaran Terbaru</option>
+                    <option value="oldest">⏳ Pendaftaran Terlama</option>
+                    <option value="name_asc">🔤 Abjad (A → Z)</option>
+                    <option value="name_desc">🔤 Abjad (Z → A)</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
@@ -2101,13 +2327,32 @@ export function AdminDashboardClient({
                     {groupedParticipants.length} {groupWord} ditemukan
                   </p>
                 </div>
-                <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
+                <div className="flex items-center gap-3">
+                  {(participantStartDate || participantEndDate) && (
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Filter Tanggal Aktif
+                    </span>
+                  )}
+                  <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
+                </div>
               </div>
 
               {groupedParticipants.length === 0 ? (
                 <div className="p-8 text-center">
                   <p className="text-sm font-bold text-foreground">Data peserta tidak ditemukan</p>
-                  <p className="text-xs text-brand-muted mt-1">Coba gunakan kata pencarian lain.</p>
+                  <p className="text-xs text-brand-muted mt-1">Coba gunakan kata pencarian lain atau ubah filter tanggal.</p>
+                  {(participantStartDate || participantEndDate || query) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery('')
+                        handleDatePresetChange('all')
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sport-orange text-white text-[10px] font-bold uppercase cursor-pointer hover:bg-sport-orange/90 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Reset Semua Filter
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y divide-card-border">
@@ -2125,13 +2370,13 @@ export function AdminDashboardClient({
                             <button
                               type="button"
                               onClick={() => toggleCommunity(group.key)}
-                              className="mt-0.5 p-1.5 rounded-lg bg-brand-gray/40 border border-card-border text-brand-muted"
+                              className="mt-0.5 p-1.5 rounded-lg bg-brand-gray/40 border border-card-border text-brand-muted cursor-pointer"
                             >
                               {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                             </button>
                             <div className="min-w-0">
                               <p className="text-sm font-black text-foreground wrap-break-word">{group.name}</p>
-                              <p className="text-[10px] font-bold text-brand-muted flex flex-wrap items-center gap-2">
+                              <div className="text-[10px] font-bold text-brand-muted flex flex-wrap items-center gap-2 mt-0.5">
                                 <span>{group.code}</span>
                                 {editableCommunity && (editableCommunity.provinsi || editableCommunity.kota || editableCommunity.kecamatan) && (
                                   <span className="px-1.5 py-0.5 rounded bg-brand-gray/50 text-[9px] font-bold text-foreground">
@@ -2142,7 +2387,13 @@ export function AdminDashboardClient({
                                     ].filter((v) => v && v !== '-').join(', ') || '-'}
                                   </span>
                                 )}
-                              </p>
+                                {group.latestCreatedAt > 0 && (
+                                  <span className="text-[9px] text-brand-muted flex items-center gap-1 font-medium">
+                                    <Clock className="w-2.5 h-2.5 text-sport-orange/70" />
+                                    Daftar: {formatDateTime(new Date(group.latestCreatedAt).toISOString())}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -2164,7 +2415,7 @@ export function AdminDashboardClient({
                               <button
                                 type="button"
                                 onClick={() => openCommunityEditor(editableCommunity)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground cursor-pointer"
                               >
                                 <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Peserta' : 'Grup'}
                               </button>
@@ -2172,7 +2423,7 @@ export function AdminDashboardClient({
                             <button
                               type="button"
                               onClick={() => toggleCommunity(group.key)}
-                              className="text-[10px] font-black uppercase tracking-wider text-sport-orange"
+                              className="text-[10px] font-black uppercase tracking-wider text-sport-orange cursor-pointer"
                             >
                               {isOpen ? 'Tutup Detail' : 'Lihat Detail'}
                             </button>
@@ -2196,6 +2447,12 @@ export function AdminDashboardClient({
                                       <p className="text-sm font-bold text-foreground">{participant.full_name}</p>
                                       <p className="text-[10px] text-sport-orange font-bold">{participant.participant_code || 'Belum ada kode'}</p>
                                       <p className="text-[10px] text-brand-muted">{participant.bib_name}</p>
+                                      {participant.created_at && (
+                                        <p className="text-[9px] text-brand-muted/80 flex items-center gap-1 mt-0.5">
+                                          <Clock className="w-2.5 h-2.5 text-sport-orange/70" />
+                                          {formatDateTime(participant.created_at)}
+                                        </p>
+                                      )}
                                     </td>
                                     <td className="px-4 py-3">
                                       <Badge
@@ -2237,7 +2494,7 @@ export function AdminDashboardClient({
                                       <button
                                         type="button"
                                         onClick={() => openParticipantEditor(participant)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground cursor-pointer"
                                       >
                                         <Pencil className="w-3 h-3" />Edit
                                       </button>
