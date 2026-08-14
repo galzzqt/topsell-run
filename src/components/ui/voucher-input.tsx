@@ -29,75 +29,131 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
   const [autoVoucher, setAutoVoucher] = useState<AppliedVoucher | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const autoChecked = useRef(false)
   const isDismissed = useRef(false)
   const prevCategory = useRef(category)
   const prevPkg = useRef(packageKey)
+  const onApplyRef = useRef(onApply)
+  const onRemoveRef = useRef(onRemove)
+  const appliedRef = useRef<AppliedVoucher | null>(null)
+
+  onApplyRef.current = onApply
+  onRemoveRef.current = onRemove
+  appliedRef.current = applied
 
   // ── Auto-apply & Re-validation: cek saat komponen mount & saat category/basePrice/packageKey berubah ──
   useEffect(() => {
-    if (!category || !basePrice) return
-
-    // Jika kategori atau paket berubah, reset status dismissal agar auto-apply bisa dicek untuk opsi baru
-    if (prevCategory.current !== category || prevPkg.current !== packageKey) {
-      isDismissed.current = false
-      autoChecked.current = false
+    if (!category || !basePrice || basePrice <= 0) {
       setAutoVoucher(null)
+      setApplied(null)
+      setStatus('idle')
+      return
+    }
+
+    let isMounted = true
+    const isCategoryOrPkgChanged = prevCategory.current !== category || prevPkg.current !== packageKey
+
+    if (isCategoryOrPkgChanged) {
+      isDismissed.current = false
       prevCategory.current = category
       prevPkg.current = packageKey
     }
 
-    const revalidateCurrentVoucher = async (currApplied: AppliedVoucher) => {
-      const codeToValidate = currApplied.code === 'AUTO' ? 'AUTO' : currApplied.code
+    const checkAndSyncVouchers = async () => {
+      // 1. Selalu cek voucher auto untuk paket, kategori, dan basePrice saat ini
+      let fetchedAutoVoucher: AppliedVoucher | null = null
       try {
-        const url = `/api/voucher/validate?code=${encodeURIComponent(codeToValidate)}&pkg=${encodeURIComponent(packageKey)}&category=${encodeURIComponent(category)}&basePrice=${basePrice}`
-        const res = await fetch(url)
-        const data: VoucherValidation = await res.json()
-        if (data.valid) {
-          applyResult(codeToValidate, data)
-        } else {
-          handleRemove(false)
+        const autoUrl = `/api/voucher/validate?code=AUTO&pkg=${encodeURIComponent(packageKey)}&category=${encodeURIComponent(category)}&basePrice=${basePrice}`
+        const autoRes = await fetch(autoUrl)
+        const autoData: VoucherValidation = await autoRes.json()
+        if (autoData.valid && autoData.finalDiscount > 0) {
+          fetchedAutoVoucher = {
+            code: 'AUTO',
+            name: autoData.name || 'Voucher Auto',
+            discountType: autoData.discountType!,
+            discountValue: autoData.discountValue!,
+            finalDiscount: autoData.finalDiscount,
+          }
         }
       } catch {
-        handleRemove(false)
+        // Abaikan error fetch auto
       }
-    }
 
-    if (applied) {
-      revalidateCurrentVoucher(applied)
-    } else {
-      autoChecked.current = false
-      checkAutoVoucher()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, basePrice, packageKey])
+      if (!isMounted) return
+      setAutoVoucher(fetchedAutoVoucher)
 
-  async function checkAutoVoucher() {
-    if (autoChecked.current) return
-    autoChecked.current = true
-    try {
-      const url = `/api/voucher/validate?code=AUTO&pkg=${encodeURIComponent(packageKey)}&category=${encodeURIComponent(category)}&basePrice=${basePrice}`
-      const res = await fetch(url)
-      const data: VoucherValidation = await res.json()
-      if (data.valid && data.finalDiscount > 0) {
-        const autoV: AppliedVoucher = {
-          code: 'AUTO',
-          name: data.name || 'Voucher Auto',
-          discountType: data.discountType!,
-          discountValue: data.discountValue!,
-          finalDiscount: data.finalDiscount,
-        }
-        setAutoVoucher(autoV)
-        if (!isDismissed.current) {
-          applyResult('AUTO', data)
+      const currApplied = appliedRef.current
+
+      // 2. Jika ada voucher yang sedang aktif sebelumnya
+      if (currApplied) {
+        if (currApplied.code === 'AUTO') {
+          if (fetchedAutoVoucher) {
+            if (isDismissed.current) {
+              setApplied(null)
+              setStatus('idle')
+              onRemoveRef.current()
+            } else {
+              setApplied(fetchedAutoVoucher)
+              setStatus('valid')
+              onApplyRef.current(fetchedAutoVoucher)
+            }
+          } else {
+            setApplied(null)
+            setStatus('idle')
+            onRemoveRef.current()
+          }
+        } else {
+          // Voucher kode manual yang sedang terpasang
+          try {
+            const manualUrl = `/api/voucher/validate?code=${encodeURIComponent(currApplied.code)}&pkg=${encodeURIComponent(packageKey)}&category=${encodeURIComponent(category)}&basePrice=${basePrice}`
+            const manualRes = await fetch(manualUrl)
+            const manualData: VoucherValidation = await manualRes.json()
+            if (!isMounted) return
+
+            if (manualData.valid) {
+              const manualV: AppliedVoucher = {
+                code: currApplied.code,
+                name: manualData.name || currApplied.code,
+                discountType: manualData.discountType!,
+                discountValue: manualData.discountValue!,
+                finalDiscount: manualData.finalDiscount,
+              }
+              setApplied(manualV)
+              setStatus('valid')
+              onApplyRef.current(manualV)
+            } else {
+              if (fetchedAutoVoucher && !isDismissed.current) {
+                setApplied(fetchedAutoVoucher)
+                setStatus('valid')
+                onApplyRef.current(fetchedAutoVoucher)
+              } else {
+                setApplied(null)
+                setStatus('idle')
+                onRemoveRef.current()
+              }
+            }
+          } catch {
+            if (!isMounted) return
+            setApplied(null)
+            setStatus('idle')
+            onRemoveRef.current()
+          }
         }
       } else {
-        setAutoVoucher(null)
+        // 3. Tidak ada voucher terpasang: pasang auto-voucher jika tersedia dan belum di-dismiss
+        if (fetchedAutoVoucher && !isDismissed.current) {
+          setApplied(fetchedAutoVoucher)
+          setStatus('valid')
+          onApplyRef.current(fetchedAutoVoucher)
+        }
       }
-    } catch {
-      // Diam — auto-apply gagal tidak perlu error ke user
     }
-  }
+
+    checkAndSyncVouchers()
+
+    return () => {
+      isMounted = false
+    }
+  }, [category, basePrice, packageKey])
 
   async function handleApply() {
     const trimmed = code.trim().toUpperCase()
@@ -131,7 +187,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
     setApplied(v)
     setStatus('valid')
     setErrorMsg('')
-    onApply(v)
+    onApplyRef.current(v)
   }
 
   function applyResult(usedCode: string, data: VoucherValidation) {
@@ -144,7 +200,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
     }
     setApplied(v)
     setStatus('valid')
-    onApply(v)
+    onApplyRef.current(v)
   }
 
   function handleRemove(isUserAction = true) {
@@ -155,7 +211,7 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
     setCode('')
     setStatus('idle')
     setErrorMsg('')
-    onRemove()
+    onRemoveRef.current()
   }
 
   const discountLabel =
