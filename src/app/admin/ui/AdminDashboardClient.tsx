@@ -512,6 +512,45 @@ export function AdminDashboardClient({
   const [envForm, setEnvForm] = useState<Record<string, string>>({})
   const [selectedExportCommunities, setSelectedExportCommunities] = useState<Set<string> | null>(null)
   const [exportPaymentFilter, setExportPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+  const [exportStartDate, setExportStartDate] = useState('')
+  const [exportEndDate, setExportEndDate] = useState('')
+  const [exportDatePreset, setExportDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+
+  const handleExportDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
+    setExportDatePreset(preset)
+    setSelectedExportCommunities(null)
+    const now = new Date()
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'all') {
+      setExportStartDate('')
+      setExportEndDate('')
+    } else if (preset === 'today') {
+      const todayStr = formatDateForInput(now)
+      setExportStartDate(todayStr)
+      setExportEndDate(todayStr)
+    } else if (preset === '7d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 6)
+      setExportStartDate(formatDateForInput(start))
+      setExportEndDate(formatDateForInput(now))
+    } else if (preset === '30d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 29)
+      setExportStartDate(formatDateForInput(start))
+      setExportEndDate(formatDateForInput(now))
+    } else if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setExportStartDate(formatDateForInput(start))
+      setExportEndDate(formatDateForInput(end))
+    }
+  }
   const [settingsMessage, setSettingsMessage] = useState('')
   const [adminCreateForm, setAdminCreateForm] = useState<{ name: string; username: string; password: string; role: 'admin' | 'superadmin'; allowed_tabs: string[] }>({
     name: '',
@@ -670,27 +709,29 @@ export function AdminDashboardClient({
     const targetCommunities = activeCommunities
     const isExportParticipants = activeTab === 'export_participants'
     const isExportPayments = activeTab === 'export_payments'
-    if (exportPaymentFilter === 'all' || (!isExportParticipants && !isExportPayments)) return targetCommunities
+    if (!isExportParticipants && !isExportPayments) return targetCommunities
+
+    const hasStatusFilter = exportPaymentFilter !== 'all'
+    const hasDateFilter = Boolean(exportStartDate || exportEndDate)
+
+    if (!hasStatusFilter && !hasDateFilter) return targetCommunities
+
     const matchingCommunityIds = new Set<string>()
     if (isExportParticipants) {
-      const targetParticipants = activeParticipants
-      for (const p of targetParticipants) {
+      const filtered = applyParticipantFilter(activeParticipants)
+      for (const p of filtered) {
         const community = getParticipantCommunity(p)
-        if (!community) continue
-        const matches = exportPaymentFilter === 'paid' ? p.payment_status === 'paid' : p.payment_status !== 'paid'
-        if (matches) matchingCommunityIds.add(community.id)
+        if (community) matchingCommunityIds.add(community.id)
       }
     } else {
-      const targetPayments = activePayments
-      for (const pay of targetPayments) {
+      const filtered = applyPaymentFilter(activePayments)
+      for (const pay of filtered) {
         const community = getPaymentCommunity(pay)
-        if (!community) continue
-        const matches = exportPaymentFilter === 'paid' ? pay.status === 'paid' : pay.status !== 'paid'
-        if (matches) matchingCommunityIds.add(community.id)
+        if (community) matchingCommunityIds.add(community.id)
       }
     }
     return targetCommunities.filter((c) => matchingCommunityIds.has(c.id))
-  }, [activeCommunities, activeParticipants, activePayments, activeTab, exportPaymentFilter])
+  }, [activeCommunities, activeParticipants, activePayments, activeTab, exportPaymentFilter, exportStartDate, exportEndDate])
 
   const resolvedSelection = useMemo(() => {
     return selectedExportCommunities ?? new Set(communitiesForExport.map((c) => c.id))
@@ -1127,15 +1168,40 @@ export function AdminDashboardClient({
   }
 
   const applyParticipantFilter = (rows: AdminParticipant[]) => {
-    if (exportPaymentFilter === 'paid') return rows.filter((p) => p.payment_status === 'paid')
-    if (exportPaymentFilter === 'unpaid') return rows.filter((p) => p.payment_status !== 'paid')
-    return rows
+    let list = rows
+    if (exportPaymentFilter === 'paid') list = list.filter((p) => p.payment_status === 'paid')
+    else if (exportPaymentFilter === 'unpaid') list = list.filter((p) => p.payment_status !== 'paid')
+
+    if (exportStartDate || exportEndDate) {
+      const start = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : -Infinity
+      const end = exportEndDate ? new Date(`${exportEndDate}T23:59:59.999`).getTime() : Infinity
+      list = list.filter((p) => {
+        if (!p.created_at) return false
+        const time = new Date(p.created_at).getTime()
+        if (Number.isNaN(time)) return false
+        return time >= start && time <= end
+      })
+    }
+    return list
   }
 
   const applyPaymentFilter = (rows: AdminPayment[]) => {
-    if (exportPaymentFilter === 'paid') return rows.filter((pay) => pay.status === 'paid')
-    if (exportPaymentFilter === 'unpaid') return rows.filter((pay) => pay.status !== 'paid')
-    return rows
+    let list = rows
+    if (exportPaymentFilter === 'paid') list = list.filter((pay) => pay.status === 'paid')
+    else if (exportPaymentFilter === 'unpaid') list = list.filter((pay) => pay.status !== 'paid')
+
+    if (exportStartDate || exportEndDate) {
+      const start = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : -Infinity
+      const end = exportEndDate ? new Date(`${exportEndDate}T23:59:59.999`).getTime() : Infinity
+      list = list.filter((pay) => {
+        const dateStr = pay.paid_at || pay.created_at
+        if (!dateStr) return false
+        const time = new Date(dateStr).getTime()
+        if (Number.isNaN(time)) return false
+        return time >= start && time <= end
+      })
+    }
+    return list
   }
 
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
@@ -1153,6 +1219,13 @@ export function AdminDashboardClient({
     const targetParticipants = activeParticipants
     const targetPayments = activePayments
     const filterSuffix = exportPaymentFilter === 'paid' ? '-paid' : exportPaymentFilter === 'unpaid' ? '-unpaid' : ''
+    const dateSuffix = exportStartDate && exportEndDate
+      ? `-${exportStartDate}_sd_${exportEndDate}`
+      : exportStartDate
+      ? `-sejak_${exportStartDate}`
+      : exportEndDate
+      ? `-hingga_${exportEndDate}`
+      : ''
 
     if (combineFiles) {
       const workbook = XLSX.utils.book_new()
@@ -1180,7 +1253,7 @@ export function AdminDashboardClient({
       }
 
       const segmentName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'individu' : 'bro-sist'
-      XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}-${today}.xlsx`)
+      XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}${dateSuffix}-${today}.xlsx`)
     } else {
       for (const community of selectedCommunities) {
         const communityParticipants = applyParticipantFilter(
@@ -1198,7 +1271,7 @@ export function AdminDashboardClient({
         if (type === 'payments' || type === 'all') {
           XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPaymentExportRows(communityPayments)), 'Pembayaran')
         }
-        XLSX.writeFile(workbook, `topsell-run-${slugify(community.community_code)}-${slugify(community.name)}-${type}${filterSuffix}-${today}.xlsx`)
+        XLSX.writeFile(workbook, `topsell-run-${slugify(community.community_code)}-${slugify(community.name)}-${type}${filterSuffix}${dateSuffix}-${today}.xlsx`)
       }
     }
   }
@@ -3943,8 +4016,8 @@ export function AdminDashboardClient({
           )}
 
           {(activeTab === 'export_participants' || activeTab === 'export_payments') && (
-            <div className="bg-card-bg border border-card-border rounded-lg p-4 flex flex-col gap-3">
-              <div className="flex border-b border-card-border mb-2">
+            <div className="bg-card-bg border border-card-border rounded-lg overflow-hidden flex flex-col">
+              <div className="flex border-b border-card-border">
                 <button
                   onClick={() => setPackageType('community')}
                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
@@ -3976,92 +4049,225 @@ export function AdminDashboardClient({
                   Individu
                 </button>
               </div>
-              <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
+
+              {/* Filter Toolbar (Status & Date) */}
+              <div className="p-3.5 bg-brand-dark/40 border-b border-card-border flex flex-col gap-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  {/* Status Filter */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <Filter className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Filter Status:</span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+                      {(
+                        [
+                          { id: 'all', label: 'Semua Status' },
+                          { id: 'paid', label: 'Paid / Lunas' },
+                          { id: 'unpaid', label: 'Belum Lunas' },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setExportPaymentFilter(opt.id)
+                            setSelectedExportCommunities(null)
+                          }}
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                            exportPaymentFilter === opt.id
+                              ? 'bg-sport-orange text-white shadow-xs'
+                              : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Excel file generation options */}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={combineFiles}
+                        onChange={(event) => setCombineFiles(event.target.checked)}
+                        className="accent-sport-orange"
+                      />
+                      Gabung menjadi 1 file Excel
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={communitiesForExport.length > 0 && resolvedSelection.size === communitiesForExport.length}
+                        onChange={(event) => setAllExportCommunities(event.target.checked)}
+                        className="accent-sport-orange"
+                      />
+                      Pilih semua {groupWord}
+                    </label>
+                  </div>
+                </div>
+
+                {/* Date Filter */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-card-border/50">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <CalendarDays className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>{activeTab === 'export_participants' ? 'Tgl Daftar:' : 'Tgl Bayar:'}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+                      {(
+                        [
+                          { id: 'all', label: 'Semua' },
+                          { id: 'today', label: 'Hari Ini' },
+                          { id: '7d', label: '7 Hari' },
+                          { id: '30d', label: '30 Hari' },
+                          { id: 'this_month', label: 'Bulan Ini' },
+                        ] as const
+                      ).map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleExportDatePresetChange(preset.id)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                            exportDatePreset === preset.id
+                              ? 'bg-sport-orange text-white shadow-xs'
+                              : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom date range inputs */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={exportStartDate}
+                        onChange={(e) => {
+                          setExportStartDate(e.target.value)
+                          setExportDatePreset('custom')
+                          setSelectedExportCommunities(null)
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title={activeTab === 'export_participants' ? 'Dari Tanggal Pendaftaran' : 'Dari Tanggal Pembayaran'}
+                      />
+                      <span className="text-[10px] text-brand-muted font-bold">-</span>
+                      <input
+                        type="date"
+                        value={exportEndDate}
+                        onChange={(e) => {
+                          setExportEndDate(e.target.value)
+                          setExportDatePreset('custom')
+                          setSelectedExportCommunities(null)
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title={activeTab === 'export_participants' ? 'Sampai Tanggal Pendaftaran' : 'Sampai Tanggal Pembayaran'}
+                      />
+
+                      {(exportStartDate || exportEndDate) && (
+                        <button
+                          type="button"
+                          onClick={() => handleExportDatePresetChange('all')}
+                          className="p-1 text-brand-muted hover:text-sport-red hover:bg-sport-red/10 rounded transition-colors cursor-pointer"
+                          title="Reset Filter Tanggal"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {(exportStartDate || exportEndDate || exportPaymentFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportPaymentFilter('all')
+                        handleExportDatePresetChange('all')
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-brand-gray/40 border border-card-border hover:border-sport-red hover:text-sport-red text-[10px] font-bold text-brand-muted transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Reset Semua Filter
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Sub-header */}
+              <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">
                     {activeTab === 'export_participants' ? 'Export Peserta' : 'Export Pembayaran'}
                   </p>
-                  <p className="text-xs font-bold text-brand-muted">
-                    Pilih {groupWord}, lalu sistem membuat {combineFiles ? '1 file Excel gabungan' : `1 file Excel untuk tiap ${groupWord}`}.
+                  <p className="text-xs font-bold text-foreground">
+                    {communitiesForExport.length} {groupWord} ditemukan ({resolvedSelection.size} terpilih)
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
-                  <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={combineFiles}
-                      onChange={(event) => setCombineFiles(event.target.checked)}
-                    />
-                    Gabung menjadi 1 file Excel
-                  </label>
-                  <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={communitiesForExport.length > 0 && resolvedSelection.size === communitiesForExport.length}
-                      onChange={(event) => setAllExportCommunities(event.target.checked)}
-                    />
-                    Pilih semua {groupWord}
-                  </label>
+                <div className="flex items-center gap-2">
+                  {(exportStartDate || exportEndDate) && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Filter Tanggal: {exportStartDate || '...'} s/d {exportEndDate || '...'}
+                    </span>
+                  )}
+                  {exportPaymentFilter !== 'all' && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Status: {exportPaymentFilter === 'paid' ? 'Paid' : 'Unpaid'}
+                    </span>
+                  )}
                 </div>
-              {(activeTab === 'export_participants' || activeTab === 'export_payments') && (
-                <div className="flex items-center gap-1.5 bg-brand-gray/30 border border-card-border rounded-lg px-3 py-1.5">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted mr-2">Filter Status:</span>
-                  {(['all', 'paid', 'unpaid'] as const).map((opt) => (
-                    <label key={opt} className="inline-flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="exportPaymentFilter"
-                        value={opt}
-                        checked={exportPaymentFilter === opt}
-                        onChange={() => { setExportPaymentFilter(opt); setSelectedExportCommunities(null) }}
-                        className="accent-sport-orange"
-                      />
-                      <span className={`text-[10px] font-black uppercase tracking-wide ${
-                        exportPaymentFilter === opt ? 'text-sport-orange' : 'text-brand-muted'
-                      }`}>
-                        {opt === 'all' ? 'Semua' : opt === 'paid' ? 'Paid' : 'Unpaid'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+
+              {/* Communities selection grid */}
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
                 {communitiesForExport.length === 0 && (
-                  <p className="col-span-full text-xs text-brand-muted py-2">
-                    {exportPaymentFilter === 'paid'
-                      ? (activeTab === 'export_payments' ? 'Tidak ada grup dengan pembayaran lunas.' : 'Tidak ada grup dengan peserta lunas.')
-                      : exportPaymentFilter === 'unpaid'
-                        ? (activeTab === 'export_payments' ? 'Tidak ada grup dengan pembayaran belum lunas.' : 'Tidak ada grup dengan peserta belum lunas.')
-                        : 'Tidak ada grup ditemukan.'}
-                  </p>
+                  <div className="col-span-full py-8 text-center">
+                    <p className="text-xs font-bold text-foreground">Tidak ada {groupWord} yang cocok dengan filter.</p>
+                    <p className="text-[11px] text-brand-muted mt-1">Coba sesuaikan filter tanggal atau status pembayaran.</p>
+                    {(exportStartDate || exportEndDate || exportPaymentFilter !== 'all') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExportPaymentFilter('all')
+                          handleExportDatePresetChange('all')
+                        }}
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sport-orange text-white text-[10px] font-bold uppercase cursor-pointer hover:bg-sport-orange/90 transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Reset Filter
+                      </button>
+                    )}
+                  </div>
                 )}
                 {communitiesForExport.map((community) => (
-                  <label key={community.id} className="flex items-start gap-2 rounded-lg border border-card-border bg-brand-gray/20 p-2 text-xs">
+                  <label key={community.id} className="flex items-start gap-2.5 rounded-lg border border-card-border bg-brand-gray/20 hover:bg-brand-gray/30 p-2.5 text-xs transition-colors cursor-pointer">
                     <input
                       type="checkbox"
                       checked={resolvedSelection.has(community.id)}
                       onChange={() => toggleExportCommunity(community.id)}
-                      className="mt-0.5"
+                      className="mt-0.5 accent-sport-orange"
                     />
-                    <span>
-                      <span className="block font-black text-foreground">{community.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-black text-foreground truncate">{community.name}</span>
                       <span className="block text-[10px] text-brand-muted">{community.community_code}</span>
                     </span>
                   </label>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2">
+
+              {/* Action Buttons */}
+              <div className="p-4 bg-brand-dark/20 border-t border-card-border flex flex-wrap items-center gap-2">
                 <Button type="button" variant="ghost" onClick={() => router.refresh()}>
                   <RefreshCw className="w-4 h-4 mr-2" />Refresh Data
                 </Button>
                 {activeTab === 'export_participants' ? (
                   <Button type="button" variant="secondary" onClick={() => exportWorkbook('participants', 'selected')}>
-                    <Download className="w-4 h-4 mr-2" />Export Peserta
+                    <Download className="w-4 h-4 mr-2" />Export Peserta ({resolvedSelection.size} {groupWord})
                   </Button>
                 ) : (
                   <Button type="button" variant="secondary" onClick={() => exportWorkbook('payments', 'selected')}>
-                    <Download className="w-4 h-4 mr-2" />Export Pembayaran
+                    <Download className="w-4 h-4 mr-2" />Export Pembayaran ({resolvedSelection.size} {groupWord})
                   </Button>
                 )}
               </div>
