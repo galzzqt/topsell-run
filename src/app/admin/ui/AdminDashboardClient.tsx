@@ -39,6 +39,7 @@ import {
   Link as LinkIcon,
   Watch,
   Banknote,
+  Filter,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -406,6 +407,47 @@ export function AdminDashboardClient({
   const [participantDatePreset, setParticipantDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
   const [participantSort, setParticipantSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
 
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'pending' | 'paid' | 'failed' | 'expired' | 'testing'>('all')
+  const [paymentStartDate, setPaymentStartDate] = useState('')
+  const [paymentEndDate, setPaymentEndDate] = useState('')
+  const [paymentDatePreset, setPaymentDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+  const [paymentSort, setPaymentSort] = useState<'newest' | 'oldest' | 'amount_desc' | 'amount_asc'>('newest')
+
+  const handlePaymentDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
+    setPaymentDatePreset(preset)
+    const now = new Date()
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'all') {
+      setPaymentStartDate('')
+      setPaymentEndDate('')
+    } else if (preset === 'today') {
+      const todayStr = formatDateForInput(now)
+      setPaymentStartDate(todayStr)
+      setPaymentEndDate(todayStr)
+    } else if (preset === '7d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 6)
+      setPaymentStartDate(formatDateForInput(start))
+      setPaymentEndDate(formatDateForInput(now))
+    } else if (preset === '30d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 29)
+      setPaymentStartDate(formatDateForInput(start))
+      setPaymentEndDate(formatDateForInput(now))
+    } else if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setPaymentStartDate(formatDateForInput(start))
+      setPaymentEndDate(formatDateForInput(end))
+    }
+  }
+
   const handleDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
     setParticipantDatePreset(preset)
     const now = new Date()
@@ -688,28 +730,93 @@ export function AdminDashboardClient({
     return list
   }, [activeParticipants, query, participantStartDate, participantEndDate])
 
+  const paymentStats = useMemo(() => {
+    const total = activePayments.length
+    let pending = 0
+    let paid = 0
+    let failed = 0
+    let expired = 0
+    let testing = 0
+    let totalNominalPaid = 0
+
+    for (const payment of activePayments) {
+      const status = paymentStatusChanges.get(payment.id) || payment.status
+      if (status === 'pending') pending++
+      else if (status === 'paid') {
+        paid++
+        totalNominalPaid += payment.amount
+      } else if (status === 'failed') failed++
+      else if (status === 'expired') expired++
+      else if (status === 'testing') testing++
+    }
+
+    return { total, pending, paid, failed, expired, testing, totalNominalPaid }
+  }, [activePayments, paymentStatusChanges])
+
   const filteredPayments = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    const targetPayments = activePayments
-    if (!keyword) return targetPayments
+    let list = activePayments
 
-    return targetPayments.filter((payment) => {
-      const community = getPaymentCommunity(payment)
-      return [
-        payment.payment_reference,
-        payment.payment_method || '',
-        payment.status,
-        String(payment.amount),
-        formatCurrency(payment.amount),
-        formatDateTime(payment.paid_at || payment.created_at),
-        community?.name || '',
-        community?.leader_name || '',
-        community?.email || '',
-        community?.phone || '',
-        community?.community_code || '',
-      ].some((value) => value.toLowerCase().includes(keyword))
+    if (keyword) {
+      list = list.filter((payment) => {
+        const community = getPaymentCommunity(payment)
+        return [
+          payment.payment_reference,
+          payment.payment_method || '',
+          payment.status,
+          String(payment.amount),
+          formatCurrency(payment.amount),
+          formatDateTime(payment.paid_at || payment.created_at),
+          community?.name || '',
+          community?.leader_name || '',
+          community?.email || '',
+          community?.phone || '',
+          community?.community_code || '',
+        ].some((value) => value.toLowerCase().includes(keyword))
+      })
+    }
+
+    if (paymentStatusFilter !== 'all') {
+      list = list.filter((payment) => {
+        const status = paymentStatusChanges.get(payment.id) || payment.status
+        return status === paymentStatusFilter
+      })
+    }
+
+    if (paymentStartDate || paymentEndDate) {
+      const start = paymentStartDate ? new Date(`${paymentStartDate}T00:00:00`).getTime() : -Infinity
+      const end = paymentEndDate ? new Date(`${paymentEndDate}T23:59:59.999`).getTime() : Infinity
+
+      list = list.filter((payment) => {
+        const dateStr = payment.paid_at || payment.created_at
+        if (!dateStr) return false
+        const pTime = new Date(dateStr).getTime()
+        if (Number.isNaN(pTime)) return false
+        return pTime >= start && pTime <= end
+      })
+    }
+
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.paid_at || a.created_at || 0).getTime()
+      const timeB = new Date(b.paid_at || b.created_at || 0).getTime()
+
+      if (paymentSort === 'oldest') {
+        return timeA - timeB
+      }
+      if (paymentSort === 'amount_desc') {
+        return b.amount - a.amount
+      }
+      if (paymentSort === 'amount_asc') {
+        return a.amount - b.amount
+      }
+      // 'newest'
+      return timeB - timeA
     })
-  }, [activePayments, query])
+  }, [activePayments, query, paymentStatusFilter, paymentStartDate, paymentEndDate, paymentSort, paymentStatusChanges])
+
+  const filteredPaymentsTotalNominal = useMemo(() => {
+    return filteredPayments.reduce((sum, p) => sum + p.amount, 0)
+  }, [filteredPayments])
 
   const groupedParticipants = useMemo(() => {
     const groups = new Map<
@@ -2547,6 +2654,194 @@ export function AdminDashboardClient({
                   Individu
                 </button>
               </div>
+
+              {/* Filter Toolbar: Status Filter Buttons */}
+              <div className="p-3.5 bg-brand-dark/40 border-b border-card-border flex flex-col gap-3 text-xs">
+                {/* Status Badges Filter */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider mr-1">
+                    <Filter className="w-3.5 h-3.5 text-sport-orange" />
+                    <span>Status:</span>
+                  </div>
+                  {(
+                    [
+                      { id: 'all', label: 'Semua Status', count: paymentStats.total, activeColor: 'bg-sport-orange text-white border-sport-orange shadow-xs', badgeColor: 'bg-white/20 text-white' },
+                      { id: 'pending', label: 'Pending', count: paymentStats.pending, activeColor: 'bg-amber-500/20 text-amber-500 border-amber-500/50 shadow-xs', badgeColor: 'bg-amber-500/20 text-amber-500' },
+                      { id: 'paid', label: 'Success', count: paymentStats.paid, activeColor: 'bg-green-500/20 text-green-500 border-green-500/50 shadow-xs', badgeColor: 'bg-green-500/20 text-green-500' },
+                      { id: 'failed', label: 'Failed', count: paymentStats.failed, activeColor: 'bg-red-500/20 text-red-500 border-red-500/50 shadow-xs', badgeColor: 'bg-red-500/20 text-red-500' },
+                      { id: 'expired', label: 'Expired', count: paymentStats.expired, activeColor: 'bg-gray-500/20 text-gray-400 border-gray-500/50 shadow-xs', badgeColor: 'bg-gray-500/20 text-gray-400' },
+                      { id: 'testing', label: 'Testing', count: paymentStats.testing, activeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/50 shadow-xs', badgeColor: 'bg-blue-500/20 text-blue-400' },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = paymentStatusFilter === tab.id
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setPaymentStatusFilter(tab.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
+                          isActive
+                            ? tab.activeColor
+                            : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                            isActive
+                              ? tab.id === 'all'
+                                ? 'bg-black/20 text-white'
+                                : tab.badgeColor
+                              : 'bg-brand-dark/40 text-brand-muted'
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Date & Sort Filter */}
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2 border-t border-card-border/50">
+                  {/* Date Filter & Presets */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <CalendarDays className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Tgl Bayar:</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+                      {(
+                        [
+                          { id: 'all', label: 'Semua' },
+                          { id: 'today', label: 'Hari Ini' },
+                          { id: '7d', label: '7 Hari' },
+                          { id: '30d', label: '30 Hari' },
+                          { id: 'this_month', label: 'Bulan Ini' },
+                        ] as const
+                      ).map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handlePaymentDatePresetChange(preset.id)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                            paymentDatePreset === preset.id
+                              ? 'bg-sport-orange text-white shadow-xs'
+                              : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom date range inputs */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={paymentStartDate}
+                        onChange={(e) => {
+                          setPaymentStartDate(e.target.value)
+                          setPaymentDatePreset('custom')
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title="Dari Tanggal Pembayaran"
+                      />
+                      <span className="text-[10px] text-brand-muted font-bold">-</span>
+                      <input
+                        type="date"
+                        value={paymentEndDate}
+                        onChange={(e) => {
+                          setPaymentEndDate(e.target.value)
+                          setPaymentDatePreset('custom')
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title="Sampai Tanggal Pembayaran"
+                      />
+
+                      {(paymentStartDate || paymentEndDate) && (
+                        <button
+                          type="button"
+                          onClick={() => handlePaymentDatePresetChange('all')}
+                          className="p-1 text-brand-muted hover:text-sport-red hover:bg-sport-red/10 rounded transition-colors cursor-pointer"
+                          title="Reset Filter Tanggal"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sorting Controls */}
+                  <div className="flex items-center gap-2 self-start xl:self-auto">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Urutkan:</span>
+                    </div>
+                    <select
+                      value={paymentSort}
+                      onChange={(e) => setPaymentSort(e.target.value as 'newest' | 'oldest' | 'amount_desc' | 'amount_asc')}
+                      className="px-2.5 py-1.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                    >
+                      <option value="newest">⚡ Terbaru</option>
+                      <option value="oldest">⏳ Terlama</option>
+                      <option value="amount_desc">💰 Nominal Tertinggi</option>
+                      <option value="amount_asc">💵 Nominal Terendah</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-header / Status Info */}
+              <div className="bg-brand-dark/30 border-b border-card-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                      Total Data Ditemukan
+                    </p>
+                    <p className="text-xs font-bold text-foreground">
+                      {filteredPayments.length} transaksi pembayaran
+                    </p>
+                  </div>
+                  <div className="h-6 w-px bg-card-border hidden sm:block" />
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                      Total Nominal
+                    </p>
+                    <p className="text-xs font-black text-sport-orange">
+                      {formatCurrency(filteredPaymentsTotalNominal)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(paymentStartDate || paymentEndDate) && (
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Filter Tanggal Aktif
+                    </span>
+                  )}
+                  {paymentStatusFilter !== 'all' && (
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Filter Status: {paymentStatusFilter.toUpperCase()}
+                    </span>
+                  )}
+                  {(paymentStartDate || paymentEndDate || paymentStatusFilter !== 'all' || query) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery('')
+                        setPaymentStatusFilter('all')
+                        handlePaymentDatePresetChange('all')
+                        setPaymentSort('newest')
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-brand-gray/40 border border-card-border hover:border-sport-red hover:text-sport-red text-[10px] font-bold text-brand-muted transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Reset Filter
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-brand-dark/30 border-b border-card-border">
@@ -2622,7 +2917,21 @@ export function AdminDashboardClient({
                     {filteredPayments.length === 0 && (
                       <tr>
                         <td colSpan={7} className="px-4 py-8 text-center text-xs font-bold text-brand-muted">
-                          Tidak ada pembayaran yang cocok dengan pencarian.
+                          <p className="text-foreground">Tidak ada pembayaran yang cocok dengan filter / pencarian.</p>
+                          {(paymentStartDate || paymentEndDate || paymentStatusFilter !== 'all' || query) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQuery('')
+                                setPaymentStatusFilter('all')
+                                handlePaymentDatePresetChange('all')
+                                setPaymentSort('newest')
+                              }}
+                              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sport-orange text-white text-[10px] font-bold uppercase cursor-pointer hover:bg-sport-orange/90 transition-colors"
+                            >
+                              <RotateCcw className="w-3 h-3" /> Reset Semua Filter
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )}
