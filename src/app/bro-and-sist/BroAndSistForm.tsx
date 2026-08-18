@@ -276,7 +276,7 @@ export default function BroAndSistForm() {
           setIsSuccess(false)
           router.push('/login')
         }}
-        title="✅ REGISTRASI BERHASIL"
+        title="REGISTRASI BERHASIL"
       >
         <div className="flex flex-col items-center text-center gap-6">
           {/* Success Icon */}
@@ -305,7 +305,7 @@ export default function BroAndSistForm() {
               </div>
               <div>
                 <p className="text-sm font-black text-amber-900 mb-3 uppercase tracking-wide">
-                  📧 Aktivasi Email Diperlukan
+                  Aktivasi Email Diperlukan
                 </p>
                 <p className="text-xs text-amber-800 leading-relaxed mb-2">
                   Kami telah mengirim <strong>link aktivasi</strong> ke email Anda. 

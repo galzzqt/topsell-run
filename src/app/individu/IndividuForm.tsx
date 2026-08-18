@@ -243,7 +243,7 @@ export default function IndividuForm() {
           setIsSuccess(false)
           router.push('/login')
         }}
-        title="✅ REGISTRASI BERHASIL"
+        title="REGISTRASI BERHASIL"
       >
         <div className="flex flex-col items-center text-center gap-6">
           <div className="p-5 bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 rounded-full shadow-xl animate-pulse">
@@ -270,7 +270,7 @@ export default function IndividuForm() {
                 </div>
                 <div>
                   <p className="text-sm font-black text-amber-900 mb-3 uppercase tracking-wide">
-                    📧 Aktivasi Email Diperlukan
+                    Aktivasi Email Diperlukan
                   </p>
                   <p className="text-xs text-amber-800 leading-relaxed mb-3">
                     Kami telah mengirim <strong>link aktivasi</strong> ke email Anda. Silakan buka email dan{' '}
@@ -293,7 +293,7 @@ export default function IndividuForm() {
                 </div>
                 <div>
                   <p className="text-sm font-black text-red-900 mb-3 uppercase tracking-wide">
-                    ⚠️ Email Aktivasi Gagal Terkirim
+                    Email Aktivasi Gagal Terkirim
                   </p>
                   <p className="text-xs text-red-800 leading-relaxed">
                     Akun Anda <strong>berhasil dibuat</strong>, tetapi kami gagal mengirim email aktivasi.

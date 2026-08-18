@@ -373,6 +373,18 @@ export async function simulateIndividualPaymentSuccess(paymentId: string) {
     sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
   ])
 
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'payment',
+      event: 'individual_payment_simulated',
+      message: `Simulasi pembayaran individu sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      data: { paymentId, reference: payment.payment_reference, amount: payment.amount }
+    })
+  } catch (logError) {
+    console.error('Failed to log individual payment simulation:', logError)
+  }
+
   revalidatePath('/individu-dashboard')
   return { success: true }
 }
@@ -411,9 +423,33 @@ export async function syncXenditIndividualPaymentStatus(paymentReference: string
     if (status === 'EXPIRED') await markIndividualPaymentExpired(payment.id)
     else if (status === 'FAILED') await markIndividualPaymentFailed(payment.id)
     if (status === 'EXPIRED' || status === 'FAILED') {
+      try {
+        await ingestAdminLog({
+          level: 'warning',
+          source: 'payment',
+          event: status === 'EXPIRED' ? 'individual_payment_synced_expired' : 'individual_payment_synced_failed',
+          message: `Sinkronisasi pembayaran individu: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+          data: { paymentId: payment.id, reference: paymentReference, status }
+        })
+      } catch (logError) {
+        console.error('Failed to log individual payment sync failure:', logError)
+      }
       revalidatePath('/individu-dashboard')
       return { success: true, status }
     }
+
+    try {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'individual_payment_synced_pending',
+        message: `Sinkronisasi pembayaran individu: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+        data: { paymentId: payment.id, reference: paymentReference, status }
+      })
+    } catch (logError) {
+      console.error('Failed to log individual payment sync pending:', logError)
+    }
+
     return { success: true, status: xenditData?.status || 'UNKNOWN' }
   }
 
@@ -425,6 +461,18 @@ export async function syncXenditIndividualPaymentStatus(paymentReference: string
     sendIndividualRacepackEmailsForRegistration(payment.registration_id),
     sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
   ])
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'payment',
+      event: 'individual_payment_synced_paid',
+      message: `Sinkronisasi pembayaran individu: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      data: { paymentId: payment.id, reference: paymentReference, paymentMethod }
+    })
+  } catch (logError) {
+    console.error('Failed to log individual payment sync success:', logError)
+  }
 
   revalidatePath('/individu-dashboard')
   return { success: true, status: 'paid' as const, paymentMethod }

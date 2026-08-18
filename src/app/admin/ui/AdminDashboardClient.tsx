@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Html5Qrcode } from 'html5-qrcode'
@@ -40,6 +40,10 @@ import {
   Watch,
   Banknote,
   Filter,
+  HeartHandshake,
+  User,
+  Timer,
+  Zap,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -705,6 +709,49 @@ export function AdminDashboardClient({
   // Individu punya koleksi pembayaran sendiri; komunitas & bro-sist seperti semula.
   const paymentPackageType: 'community' | 'family' | 'individual' = packageType
 
+  const applyParticipantFilter = useCallback(
+    (rows: AdminParticipant[]) => {
+      let list = rows
+      if (exportPaymentFilter === 'paid') list = list.filter((p) => p.payment_status === 'paid')
+      else if (exportPaymentFilter === 'unpaid') list = list.filter((p) => p.payment_status !== 'paid')
+
+      if (exportStartDate || exportEndDate) {
+        const start = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : -Infinity
+        const end = exportEndDate ? new Date(`${exportEndDate}T23:59:59.999`).getTime() : Infinity
+        list = list.filter((p) => {
+          if (!p.created_at) return false
+          const time = new Date(p.created_at).getTime()
+          if (Number.isNaN(time)) return false
+          return time >= start && time <= end
+        })
+      }
+      return list
+    },
+    [exportPaymentFilter, exportStartDate, exportEndDate]
+  )
+
+  const applyPaymentFilter = useCallback(
+    (rows: AdminPayment[]) => {
+      let list = rows
+      if (exportPaymentFilter === 'paid') list = list.filter((pay) => pay.status === 'paid')
+      else if (exportPaymentFilter === 'unpaid') list = list.filter((pay) => pay.status !== 'paid')
+
+      if (exportStartDate || exportEndDate) {
+        const start = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : -Infinity
+        const end = exportEndDate ? new Date(`${exportEndDate}T23:59:59.999`).getTime() : Infinity
+        list = list.filter((pay) => {
+          const dateStr = pay.paid_at || pay.created_at
+          if (!dateStr) return false
+          const time = new Date(dateStr).getTime()
+          if (Number.isNaN(time)) return false
+          return time >= start && time <= end
+        })
+      }
+      return list
+    },
+    [exportPaymentFilter, exportStartDate, exportEndDate]
+  )
+
   const communitiesForExport = useMemo(() => {
     const targetCommunities = activeCommunities
     const isExportParticipants = activeTab === 'export_participants'
@@ -1165,43 +1212,6 @@ export function AdminDashboardClient({
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPacerExportRows(pacerRows)), 'Pacer')
     XLSX.writeFile(workbook, `topsell-run-pacer-${today}.xlsx`)
-  }
-
-  const applyParticipantFilter = (rows: AdminParticipant[]) => {
-    let list = rows
-    if (exportPaymentFilter === 'paid') list = list.filter((p) => p.payment_status === 'paid')
-    else if (exportPaymentFilter === 'unpaid') list = list.filter((p) => p.payment_status !== 'paid')
-
-    if (exportStartDate || exportEndDate) {
-      const start = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : -Infinity
-      const end = exportEndDate ? new Date(`${exportEndDate}T23:59:59.999`).getTime() : Infinity
-      list = list.filter((p) => {
-        if (!p.created_at) return false
-        const time = new Date(p.created_at).getTime()
-        if (Number.isNaN(time)) return false
-        return time >= start && time <= end
-      })
-    }
-    return list
-  }
-
-  const applyPaymentFilter = (rows: AdminPayment[]) => {
-    let list = rows
-    if (exportPaymentFilter === 'paid') list = list.filter((pay) => pay.status === 'paid')
-    else if (exportPaymentFilter === 'unpaid') list = list.filter((pay) => pay.status !== 'paid')
-
-    if (exportStartDate || exportEndDate) {
-      const start = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : -Infinity
-      const end = exportEndDate ? new Date(`${exportEndDate}T23:59:59.999`).getTime() : Infinity
-      list = list.filter((pay) => {
-        const dateStr = pay.paid_at || pay.created_at
-        if (!dateStr) return false
-        const time = new Date(dateStr).getTime()
-        if (Number.isNaN(time)) return false
-        return time >= start && time <= end
-      })
-    }
-    return list
   }
 
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
@@ -2490,10 +2500,10 @@ export function AdminDashboardClient({
                     onChange={(e) => setParticipantSort(e.target.value as 'newest' | 'oldest' | 'name_asc' | 'name_desc')}
                     className="px-2.5 py-1.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
                   >
-                    <option value="newest">⚡ Pendaftaran Terbaru</option>
-                    <option value="oldest">⏳ Pendaftaran Terlama</option>
-                    <option value="name_asc">🔤 Abjad (A → Z)</option>
-                    <option value="name_desc">🔤 Abjad (Z → A)</option>
+                    <option value="newest">Pendaftaran Terbaru</option>
+                    <option value="oldest">Pendaftaran Terlama</option>
+                    <option value="name_asc">Abjad (A → Z)</option>
+                    <option value="name_desc">Abjad (Z → A)</option>
                   </select>
                 </div>
               </div>
@@ -2857,10 +2867,10 @@ export function AdminDashboardClient({
                       onChange={(e) => setPaymentSort(e.target.value as 'newest' | 'oldest' | 'amount_desc' | 'amount_asc')}
                       className="px-2.5 py-1.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
                     >
-                      <option value="newest">⚡ Terbaru</option>
-                      <option value="oldest">⏳ Terlama</option>
-                      <option value="amount_desc">💰 Nominal Tertinggi</option>
-                      <option value="amount_asc">💵 Nominal Terendah</option>
+                      <option value="newest">Terbaru</option>
+                      <option value="oldest">Terlama</option>
+                      <option value="amount_desc">Nominal Tertinggi</option>
+                      <option value="amount_asc">Nominal Terendah</option>
                     </select>
                   </div>
                 </div>
@@ -3369,11 +3379,11 @@ export function AdminDashboardClient({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {([
-                      { key: 'community'  as PackageKey, icon: '🏃', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
-                      { key: 'family'     as PackageKey, icon: '👨‍👩‍👧', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
-                      { key: 'individual' as PackageKey, icon: '⚡', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
-                      { key: 'pacer'      as PackageKey, icon: '🎽', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
-                    ]).map(({ key, icon, accent, border, badge }) => {
+                      { key: 'community'  as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
+                      { key: 'family'     as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
+                      { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
+                      { key: 'pacer'      as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
+                    ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       return (
                         <button
@@ -3383,7 +3393,9 @@ export function AdminDashboardClient({
                           className={`group relative flex flex-col gap-4 p-6 rounded-xl border ${border} bg-gradient-to-br ${accent} hover:scale-[1.015] hover:shadow-lg hover:shadow-black/30 transition-all duration-200 text-left cursor-pointer`}
                         >
                           <div className="flex items-start justify-between">
-                            <div className="text-3xl">{icon}</div>
+                            <div className={`w-12 h-12 rounded-xl border ${iconBg} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+                              {icon}
+                            </div>
                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${badge}`}>
                               {config.enabled ? 'Buka' : 'Tutup'}
                             </span>
@@ -3580,11 +3592,11 @@ export function AdminDashboardClient({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {([
-                      { key: 'community' as PackageKey, icon: '🏃', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
-                      { key: 'family'    as PackageKey, icon: '👨‍👩‍👧', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
-                      { key: 'individual'as PackageKey, icon: '⚡', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
-                      { key: 'pacer'     as PackageKey, icon: '🎽', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
-                    ]).map(({ key, icon, accent, border, badge }) => {
+                      { key: 'community' as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
+                      { key: 'family'    as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
+                      { key: 'individual'as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
+                      { key: 'pacer'     as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
+                    ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       const periodCount = config.periods.length
                       return (
@@ -3595,7 +3607,9 @@ export function AdminDashboardClient({
                           className={`group relative flex flex-col gap-4 p-6 rounded-xl border ${border} bg-gradient-to-br ${accent} hover:scale-[1.015] hover:shadow-lg hover:shadow-black/30 transition-all duration-200 text-left cursor-pointer`}
                         >
                           <div className="flex items-start justify-between">
-                            <div className="text-3xl">{icon}</div>
+                            <div className={`w-12 h-12 rounded-xl border ${iconBg} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+                              {icon}
+                            </div>
                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${badge}`}>
                               {periodCount} Periode
                             </span>

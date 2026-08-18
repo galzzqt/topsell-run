@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, TicketCheck, RefreshCw, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, TicketCheck, RefreshCw, X, Key, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
@@ -423,7 +423,15 @@ export function VouchersTab({
                       : 'bg-transparent text-brand-muted border-card-border hover:border-sport-purple/40'
                   }`}
                 >
-                  {t === 'code' ? '🔑 Kode' : '✨ Auto-Apply'}
+                  {t === 'code' ? (
+                    <span className="inline-flex items-center gap-1.5 justify-center">
+                      <Key className="w-3.5 h-3.5" /> Kode
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 justify-center">
+                      <Sparkles className="w-3.5 h-3.5" /> Auto-Apply
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

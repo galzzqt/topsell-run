@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CheckCircle, ArrowRight, UserPlus, Trophy, User, ImagePlus, X } from 'lucide-react'
+import { CheckCircle, ArrowRight, UserPlus, Trophy, User, ImagePlus, X, Mail, AlertTriangle } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { registerPacerSchema, RegisterPacerFormValues, RegisterPacerFormInput } from '@/lib/validations/auth'
 import { signUpPacer } from '@/app/actions/pacer-auth'
@@ -54,7 +54,7 @@ export default function PacerForm() {
   const [loadingKota, setLoadingKota] = useState(false)
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
 
-  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<RegisterPacerFormInput, unknown, RegisterPacerFormValues>({
+  const { register, handleSubmit, control, setValue, reset, formState: { errors, isSubmitting } } = useForm<RegisterPacerFormInput, unknown, RegisterPacerFormValues>({
     resolver: zodResolver(registerPacerSchema),
     defaultValues: {
       full_name: '',
@@ -258,41 +258,53 @@ export default function PacerForm() {
     const kotaName = kotaList.find((k) => k.value === values.kota)?.label || values.kota
     const kecamatanName = kecamatanList.find((k) => k.value === values.kecamatan)?.label || values.kecamatan
 
-    const result = await signUpPacer({
+
+    if (mediaUrls.length === 0) {
+      setMediaError('Minimal 1 foto portofolio lari wajib diunggah.')
+      return
+    }
+
+    const res = await signUpPacer({
       ...values,
-      provinsi: provinsiName,
-      kota: kotaName,
-      kecamatan: kecamatanName,
       media_urls: mediaUrls,
       pb_media_urls: pbMediaUrls,
     })
 
-    if (result.error) {
-      setAuthError(result.error)
+    if (res?.error) {
+      setAuthError(res.error)
       return
     }
 
-    setEmailSent(result.emailSent ?? false)
     setSubmittedEmail(values.email)
-    confetti({
-      particleCount: 150,
-      spread: 80,
-      origin: { y: 0.6 },
-      colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
-    })
+    setEmailSent(res?.emailSent !== false)
     setIsSuccess(true)
+    reset()
+    setMediaUrls([])
+    setPbMediaUrls([])
+
+    try {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      })
+    } catch {
+      // Ignored
+    }
   }
+
+  const pacerPkg = formSettings.pacer
 
   return (
     <SiteShell session={activeSession} onLogout={() => setActiveSession(null)}>
-      {/* Success Modal */}
+      {/* SUCCESS MODAL */}
       <Dialog
         isOpen={isSuccess}
         onClose={() => {
           setIsSuccess(false)
           router.push('/login')
         }}
-        title="✅ PENDAFTARAN DITERIMA"
+        title="PENDAFTARAN DITERIMA"
       >
         <div className="flex flex-col items-center text-center gap-6">
           <div className="p-5 bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 rounded-full shadow-xl animate-pulse">
@@ -310,8 +322,8 @@ export default function PacerForm() {
           </div>
 
           {emailSent ? (
-            <div className="w-full flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <span className="text-xl">📧</span>
+            <div className="w-full flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-left">
+              <Mail className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-black text-amber-900 mb-1">Cek Email Anda</p>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
@@ -320,8 +332,8 @@ export default function PacerForm() {
               </div>
             </div>
           ) : (
-            <div className="w-full flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
-              <span className="text-xl">⚠️</span>
+            <div className="w-full flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-left">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-black text-yellow-900 mb-1">Email Verifikasi Belum Terkirim</p>
                 <p className="text-[11px] text-yellow-800 leading-relaxed">

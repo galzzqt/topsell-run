@@ -64,16 +64,6 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
       onBlur?.(e)
     }
 
-    const openPicker = () => {
-      if (disabled) return
-      const picker = pickerRef.current
-      if (!picker) return
-      if (typeof picker.showPicker === 'function') {
-        picker.showPicker()
-      } else {
-        picker.click()
-      }
-    }
 
     const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const isoDate = e.target.value
@@ -113,27 +103,25 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
             maxLength={10}
             {...props}
           />
-          <button
-            type="button"
-            onClick={openPicker}
-            disabled={disabled}
-            aria-label="Pilih tanggal"
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-brand-muted hover:text-sport-orange hover:bg-sport-orange/10 transition-colors disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <Calendar className="w-4 h-4" />
-          </button>
-          <input
-            ref={pickerRef}
-            type="date"
-            value={value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ''}
-            min="1900-01-01"
-            max={todayIso()}
-            onChange={handlePickerChange}
-            disabled={disabled}
-            tabIndex={-1}
-            aria-hidden="true"
-            className="absolute opacity-0 pointer-events-none w-0 h-0"
-          />
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center">
+            {/* Visual calendar icon button */}
+            <div className="p-1.5 rounded-md text-brand-muted hover:text-sport-orange transition-colors pointer-events-none">
+              <Calendar className="w-4 h-4" />
+            </div>
+            {/* Native date picker input overlay that directly captures touch on mobile & click on desktop */}
+            <input
+              ref={pickerRef}
+              type="date"
+              value={value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ''}
+              min="1900-01-01"
+              max={todayIso()}
+              onChange={handlePickerChange}
+              disabled={disabled}
+              aria-label={label || 'Pilih tanggal'}
+              title="Pilih tanggal"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:pointer-events-none"
+            />
+          </div>
         </div>
         {error && <span className="text-xs text-sport-red font-medium">{error}</span>}
       </div>
