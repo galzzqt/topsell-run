@@ -133,6 +133,7 @@ export async function listPaymentsWithRelations() {
                   leader_name: community.leader_name as string,
                   email: (community.email as string | null) ?? null,
                   phone: community.phone as string,
+                  category: (community.category as string | null) ?? null,
                   community_code: community.community_code as string,
                   provinsi: (community.provinsi as string | null) ?? null,
                   kota: (community.kota as string | null) ?? null,

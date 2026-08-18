@@ -135,6 +135,7 @@ type CommunityInfo = {
   leader_name: string
   email: string | null
   phone: string
+  category?: string | null
   community_code: string
   provinsi: string | null
   kota: string | null
@@ -154,6 +155,7 @@ export type AdminParticipant = {
   ktp_number: string
   email: string
   phone: string
+  category?: string | null
   date_of_birth: string | null
   gender: 'male' | 'female'
   tshirt_size: string
@@ -176,6 +178,7 @@ export type AdminCommunity = {
   leader_name: string
   email: string | null
   phone: string
+  category?: string | null
   community_code: string
   provinsi: string | null
   kota: string | null
@@ -1127,11 +1130,33 @@ export function AdminDashboardClient({
     }
   }
 
+  const formatParticipantCategory = (participant: AdminParticipant) => {
+    const community = getParticipantCommunity(participant)
+    const raw = (community?.category || participant.category || '').trim()
+    if (raw) {
+      const match = raw.match(/^(\d+K)/i)
+      if (match) {
+        return match[1].toUpperCase()
+      }
+      if (raw.toUpperCase().includes('3K')) return '3K'
+      if (raw.toUpperCase().includes('6K')) return '6K'
+      return raw
+    }
+    if (participant.participant_code) {
+      const codeMatch = participant.participant_code.match(/(3K|6K|\d+K)/i)
+      if (codeMatch) {
+        return codeMatch[1].toUpperCase()
+      }
+    }
+    return '6K'
+  }
+
   const buildParticipantExportRows = (rows: AdminParticipant[]) => rows.map((participant) => {
     const community = getParticipantCommunity(participant)
     return {
       'Nama Peserta': participant.full_name,
       'Nama BIB': participant.bib_name,
+      Kategori: formatParticipantCategory(participant),
       'No. KTP': participant.ktp_number,
       'Kode Peserta': participant.participant_code || '',
       Komunitas: community?.name || '',

@@ -118,6 +118,7 @@ export async function listIndividualPaymentsWithRelations() {
                   leader_name: individual.leader_name as string,
                   email: (individual.email as string | null) ?? null,
                   phone: individual.phone as string,
+                  category: (individual.category as string | null) ?? null,
                   individual_code: individual.individual_code as string,
                   provinsi: (individual.provinsi as string | null) ?? null,
                   kota: (individual.kota as string | null) ?? null,

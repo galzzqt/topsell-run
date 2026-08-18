@@ -111,7 +111,7 @@ export async function listFamilyParticipantsWithFamily() {
   const familyIds = [...new Set(participants.map((p) => p.family_id))]
   const families = await db.collection('families')
     .find({ id: { $in: familyIds } })
-    .project({ id: 1, name: 1, leader_name: 1, email: 1, phone: 1, family_code: 1, provinsi: 1, kota: 1, kecamatan: 1 })
+    .project({ id: 1, name: 1, leader_name: 1, email: 1, phone: 1, category: 1, family_code: 1, provinsi: 1, kota: 1, kecamatan: 1 })
     .toArray()
   const familyMap = new Map(families.map((f) => [f.id as string, f]))
 
@@ -126,6 +126,7 @@ export async function listFamilyParticipantsWithFamily() {
             leader_name: family.leader_name as string,
             email: (family.email as string | null) ?? null,
             phone: family.phone as string,
+            category: (family.category as string | null) ?? null,
             family_code: family.family_code as string,
             provinsi: (family.provinsi as string | null) ?? null,
             kota: (family.kota as string | null) ?? null,

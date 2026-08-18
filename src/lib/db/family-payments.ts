@@ -133,6 +133,7 @@ export async function listFamilyPaymentsWithRelations() {
                   leader_name: family.leader_name as string,
                   email: (family.email as string | null) ?? null,
                   phone: family.phone as string,
+                  category: (family.category as string | null) ?? null,
                   family_code: family.family_code as string,
                   provinsi: (family.provinsi as string | null) ?? null,
                   kota: (family.kota as string | null) ?? null,
