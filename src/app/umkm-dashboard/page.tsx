@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
@@ -50,7 +50,7 @@ function PaymentStatusBadge({ status }: { status: string }) {
   )
 }
 
-export default function UmkmDashboardPage() {
+function UmkmDashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [umkm, setUmkm] = useState<UmkmRegistration | null>(null)
@@ -509,5 +509,13 @@ export default function UmkmDashboardPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function UmkmDashboardPage() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <UmkmDashboardContent />
+    </Suspense>
   )
 }
