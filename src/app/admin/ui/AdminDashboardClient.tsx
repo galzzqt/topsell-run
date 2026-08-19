@@ -2085,6 +2085,23 @@ export function AdminDashboardClient({
     ['confirmPassword', 'Konfirmasi Password *'],
   ]
 
+  const umkmSettingFields: Array<[keyof RegistrationFormGroupSettings, string]> = [
+    ['name', 'Nama Usaha / Brand *'],
+    ['category', 'Bidang Usaha *'],
+    ['social_media', 'Link Media Sosial Usaha *'],
+    ['description', 'Deskripsi Usaha / Produk *'],
+    ['photo_urls', 'Foto Usaha / Produk UMKM *'],
+    ['leader_name', 'Nama PIC *'],
+    ['phone', 'No. WhatsApp PIC *'],
+    ['email', 'Email PIC *'],
+    ['provinsi', 'Provinsi *'],
+    ['kota', 'Kota / Kabupaten *'],
+    ['kecamatan', 'Kecamatan *'],
+    ['address', 'Alamat Lengkap Usaha / Domisili *'],
+    ['password', 'Password *'],
+    ['confirmPassword', 'Konfirmasi Password *'],
+  ]
+
   const participantInputSettingFields: Array<[keyof RegistrationFormParticipantSettings, string]> = [
     ['full_name', 'Nama Lengkap Peserta *'],
     ['bib_name', 'Nama BIB *'],
@@ -4644,149 +4661,241 @@ export function AdminDashboardClient({
       >
         {formEditingPkg && (
           <div className="flex flex-col gap-5">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Pendaftar</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {communitySettingFields.map(([key, title]) => {
-                  const field = settingsForm.registrationForm[formEditingPkg].registrant[key]
-                  return (
-                    <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                      <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
-                      <input
-                        value={field.label}
-                        onChange={(event) => updateRegistrantField(formEditingPkg, key, { label: event.target.value })}
-                        placeholder="Label field"
-                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                      />
-                      <input
-                        value={field.placeholder}
-                        onChange={(event) => updateRegistrantField(formEditingPkg, key, { placeholder: event.target.value })}
-                        placeholder="Placeholder"
-                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                      />
-                      <div className="flex items-center gap-4">
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+            {formEditingPkg === 'umkm' ? (
+              <>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Pendaftaran Tenant UMKM</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {umkmSettingFields.map(([key, title]) => {
+                      const field = settingsForm.registrationForm.umkm.registrant[key]
+                      if (!field) return null
+                      return (
+                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
                           <input
-                            type="checkbox"
-                            checked={field.visible}
-                            onChange={(event) => updateRegistrantField(formEditingPkg, key, { visible: event.target.checked })}
+                            value={field.label}
+                            onChange={(event) => updateRegistrantField('umkm', key, { label: event.target.value })}
+                            placeholder="Label field"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
                           />
-                          Tampilkan field
-                        </label>
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
                           <input
-                            type="checkbox"
-                            checked={field.required}
-                            onChange={(event) => updateRegistrantField(formEditingPkg, key, { required: event.target.checked })}
+                            value={field.placeholder}
+                            onChange={(event) => updateRegistrantField('umkm', key, { placeholder: event.target.value })}
+                            placeholder="Placeholder"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
                           />
-                          Wajib diisi
-                        </label>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+                          <div className="flex items-center gap-4">
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateRegistrantField('umkm', key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(event) => updateRegistrantField('umkm', key, { required: event.target.checked })}
+                              />
+                              Wajib diisi
+                            </label>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
 
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Peserta</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {[...participantInputSettingFields, ...(formEditingPkg === 'pacer' ? pacerOnlyInputFields : [])].map(([key, title]) => {
-                  const field = settingsForm.registrationForm[formEditingPkg].participants[key] as FormInputConfig
-                  return (
-                    <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                      <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
-                      <input
-                        value={field.label}
-                        onChange={(event) => updateParticipantField(formEditingPkg, key, { label: event.target.value })}
-                        placeholder="Label field"
-                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                      />
-                      <input
-                        value={field.placeholder}
-                        onChange={(event) => updateParticipantField(formEditingPkg, key, { placeholder: event.target.value })}
-                        placeholder="Placeholder"
-                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                      />
-                      <div className="flex items-center gap-4">
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                          <input
-                            type="checkbox"
-                            checked={field.visible}
-                            onChange={(event) => updateParticipantField(formEditingPkg, key, { visible: event.target.checked })}
-                          />
-                          Tampilkan field
-                        </label>
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
-                          <input
-                            type="checkbox"
-                            checked={field.required}
-                            onChange={(event) => updateParticipantField(formEditingPkg, key, { required: event.target.checked })}
-                          />
-                          Wajib diisi
-                        </label>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Dropdown Peserta (termasuk opsi ukuran jersey)</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {[...participantSelectSettingFields, ...(formEditingPkg === 'pacer' ? pacerOnlySelectFields : [])].map(([key, title]) => {
-                  const field = settingsForm.registrationForm[formEditingPkg].participants[key] as FormSelectConfig
-                  return (
-                    <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
-                      <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
-                      <input
-                        value={field.label}
-                        onChange={(event) => updateParticipantField(formEditingPkg, key, { label: event.target.value })}
-                        placeholder="Label dropdown"
-                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
-                      />
-                      <input
-                        value={field.placeholder}
-                        onChange={(event) => updateParticipantField(formEditingPkg, key, { placeholder: event.target.value })}
-                        placeholder="Placeholder dropdown"
-                        className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-3"
-                      />
-                      <div className="flex items-center gap-4 mb-3">
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
-                          <input
-                            type="checkbox"
-                            checked={field.visible}
-                            onChange={(event) => updateParticipantField(formEditingPkg, key, { visible: event.target.checked })}
-                          />
-                          Tampilkan field
-                        </label>
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
-                          <input
-                            type="checkbox"
-                            checked={field.required}
-                            onChange={(event) => updateParticipantField(formEditingPkg, key, { required: event.target.checked })}
-                          />
-                          Wajib diisi
-                        </label>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        {field.options.map((option) => (
-                          <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
-                            <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
+                {settingsForm.registrationForm.umkm.registrant.category?.options && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Opsi Dropdown Bidang Usaha</p>
+                    <div className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                      <p className="text-[10px] font-black uppercase text-sport-orange mb-2">Pilihan Kategori / Bidang Usaha UMKM</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {settingsForm.registrationForm.umkm.registrant.category.options.map((option) => (
+                          <div key={option.value} className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-brand-muted shrink-0 w-28 truncate">{option.value}</span>
                             <input
                               value={option.label}
-                              onChange={(event) => updateSelectOptionLabel(formEditingPkg as PackageKey, key, option.value, event.target.value)}
-                              className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                              onChange={(event) => {
+                                const newLabel = event.target.value
+                                setSettingsForm((current) => ({
+                                  ...current,
+                                  registrationForm: {
+                                    ...current.registrationForm,
+                                    umkm: {
+                                      ...current.registrationForm.umkm,
+                                      registrant: {
+                                        ...current.registrationForm.umkm.registrant,
+                                        category: {
+                                          ...current.registrationForm.umkm.registrant.category,
+                                          options: current.registrationForm.umkm.registrant.category.options.map((opt) =>
+                                            opt.value === option.value ? { ...opt, label: newLabel } : opt
+                                          ),
+                                        },
+                                      },
+                                    },
+                                  },
+                                }))
+                              }}
+                              className="w-full px-3 py-1.5 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
                             />
-                          </label>
+                          </div>
                         ))}
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Pendaftar</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {communitySettingFields.map(([key, title]) => {
+                      const field = settingsForm.registrationForm[formEditingPkg].registrant[key]
+                      return (
+                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
+                          <input
+                            value={field.label}
+                            onChange={(event) => updateRegistrantField(formEditingPkg, key, { label: event.target.value })}
+                            placeholder="Label field"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                          />
+                          <input
+                            value={field.placeholder}
+                            onChange={(event) => updateRegistrantField(formEditingPkg, key, { placeholder: event.target.value })}
+                            placeholder="Placeholder"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                          />
+                          <div className="flex items-center gap-4">
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateRegistrantField(formEditingPkg, key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(event) => updateRegistrantField(formEditingPkg, key, { required: event.target.checked })}
+                              />
+                              Wajib diisi
+                            </label>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Peserta</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[...participantInputSettingFields, ...(formEditingPkg === 'pacer' ? pacerOnlyInputFields : [])].map(([key, title]) => {
+                      const field = settingsForm.registrationForm[formEditingPkg].participants[key] as FormInputConfig
+                      return (
+                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
+                          <input
+                            value={field.label}
+                            onChange={(event) => updateParticipantField(formEditingPkg, key, { label: event.target.value })}
+                            placeholder="Label field"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                          />
+                          <input
+                            value={field.placeholder}
+                            onChange={(event) => updateParticipantField(formEditingPkg, key, { placeholder: event.target.value })}
+                            placeholder="Placeholder"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                          />
+                          <div className="flex items-center gap-4">
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateParticipantField(formEditingPkg, key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(event) => updateParticipantField(formEditingPkg, key, { required: event.target.checked })}
+                              />
+                              Wajib diisi
+                            </label>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Dropdown Peserta (termasuk opsi ukuran jersey)</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {[...participantSelectSettingFields, ...(formEditingPkg === 'pacer' ? pacerOnlySelectFields : [])].map(([key, title]) => {
+                      const field = settingsForm.registrationForm[formEditingPkg].participants[key] as FormSelectConfig
+                      return (
+                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                          <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
+                          <input
+                            value={field.label}
+                            onChange={(event) => updateParticipantField(formEditingPkg, key, { label: event.target.value })}
+                            placeholder="Label dropdown"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-2"
+                          />
+                          <input
+                            value={field.placeholder}
+                            onChange={(event) => updateParticipantField(formEditingPkg, key, { placeholder: event.target.value })}
+                            placeholder="Placeholder dropdown"
+                            className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground mb-3"
+                          />
+                          <div className="flex items-center gap-4 mb-3">
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
+                              <input
+                                type="checkbox"
+                                checked={field.visible}
+                                onChange={(event) => updateParticipantField(formEditingPkg, key, { visible: event.target.checked })}
+                              />
+                              Tampilkan field
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(event) => updateParticipantField(formEditingPkg, key, { required: event.target.checked })}
+                              />
+                              Wajib diisi
+                            </label>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            {field.options.map((option) => (
+                              <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
+                                <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
+                                <input
+                                  value={option.label}
+                                  onChange={(event) => updateSelectOptionLabel(formEditingPkg as PackageKey, key, option.value, event.target.value)}
+                                  className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex items-center gap-2">
               <Button type="button" onClick={savePackages} isLoading={isPending}>

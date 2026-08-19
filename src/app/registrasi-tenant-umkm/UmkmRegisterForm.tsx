@@ -14,7 +14,10 @@ import { registerUmkmSchema, type RegisterUmkmFormValues, type RegisterUmkmFormI
 import { signUpUmkm } from '@/app/actions/umkm-auth'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { VoucherInput } from '@/components/ui/voucher-input'
+import { Select } from '@/components/ui/select'
 import type { AppliedVoucher } from '@/lib/types/voucher'
+
+import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
 
 const UMKM_BASE_PRICE = 500_000
 
@@ -23,7 +26,7 @@ type OptionItem = {
   label: string
 }
 
-const BUSINESS_FIELDS = [
+const DEFAULT_BUSINESS_FIELDS = [
   'Kuliner / Makanan & Minuman',
   'Fashion & Pakaian',
   'Kerajinan Tangan',
@@ -44,6 +47,9 @@ export default function UmkmRegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+  // Form Settings from Admin
+  const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
+
   // Location
   const [provinsiList, setProvinsiList] = useState<OptionItem[]>([])
   const [kotaList, setKotaList] = useState<OptionItem[]>([])
@@ -63,6 +69,12 @@ export default function UmkmRegisterForm() {
   const finalPrice = Math.max(0, UMKM_BASE_PRICE - discountAmount)
   const isFree = finalPrice === 0
 
+  const cfg = formSettings.umkm.registrant
+
+  const businessFields = cfg.category?.options && cfg.category.options.length > 0
+    ? cfg.category.options.map((opt) => opt.label || opt.value)
+    : DEFAULT_BUSINESS_FIELDS
+
   const {
     register,
     handleSubmit,
@@ -80,6 +92,16 @@ export default function UmkmRegisterForm() {
       agreement_terms: false,
     },
   })
+
+  // Load registration form settings from admin
+  useEffect(() => {
+    fetch('/api/settings/registration-form')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((settings) => {
+        if (settings) setFormSettings(settings)
+      })
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     fetchProvinsi().then(setProvinsiList)
@@ -251,136 +273,141 @@ export default function UmkmRegisterForm() {
               <Store className="w-3.5 h-3.5" /> Informasi Usaha
             </h2>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Nama Usaha / Brand *</label>
-                <div className="relative">
-                  <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
-                  <input
-                    {...register('name')}
-                    placeholder="Contoh: Warung Makan Bu Sari"
-                    className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
-                  />
+              {cfg.name.visible && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                    {cfg.name.label} {cfg.name.required && '*'}
+                  </label>
+                  <div className="relative">
+                    <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                    <input
+                      {...register('name')}
+                      placeholder={cfg.name.placeholder}
+                      className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
+                    />
+                  </div>
+                  {errors.name && <p className="text-red-400 text-[11px] mt-1">{errors.name.message}</p>}
                 </div>
-                {errors.name && <p className="text-red-400 text-[11px] mt-1">{errors.name.message}</p>}
-              </div>
+              )}
 
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Bidang Usaha *</label>
-                <div className="relative">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted pointer-events-none" />
-                  <select
-                    {...register('business_field')}
-                    className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-10 py-3 text-sm text-foreground appearance-none focus:outline-none focus:border-sport-orange/50 transition-colors"
-                  >
-                    <option value="">Pilih bidang usaha</option>
-                    {BUSINESS_FIELDS.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted pointer-events-none" />
-                </div>
-                {errors.business_field && <p className="text-red-400 text-[11px] mt-1">{errors.business_field.message}</p>}
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
-                  Link Media Sosial Usaha * <span className="text-brand-muted/50 normal-case font-normal">(Instagram / TikTok / Website / dll)</span>
-                </label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
-                  <input
-                    {...register('social_media')}
-                    placeholder="Contoh: https://instagram.com/warungmakanbusari"
-                    className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
-                  />
-                </div>
-                {errors.social_media && <p className="text-red-400 text-[11px] mt-1">{errors.social_media.message}</p>}
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
-                  Deskripsi Usaha / Produk *
-                </label>
-                <textarea
-                  {...register('description')}
-                  placeholder="Jelaskan secara singkat jenis produk, menu, atau konsep tenant usaha Anda..."
-                  rows={3}
-                  className="w-full bg-brand-gray border border-card-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors resize-none"
+              {cfg.category.visible && (
+                <Select
+                  label={cfg.category.label}
+                  required={cfg.category.required}
+                  placeholder={cfg.category.placeholder || 'Pilih bidang usaha'}
+                  error={errors.business_field?.message}
+                  options={businessFields.map((f) => ({ value: f, label: f }))}
+                  {...register('business_field')}
                 />
-                {errors.description && <p className="text-red-400 text-[11px] mt-1">{errors.description.message}</p>}
-              </div>
+              )}
+
+              {cfg.social_media.visible && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                    {cfg.social_media.label} {cfg.social_media.required && '*'} <span className="text-brand-muted/50 normal-case font-normal">(Instagram / TikTok / Website / dll)</span>
+                  </label>
+                  <div className="relative">
+                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                    <input
+                      {...register('social_media')}
+                      placeholder={cfg.social_media.placeholder}
+                      className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
+                    />
+                  </div>
+                  {errors.social_media && <p className="text-red-400 text-[11px] mt-1">{errors.social_media.message}</p>}
+                </div>
+              )}
+
+              {cfg.description.visible && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                    {cfg.description.label} {cfg.description.required && '*'}
+                  </label>
+                  <textarea
+                    {...register('description')}
+                    placeholder={cfg.description.placeholder}
+                    rows={3}
+                    className="w-full bg-brand-gray border border-card-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors resize-none"
+                  />
+                  {errors.description && <p className="text-red-400 text-[11px] mt-1">{errors.description.message}</p>}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Foto Usaha / Produk UMKM */}
-          <div className="bg-card-bg border border-card-border rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-xs font-black uppercase tracking-widest text-sport-orange flex items-center gap-2">
-                <ImagePlus className="w-3.5 h-3.5" /> Foto Usaha / Produk UMKM *
-              </h2>
-              <span className={`text-[10px] font-black ${photoUrls.length === 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {photoUrls.length}/5 Foto {photoUrls.length === 0 ? '(Wajib min. 1)' : '✓'}
-              </span>
-            </div>
-            <p className="text-xs text-brand-muted mb-4">
-              Wajib mengunggah minimal 1 foto (maks. 5 foto, maks. 3MB per foto) berupa foto produk, logo, atau foto tempat/booth usaha Anda.
-            </p>
+          {cfg.photo_urls.visible && (
+            <div className="bg-card-bg border border-card-border rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-xs font-black uppercase tracking-widest text-sport-orange flex items-center gap-2">
+                  <ImagePlus className="w-3.5 h-3.5" /> {cfg.photo_urls.label} {cfg.photo_urls.required && '*'}
+                </h2>
+                <span className={`text-[10px] font-black ${photoUrls.length === 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {photoUrls.length}/5 Foto {photoUrls.length === 0 ? (cfg.photo_urls.required ? '(Wajib min. 1)' : '(Opsional)') : '✓'}
+                </span>
+              </div>
+              <p className="text-xs text-brand-muted mb-4">
+                {cfg.photo_urls.placeholder || 'Wajib mengunggah minimal 1 foto (maks. 5 foto, maks. 3MB per foto) berupa foto produk, logo, atau foto tempat/booth usaha Anda.'}
+              </p>
 
-            {/* Photos Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {photoUrls.map((url, idx) => (
-                <div key={url} className="relative group rounded-xl overflow-hidden border border-card-border bg-brand-dark/40 aspect-video">
-                  <Image
-                    src={url}
-                    alt={`Foto UMKM ${idx + 1}`}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemovePhoto(idx)}
-                    className="absolute top-1.5 right-1.5 p-1 bg-brand-dark/80 hover:bg-sport-red text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow"
-                    title="Hapus foto"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+              {/* Photos Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {photoUrls.map((url, idx) => (
+                  <div key={url} className="relative group rounded-xl overflow-hidden border border-card-border bg-brand-dark/40 aspect-video">
+                    <Image
+                      src={url}
+                      alt={`Foto UMKM ${idx + 1}`}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(idx)}
+                      className="absolute top-1.5 right-1.5 p-1 bg-brand-dark/80 hover:bg-sport-red text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow"
+                      title="Hapus foto"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
 
-              {photoUrls.length < 5 && (
-                <label className={`border-2 border-dashed border-card-border hover:border-sport-orange/50 rounded-xl aspect-video flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-brand-gray/30 hover:bg-brand-gray/50 transition-all ${isUploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handlePhotoUpload}
-                    className="sr-only"
-                    disabled={isUploadingPhoto}
-                  />
-                  {isUploadingPhoto ? (
-                    <>
-                      <Loader2 className="w-5 h-5 text-sport-orange animate-spin" />
-                      <span className="text-[10px] font-bold text-brand-muted">Mengupload...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ImagePlus className="w-5 h-5 text-brand-muted group-hover:text-sport-orange transition-colors" />
-                      <span className="text-[10px] font-bold text-brand-muted">+ Upload Foto</span>
-                    </>
-                  )}
-                </label>
+                {photoUrls.length < 5 && (
+                  <label className={`border-2 border-dashed border-card-border hover:border-sport-orange/50 rounded-xl aspect-video flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-brand-gray/30 hover:bg-brand-gray/50 transition-all ${isUploadingPhoto ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handlePhotoUpload}
+                      className="sr-only"
+                      disabled={isUploadingPhoto}
+                    />
+                    {isUploadingPhoto ? (
+                      <>
+                        <Loader2 className="w-5 h-5 text-sport-orange animate-spin" />
+                        <span className="text-[10px] font-bold text-brand-muted">Mengupload...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ImagePlus className="w-5 h-5 text-brand-muted group-hover:text-sport-orange transition-colors" />
+                        <span className="text-[10px] font-bold text-brand-muted">+ Upload Foto</span>
+                      </>
+                    )}
+                  </label>
+                )}
+              </div>
+              {errors.photo_urls && (
+                <p className="text-red-400 text-[11px] mt-2 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.photo_urls.message}
+                </p>
+              )}
+              {uploadError && (
+                <p className="text-red-400 text-[11px] mt-2 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {uploadError}
+                </p>
               )}
             </div>
-            {errors.photo_urls && (
-              <p className="text-red-400 text-[11px] mt-2 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.photo_urls.message}
-              </p>
-            )}
-            {uploadError && (
-              <p className="text-red-400 text-[11px] mt-2 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {uploadError}
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Info PIC */}
           <div className="bg-card-bg border border-card-border rounded-2xl p-6">
@@ -388,47 +415,59 @@ export default function UmkmRegisterForm() {
               <User className="w-3.5 h-3.5" /> Data Person in Charge (PIC)
             </h2>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Nama PIC *</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
-                  <input
-                    {...register('pic_name')}
-                    placeholder="Nama lengkap penanggung jawab"
-                    className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
-                  />
+              {cfg.leader_name.visible && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                    {cfg.leader_name.label} {cfg.leader_name.required && '*'}
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                    <input
+                      {...register('pic_name')}
+                      placeholder={cfg.leader_name.placeholder}
+                      className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
+                    />
+                  </div>
+                  {errors.pic_name && <p className="text-red-400 text-[11px] mt-1">{errors.pic_name.message}</p>}
                 </div>
-                {errors.pic_name && <p className="text-red-400 text-[11px] mt-1">{errors.pic_name.message}</p>}
-              </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">No. WhatsApp *</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
-                    <input
-                      {...register('phone')}
-                      placeholder="0812xxxxxxxx"
-                      type="tel"
-                      className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
-                    />
+                {cfg.phone.visible && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                      {cfg.phone.label} {cfg.phone.required && '*'}
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                      <input
+                        {...register('phone')}
+                        placeholder={cfg.phone.placeholder}
+                        type="tel"
+                        className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
+                      />
+                    </div>
+                    {errors.phone && <p className="text-red-400 text-[11px] mt-1">{errors.phone.message}</p>}
                   </div>
-                  {errors.phone && <p className="text-red-400 text-[11px] mt-1">{errors.phone.message}</p>}
-                </div>
+                )}
 
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Email *</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
-                    <input
-                      {...register('email')}
-                      placeholder="email@gmail.com"
-                      type="email"
-                      className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
-                    />
+                {cfg.email.visible && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                      {cfg.email.label} {cfg.email.required && '*'}
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                      <input
+                        {...register('email')}
+                        placeholder={cfg.email.placeholder}
+                        type="email"
+                        className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
+                      />
+                    </div>
+                    {errors.email && <p className="text-red-400 text-[11px] mt-1">{errors.email.message}</p>}
                   </div>
-                  {errors.email && <p className="text-red-400 text-[11px] mt-1">{errors.email.message}</p>}
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -439,84 +478,75 @@ export default function UmkmRegisterForm() {
               <MapPin className="w-3.5 h-3.5" /> Lokasi Usaha
             </h2>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Provinsi *</label>
-                <div className="relative">
-                  <select
-                    value={selectedProvinsiId}
-                    onChange={(e) => {
-                      const opt = provinsiList.find((p) => p.value === e.target.value)
-                      setSelectedProvinsiId(e.target.value)
-                      setValue('provinsi', opt?.value || '')
-                      setValue('kota', '')
-                      setValue('kecamatan', '')
-                      setSelectedKotaId('')
-                    }}
-                    className="w-full bg-brand-gray border border-card-border rounded-xl px-4 pr-10 py-3 text-sm text-foreground appearance-none focus:outline-none focus:border-sport-orange/50 transition-colors"
-                  >
-                    <option value="">Pilih provinsi</option>
-                    {provinsiList.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted pointer-events-none" />
-                </div>
-                {errors.provinsi && <p className="text-red-400 text-[11px] mt-1">{errors.provinsi.message}</p>}
-              </div>
+              {cfg.provinsi.visible && (
+                <Select
+                  label={cfg.provinsi.label}
+                  required={cfg.provinsi.required}
+                  placeholder={cfg.provinsi.placeholder || 'Pilih provinsi'}
+                  error={errors.provinsi?.message}
+                  options={provinsiList}
+                  value={selectedProvinsiId}
+                  onChange={(e) => {
+                    const opt = provinsiList.find((p) => p.value === e.target.value)
+                    setSelectedProvinsiId(e.target.value)
+                    setValue('provinsi', opt?.value || '')
+                    setValue('kota', '')
+                    setValue('kecamatan', '')
+                    setSelectedKotaId('')
+                  }}
+                />
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Kota / Kabupaten *</label>
-                  <div className="relative">
-                    <select
-                      value={selectedKotaId}
-                      disabled={!selectedProvinsiId}
-                      onChange={(e) => {
-                        const opt = kotaList.find((k) => k.value === e.target.value)
-                        setSelectedKotaId(e.target.value)
-                        setValue('kota', opt?.value || '')
-                        setValue('kecamatan', '')
-                      }}
-                      className="w-full bg-brand-gray border border-card-border rounded-xl px-4 pr-10 py-3 text-sm text-foreground appearance-none focus:outline-none focus:border-sport-orange/50 transition-colors disabled:opacity-40"
-                    >
-                      <option value="">Pilih kota</option>
-                      {kotaList.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted pointer-events-none" />
-                  </div>
-                  {errors.kota && <p className="text-red-400 text-[11px] mt-1">{errors.kota.message}</p>}
-                </div>
+                {cfg.kota.visible && (
+                  <Select
+                    label={cfg.kota.label}
+                    required={cfg.kota.required}
+                    placeholder={selectedProvinsiId ? (cfg.kota.placeholder || 'Pilih kota') : 'Pilih provinsi dulu'}
+                    error={errors.kota?.message}
+                    disabled={!selectedProvinsiId}
+                    options={kotaList}
+                    value={selectedKotaId}
+                    onChange={(e) => {
+                      const opt = kotaList.find((k) => k.value === e.target.value)
+                      setSelectedKotaId(e.target.value)
+                      setValue('kota', opt?.value || '')
+                      setValue('kecamatan', '')
+                    }}
+                  />
+                )}
 
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Kecamatan *</label>
-                  <div className="relative">
-                    <select
-                      disabled={!selectedKotaId}
-                      onChange={(e) => {
-                        const opt = kecamatanList.find((k) => k.value === e.target.value)
-                        setValue('kecamatan', opt?.value || '')
-                      }}
-                      className="w-full bg-brand-gray border border-card-border rounded-xl px-4 pr-10 py-3 text-sm text-foreground appearance-none focus:outline-none focus:border-sport-orange/50 transition-colors disabled:opacity-40"
-                    >
-                      <option value="">Pilih kecamatan</option>
-                      {kecamatanList.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted pointer-events-none" />
-                  </div>
-                  {errors.kecamatan && <p className="text-red-400 text-[11px] mt-1">{errors.kecamatan.message}</p>}
-                </div>
+                {cfg.kecamatan.visible && (
+                  <Select
+                    label={cfg.kecamatan.label}
+                    required={cfg.kecamatan.required}
+                    placeholder={selectedKotaId ? (cfg.kecamatan.placeholder || 'Pilih kecamatan') : 'Pilih kota dulu'}
+                    error={errors.kecamatan?.message}
+                    disabled={!selectedKotaId}
+                    options={kecamatanList}
+                    value={watch('kecamatan') || ''}
+                    onChange={(e) => {
+                      const opt = kecamatanList.find((k) => k.value === e.target.value)
+                      setValue('kecamatan', opt?.value || '')
+                    }}
+                  />
+                )}
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
-                  Alamat Lengkap Usaha / Domisili *
-                </label>
-                <textarea
-                  {...register('address')}
-                  placeholder="Nama jalan, nomor bangunan/toko, RT/RW, kelurahan/desa, patokan lokasi..."
-                  rows={2}
-                  className="w-full bg-brand-gray border border-card-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors resize-none"
-                />
-                {errors.address && <p className="text-red-400 text-[11px] mt-1">{errors.address.message}</p>}
-              </div>
+              {cfg.address.visible && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                    {cfg.address.label} {cfg.address.required && '*'}
+                  </label>
+                  <textarea
+                    {...register('address')}
+                    placeholder={cfg.address.placeholder}
+                    rows={2}
+                    className="w-full bg-brand-gray border border-card-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors resize-none"
+                  />
+                  {errors.address && <p className="text-red-400 text-[11px] mt-1">{errors.address.message}</p>}
+                </div>
+              )}
             </div>
           </div>
 
@@ -572,13 +602,15 @@ export default function UmkmRegisterForm() {
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Password *</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                  {cfg.password.label} {cfg.password.required && '*'}
+                </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
                   <input
                     {...register('password')}
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Minimal 6 karakter"
+                    placeholder={cfg.password.placeholder}
                     className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-12 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
                   />
                   <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-foreground">
@@ -589,13 +621,15 @@ export default function UmkmRegisterForm() {
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">Konfirmasi Password *</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-brand-muted block mb-1.5">
+                  {cfg.confirmPassword.label} {cfg.confirmPassword.required && '*'}
+                </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
                   <input
                     {...register('confirmPassword')}
                     type={showConfirmPassword ? 'text' : 'password'}
-                    placeholder="Ulangi password Anda"
+                    placeholder={cfg.confirmPassword.placeholder}
                     className="w-full bg-brand-gray border border-card-border rounded-xl pl-10 pr-12 py-3 text-sm text-foreground placeholder:text-brand-muted/50 focus:outline-none focus:border-sport-orange/50 transition-colors"
                   />
                   <button type="button" onClick={() => setShowConfirmPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-foreground">

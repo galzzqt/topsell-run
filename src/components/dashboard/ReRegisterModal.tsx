@@ -5,6 +5,7 @@ import { Plus, Trash2, Trophy, AlertCircle, Info, RefreshCw, X } from 'lucide-re
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { VoucherInput } from '@/components/ui/voucher-input'
+import { Select } from '@/components/ui/select'
 import { usePackagesSettings, resolveCategoryLabel } from '@/lib/hooks/usePackagesSettings'
 import type { AppliedVoucher, VoucherPackageKey } from '@/lib/types/voucher'
 import {
@@ -365,45 +366,36 @@ export function ReRegisterModal({
                       className="px-3 py-1.5 bg-brand-gray/50 border border-card-border rounded-lg text-xs text-foreground focus:outline-none focus:border-sport-orange"
                     />
                   </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[10px] text-brand-muted font-bold">Gender *</span>
-                    <select
+                  <div className="flex flex-col gap-1">
+                    <Select
+                      label="Gender"
+                      required
                       value={p.gender}
                       onChange={(e) => handleUpdateParticipant(idx, 'gender', e.target.value as 'male' | 'female')}
-                      className="px-3 py-1.5 bg-brand-gray/50 border border-card-border rounded-lg text-xs text-foreground focus:outline-none focus:border-sport-orange"
-                    >
-                      <option value="male">Laki-Laki (Male)</option>
-                      <option value="female">Perempuan (Female)</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[10px] text-brand-muted font-bold">Ukuran Jersey *</span>
-                    <select
+                      options={[
+                        { value: 'male', label: 'Laki-Laki (Male)' },
+                        { value: 'female', label: 'Perempuan (Female)' },
+                      ]}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Select
+                      label="Ukuran Jersey"
+                      required
                       value={p.tshirt_size}
                       onChange={(e) => handleUpdateParticipant(idx, 'tshirt_size', e.target.value as any)}
-                      className="px-3 py-1.5 bg-brand-gray/50 border border-card-border rounded-lg text-xs text-foreground focus:outline-none focus:border-sport-orange"
-                    >
-                      <option value="XS">XS</option>
-                      <option value="S">S</option>
-                      <option value="M">M</option>
-                      <option value="L">L</option>
-                      <option value="XL">XL</option>
-                      <option value="XXL">XXL</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[10px] text-brand-muted font-bold">Golongan Darah *</span>
-                    <select
+                      options={['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((s) => ({ value: s, label: s }))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Select
+                      label="Golongan Darah"
+                      required
                       value={p.blood_type}
                       onChange={(e) => handleUpdateParticipant(idx, 'blood_type', e.target.value as any)}
-                      className="px-3 py-1.5 bg-brand-gray/50 border border-card-border rounded-lg text-xs text-foreground focus:outline-none focus:border-sport-orange"
-                    >
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="AB">AB</option>
-                      <option value="O">O</option>
-                    </select>
-                  </label>
+                      options={['A', 'B', 'AB', 'O'].map((b) => ({ value: b, label: b }))}
+                    />
+                  </div>
                   <label className="flex flex-col gap-1 sm:col-span-2">
                     <span className="text-[10px] text-brand-muted font-bold">Kontak Darurat (Nama &amp; No. HP) *</span>
                     <div className="grid grid-cols-2 gap-2">

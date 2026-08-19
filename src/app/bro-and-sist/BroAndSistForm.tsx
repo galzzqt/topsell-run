@@ -535,13 +535,11 @@ export default function BroAndSistForm() {
                         ] as const).map(({ label, key, options }) => (
                           <div key={key} className="flex flex-col gap-1">
                             <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">{label}</label>
-                            <select
+                            <Select
                               value={(field as Record<string, string>)[key] || ''}
                               onChange={(e) => setAddFields((f) => f.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
-                              className="border border-card-border rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sport-purple/30 bg-white"
-                            >
-                              {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
+                              options={options}
+                            />
                             {key === 'tshirt_size' && (
                               <button
                                 type="button"

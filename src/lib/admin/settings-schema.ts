@@ -47,6 +47,10 @@ export type RegistrationFormGroupSettings = {
   provinsi: FormInputConfig
   kota: FormInputConfig
   kecamatan: FormInputConfig
+  social_media: FormInputConfig
+  description: FormInputConfig
+  photo_urls: FormInputConfig
+  address: FormInputConfig
   password: FormInputConfig
   confirmPassword: FormInputConfig
 }
@@ -162,6 +166,10 @@ const DEFAULT_REGISTRANT_GROUP: RegistrationFormGroupSettings = {
   provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi', visible: true, required: true },
   kota: { label: 'Kota / Kabupaten', placeholder: 'Pilih kota/kabupaten', visible: true, required: true },
   kecamatan: { label: 'Kecamatan', placeholder: 'Pilih kecamatan', visible: true, required: true },
+  social_media: { label: 'Link Media Sosial', placeholder: 'Contoh: https://instagram.com/...', visible: false, required: false },
+  description: { label: 'Deskripsi', placeholder: 'Deskripsi singkat...', visible: false, required: false },
+  photo_urls: { label: 'Foto', placeholder: 'Upload foto', visible: false, required: false },
+  address: { label: 'Alamat Lengkap', placeholder: 'Alamat lengkap domisili...', visible: false, required: false },
   password: { label: 'Password', placeholder: 'Minimal 6 karakter', visible: true, required: true },
   confirmPassword: { label: 'Konfirmasi Password', placeholder: 'Ulangi password', visible: true, required: true },
 }
@@ -321,9 +329,6 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
     registrant: {
       ...DEFAULT_REGISTRANT_GROUP,
       name: { label: 'Nama Usaha / Brand', placeholder: 'Contoh: Warung Makan Bu Sari', visible: true, required: true },
-      leader_name: { label: 'Nama PIC', placeholder: 'Nama lengkap penanggung jawab', visible: true, required: true },
-      phone: { label: 'No. WhatsApp PIC', placeholder: '08xxxxxxxxxx', visible: true, required: true },
-      email: { label: 'Email PIC', placeholder: 'email@usaha.com', visible: true, required: true },
       category: {
         label: 'Bidang Usaha',
         placeholder: 'Pilih bidang usaha',
@@ -342,6 +347,18 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
           { value: 'Lainnya', label: 'Lainnya' },
         ],
       },
+      social_media: { label: 'Link Media Sosial Usaha', placeholder: 'Contoh: https://instagram.com/warungmakanbusari', visible: true, required: true },
+      description: { label: 'Deskripsi Usaha / Produk', placeholder: 'Jelaskan secara singkat jenis produk, menu, atau konsep tenant usaha Anda...', visible: true, required: true },
+      photo_urls: { label: 'Foto Usaha / Produk UMKM', placeholder: 'Upload foto usaha/produk', visible: true, required: true },
+      leader_name: { label: 'Nama PIC', placeholder: 'Nama lengkap penanggung jawab', visible: true, required: true },
+      phone: { label: 'No. WhatsApp PIC', placeholder: '08xxxxxxxxxx', visible: true, required: true },
+      email: { label: 'Email PIC', placeholder: 'email@usaha.com', visible: true, required: true },
+      provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi', visible: true, required: true },
+      kota: { label: 'Kota / Kabupaten', placeholder: 'Pilih kota', visible: true, required: true },
+      kecamatan: { label: 'Kecamatan', placeholder: 'Pilih kecamatan', visible: true, required: true },
+      address: { label: 'Alamat Lengkap Usaha / Domisili', placeholder: 'Nama jalan, nomor bangunan/toko, RT/RW, kelurahan/desa, patokan lokasi...', visible: true, required: true },
+      password: { label: 'Password', placeholder: 'Minimal 6 karakter', visible: true, required: true },
+      confirmPassword: { label: 'Konfirmasi Password', placeholder: 'Ulangi password Anda', visible: true, required: true },
     },
     participants: {
       ...DEFAULT_PARTICIPANT_GROUP,

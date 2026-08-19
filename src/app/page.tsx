@@ -92,16 +92,6 @@ export default function LandingPage() {
               className="w-full max-w-[280px] sm:max-w-[456px] h-auto object-contain"
               priority
             />
-            <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-white border border-card-border shadow-sm text-brand-muted">
-              <span className="text-sm font-black uppercase tracking-widest">Supported by</span>
-              <Image
-                src="/images/mandiri.png"
-                alt="Mandiri"
-                width={160}
-                height={45}
-                className="h-9 sm:h-11 w-auto object-contain"
-              />
-            </div>
           </div>
 
           {/* Meta info */}
