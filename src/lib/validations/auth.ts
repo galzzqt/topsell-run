@@ -233,3 +233,36 @@ export type RegisterPacerFormValues = z.infer<typeof registerPacerSchema>
 // dan `media_urls` (default) membuat input/output schema berbeda secara struktural.
 export type RegisterPacerFormInput = z.input<typeof registerPacerSchema>
 export type ParticipantItemValues = z.infer<typeof participantItemSchema>
+
+// ─── UMKM Registration Schema ────────────────────────────────────────────────
+
+export const registerUmkmSchema = z
+  .object({
+    name: z.string().min(3, 'Nama usaha minimal 3 karakter').max(100, 'Nama usaha maksimal 100 karakter'),
+    pic_name: z.string().min(3, 'Nama PIC minimal 3 karakter').max(50, 'Nama PIC maksimal 50 karakter'),
+    phone: z
+      .string()
+      .min(1, 'Nomor HP wajib diisi')
+      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    email: emailSchema,
+    business_field: z.string().min(2, 'Bidang usaha wajib diisi').max(100, 'Bidang usaha maksimal 100 karakter'),
+    description: z.string().min(5, 'Deskripsi usaha wajib diisi (minimal 5 karakter)').max(500, 'Deskripsi maksimal 500 karakter'),
+    social_media: z.string().min(3, 'Link media sosial usaha wajib diisi').max(200, 'Link media sosial maksimal 200 karakter'),
+    photo_urls: z.array(z.string()).min(1, 'Wajib mengunggah minimal 1 foto usaha/produk').max(5, 'Maksimal 5 foto'),
+    provinsi: z.string().min(1, 'Provinsi wajib dipilih'),
+    kota: z.string().min(1, 'Kota/Kabupaten wajib dipilih'),
+    kecamatan: z.string().min(1, 'Kecamatan wajib dipilih'),
+    address: z.string().min(5, 'Alamat lengkap usaha wajib diisi (minimal 5 karakter)').max(300, 'Alamat maksimal 300 karakter'),
+    password: z.string().min(6, 'Password minimal 6 karakter'),
+    confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
+    agreement_data: z.boolean().refine((val) => val === true, 'Persetujuan data wajib dicentang'),
+    agreement_terms: z.boolean().refine((val) => val === true, 'Persetujuan syarat & ketentuan wajib dicentang'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Konfirmasi password tidak cocok',
+    path: ['confirmPassword'],
+  })
+
+export type RegisterUmkmFormValues = z.infer<typeof registerUmkmSchema>
+export type RegisterUmkmFormInput = z.input<typeof registerUmkmSchema>
+

@@ -399,3 +399,55 @@ export interface PacerParticipant {
   created_at: string
   updated_at: string
 }
+
+// ==========================================
+// UMKM — pendaftaran tenant UMKM dengan approval admin + pembayaran Xendit
+// (koleksi terpisah: umkm_registrations, umkm_auth, umkm_payments)
+// ==========================================
+
+export interface UmkmRegistration {
+  id: string
+  name: string           // Nama usaha / bisnis
+  pic_name: string       // Nama Person in Charge
+  email: string
+  phone: string
+  business_field: string // Bidang usaha (kuliner, fashion, kerajinan, dll)
+  description: string | null
+  social_media?: string | null
+  photo_urls?: string[]
+  umkm_code: string
+  provinsi: string | null
+  kota: string | null
+  kecamatan: string | null
+  address?: string | null
+  // Admin approval status
+  status: 'pending' | 'approved' | 'rejected'
+  status_note: string | null
+  reviewed_at: string | null
+  // Payment
+  payment_amount: number    // Rp 500.000 (dikurangi diskon voucher)
+  payment_status?: 'pending' | 'paid'  // undefined = belum bayar
+  voucher_code: string | null
+  voucher_discount: number
+  // Email verification
+  email_verified: boolean
+  verification_token: string | null
+  verification_token_expires: string | null
+  verification_sent_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UmkmPayment {
+  id: string
+  umkm_id: string
+  amount: number
+  payment_method: string | null
+  payment_reference: string
+  xendit_session_id: string | null
+  checkout_url: string | null
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
+  paid_at: string | null
+  created_at: string
+  updated_at: string
+}

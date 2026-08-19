@@ -35,6 +35,9 @@ import {
   findPacerByPhoneExcept,
   findPacerById,
   findPacerParticipantByPacerId,
+  // umkm database imports
+  findUmkmById,
+  updateUmkm,
 } from '@/lib/db'
 import { sendPacerRegistrationWebhook } from '@/lib/ghl/webhook'
 import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
@@ -701,7 +704,7 @@ export async function refreshAxiomLogs() {
 
 export type UpdatePaymentStatusValues = {
   paymentId: string
-  packageType: 'community' | 'family' | 'individual'
+  packageType: 'community' | 'family' | 'individual' | 'umkm'
   status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   paymentMethod?: string
 }
@@ -726,31 +729,37 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
       community: db.findPaymentById,
       family: db.findFamilyPaymentById,
       individual: db.findIndividualPaymentById,
+      umkm: db.findUmkmPaymentById,
     }[packageType]
     const markPaid = {
       community: db.markPaymentPaid,
       family: db.markFamilyPaymentPaid,
       individual: db.markIndividualPaymentPaid,
+      umkm: db.markUmkmPaymentPaid,
     }[packageType]
     const markFailed = {
       community: db.markPaymentFailed,
       family: db.markFamilyPaymentFailed,
       individual: db.markIndividualPaymentFailed,
+      umkm: db.markUmkmPaymentFailed,
     }[packageType]
     const markExpired = {
       community: db.markPaymentExpired,
       family: db.markFamilyPaymentExpired,
       individual: db.markIndividualPaymentExpired,
+      umkm: db.markUmkmPaymentExpired,
     }[packageType]
     const markTesting = {
       community: db.markPaymentTesting,
       family: db.markFamilyPaymentTesting,
       individual: db.markIndividualPaymentTesting,
+      umkm: async (id: string) => { await db.updateUmkmPayment(id, { status: 'testing' as any }) },
     }[packageType]
     const updatePaymentPending = {
       community: db.updatePayment,
       family: db.updateFamilyPayment,
       individual: db.updateIndividualPayment,
+      umkm: db.updateUmkmPayment,
     }[packageType]
 
     const payment = await findPaymentByPackage(paymentId)
@@ -759,8 +768,8 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
     }
 
     const oldStatus = payment.status
-    const packageName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'Individu' : 'Bro & Sist Package'
-    const eventPrefix = packageType === 'community' ? 'admin_payment' : packageType === 'individual' ? 'admin_individual_payment' : 'admin_family_payment'
+    const packageName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'Individu' : packageType === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist Package'
+    const eventPrefix = packageType === 'community' ? 'admin_payment' : packageType === 'individual' ? 'admin_individual_payment' : packageType === 'umkm' ? 'admin_umkm_payment' : 'admin_family_payment'
 
     if (status === 'paid') {
       const updateValues = {
@@ -777,19 +786,19 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
         const individualWa = await import('@/lib/whatsapp/individual')
 
         try {
-          if (packageType === 'community') {
+          if (packageType === 'community' && 'registration_id' in payment) {
             await Promise.all([
               racepackEmail.sendRacepackEmailsForRegistration(payment.registration_id),
               racepackWa.sendRacepackWhatsappsForRegistration(payment.registration_id),
               receiptEmail.sendCommunityReceiptEmail(payment.registration_id),
             ])
-          } else if (packageType === 'individual') {
+          } else if (packageType === 'individual' && 'registration_id' in payment) {
             await Promise.all([
               individualEmail.sendIndividualRacepackEmailsForRegistration(payment.registration_id),
               individualEmail.sendIndividualReceiptEmail(payment.registration_id),
               individualWa.sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
             ])
-          } else {
+          } else if (packageType === 'family' && 'registration_id' in payment) {
             await Promise.all([
               racepackEmail.sendFamilyRacepackEmailsForRegistration(payment.registration_id),
               racepackWa.sendFamilyRacepackWhatsappsForRegistration(payment.registration_id),
@@ -1022,6 +1031,45 @@ export async function updateAdminPacerParticipant(participantId: string, values:
     })
   } catch (logError) {
     console.error('Failed to log admin pacer participant update:', logError)
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export async function updateAdminUmkmStatus(
+  umkmId: string,
+  status: 'approved' | 'rejected',
+  statusNote?: string
+) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  const umkm = await findUmkmById(umkmId)
+  if (!umkm) {
+    return { error: 'Data UMKM tidak ditemukan.' }
+  }
+
+  const now = new Date().toISOString()
+  await updateUmkm(umkmId, {
+    status,
+    status_note: statusNote || null,
+    reviewed_at: now,
+  })
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: `admin_umkm_${status}`,
+      message: `Admin ${session.name} ${status === 'approved' ? 'menyetujui' : 'menolak'} pendaftaran UMKM: ${umkm.name} (${umkm.phone}).`,
+      actor: session,
+      data: { umkmId, name: umkm.name, phone: umkm.phone, status, statusNote },
+    })
+  } catch (logError) {
+    console.error('Failed to log admin UMKM status update:', logError)
   }
 
   revalidatePath('/admin')

@@ -14,7 +14,7 @@ export type FormSelectConfig = FormInputConfig & {
   options: FormSelectOptionConfig[]
 }
 
-export type PackageKey = 'community' | 'family' | 'individual' | 'pacer'
+export type PackageKey = 'community' | 'family' | 'individual' | 'pacer' | 'umkm'
 
 export type EmailTemplateConfig = {
   subject: string
@@ -159,23 +159,23 @@ const DEFAULT_REGISTRANT_GROUP: RegistrationFormGroupSettings = {
       { value: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', label: '6K 1̶4̶9̶.̶0̶0̶0̶ 135.000' },
     ],
   },
-  provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi komunitas', visible: true, required: true },
+  provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi', visible: true, required: true },
   kota: { label: 'Kota / Kabupaten', placeholder: 'Pilih kota/kabupaten', visible: true, required: true },
   kecamatan: { label: 'Kecamatan', placeholder: 'Pilih kecamatan', visible: true, required: true },
-  password: { label: 'Password', placeholder: 'Min. 6 karakter', visible: true, required: true },
+  password: { label: 'Password', placeholder: 'Minimal 6 karakter', visible: true, required: true },
   confirmPassword: { label: 'Konfirmasi Password', placeholder: 'Ulangi password', visible: true, required: true },
 }
 
 const DEFAULT_PARTICIPANT_GROUP: RegistrationFormParticipantSettings = {
-  full_name: { label: 'Nama Lengkap', placeholder: 'Nama lengkap peserta', visible: true, required: true },
-  bib_name: { label: 'Nama BIB', placeholder: 'Nama di BIB', visible: true, required: true },
-  ktp_number: { label: 'No. KTP', placeholder: 'Nomor KTP 16 digit', visible: true, required: true },
-  email: { label: 'Email', placeholder: 'email@peserta.com', visible: true, required: true },
-  phone: { label: 'No. WhatsApp', placeholder: '08xxxxxxxxxx', visible: true, required: true },
-  date_of_birth: { label: 'Tanggal Lahir', placeholder: 'DD/MM/YYYY', visible: true, required: true },
+  full_name: { label: 'Nama Lengkap', placeholder: 'Nama sesuai KTP', visible: true, required: true },
+  bib_name: { label: 'Nama BIB', placeholder: 'Maks. 12 karakter', visible: true, required: true },
+  ktp_number: { label: 'Nomor KTP / NIK', placeholder: '16 digit NIK', visible: true, required: true },
+  email: { label: 'Email Peserta', placeholder: 'email@peserta.com', visible: true, required: true },
+  phone: { label: 'No. WhatsApp Peserta', placeholder: '08xxxxxxxxxx', visible: true, required: true },
+  date_of_birth: { label: 'Tanggal Lahir', placeholder: 'YYYY-MM-DD', visible: true, required: true },
   gender: {
     label: 'Jenis Kelamin',
-    placeholder: '',
+    placeholder: 'Pilih jenis kelamin',
     visible: true,
     required: true,
     options: [
@@ -185,35 +185,41 @@ const DEFAULT_PARTICIPANT_GROUP: RegistrationFormParticipantSettings = {
   },
   tshirt_size: {
     label: 'Ukuran Jersey',
-    placeholder: '',
+    placeholder: 'Pilih ukuran',
     visible: true,
     required: true,
-    options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'].map((size) => ({ value: size, label: size })),
+    options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
   },
   blood_type: {
-    label: 'Gol. Darah',
-    placeholder: '',
+    label: 'Golongan Darah',
+    placeholder: 'Pilih golongan darah',
     visible: true,
     required: true,
-    options: ['A', 'B', 'AB', 'O'].map((type) => ({ value: type, label: type })),
+    options: [
+      { value: 'A', label: 'A' },
+      { value: 'B', label: 'B' },
+      { value: 'AB', label: 'AB' },
+      { value: 'O', label: 'O' },
+      { value: 'none', label: 'Tidak Tahu' },
+    ],
   },
-  medical_condition: { label: 'Penyakit Bawaan', placeholder: 'Isi jika ada, contoh: asma', visible: true, required: false },
-  emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Nama kontak darurat', visible: true, required: true },
+  medical_condition: { label: 'Riwayat Penyakit', placeholder: 'Isi "Tidak ada" jika sehat', visible: true, required: false },
+  emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Keluarga / kerabat terdekat', visible: true, required: true },
   emergency_contact_phone: { label: 'No. Kontak Darurat', placeholder: '08xxxxxxxxxx', visible: true, required: true },
-  // Field khusus Pacer — disembunyikan (visible:false) di paket lain karena form mereka tidak merender field ini.
-  age: { label: 'Usia', placeholder: 'Usia (tahun)', visible: false, required: true },
-  sosmed_instagram: { label: 'Instagram', placeholder: '@username', visible: false, required: true },
-  sosmed_tiktok: { label: 'TikTok', placeholder: '@username', visible: false, required: false },
-  strava_link: { label: 'Link Akun Strava', placeholder: 'https://strava.com/athletes/...', visible: false, required: true },
-  strava_username: { label: 'Username Strava', placeholder: 'Username Strava', visible: false, required: true },
-  bank_name: { label: 'Nama Bank', placeholder: 'Contoh: BCA', visible: false, required: true },
-  bank_account_number: { label: 'No. Rekening', placeholder: 'Nomor rekening', visible: false, required: true },
-  bank_account_holder: { label: 'Nama Pemilik Rekening', placeholder: 'Nama Pemilik Rekening', visible: false, required: true },
+  // Khusus Pacer: nonaktif di paket lain secara default.
+  age: { label: 'Usia', placeholder: 'Usia (tahun)', visible: false, required: false },
+  sosmed_instagram: { label: 'Link Instagram', placeholder: 'https://instagram.com/username', visible: false, required: false },
+  sosmed_tiktok: { label: 'Link TikTok', placeholder: 'https://tiktok.com/@username', visible: false, required: false },
+  strava_link: { label: 'Link Akun Strava', placeholder: 'https://strava.com/athletes/...', visible: false, required: false },
+  strava_username: { label: 'Username Strava', placeholder: 'Username Strava', visible: false, required: false },
+  bank_name: { label: 'Nama Bank', placeholder: 'Contoh: BCA', visible: false, required: false },
+  bank_account_number: { label: 'No. Rekening', placeholder: 'Nomor rekening', visible: false, required: false },
+  bank_account_holder: { label: 'Nama Pemilik Rekening', placeholder: 'Nama Pemilik Rekening', visible: false, required: false },
   has_smartwatch: {
     label: 'Punya Smartwatch?',
     placeholder: '',
     visible: false,
-    required: true,
+    required: false,
     options: [
       { value: 'yes', label: 'Ya' },
       { value: 'no', label: 'Tidak' },
@@ -222,8 +228,19 @@ const DEFAULT_PARTICIPANT_GROUP: RegistrationFormParticipantSettings = {
 }
 
 export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
-  community: { registrant: DEFAULT_REGISTRANT_GROUP, participants: DEFAULT_PARTICIPANT_GROUP },
-  family: { registrant: DEFAULT_REGISTRANT_GROUP, participants: DEFAULT_PARTICIPANT_GROUP },
+  community: {
+    registrant: { ...DEFAULT_REGISTRANT_GROUP },
+    participants: { ...DEFAULT_PARTICIPANT_GROUP },
+  },
+  family: {
+    registrant: {
+      ...DEFAULT_REGISTRANT_GROUP,
+      name: { label: 'Nama Keluarga', placeholder: 'Contoh: Keluarga Pratama', visible: true, required: true },
+      leader_name: { label: 'Nama Perwakilan Keluarga', placeholder: 'Nama lengkap perwakilan', visible: true, required: true },
+      email: { label: 'Email Keluarga', placeholder: 'email@keluarga.com', visible: true, required: true },
+    },
+    participants: { ...DEFAULT_PARTICIPANT_GROUP },
+  },
   individual: {
     registrant: {
       ...DEFAULT_REGISTRANT_GROUP,
@@ -237,8 +254,8 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         visible: true,
         required: true,
         options: [
-          { value: '3K 99.000', label: '3K — Rp 99.000' },
-          { value: '6K 149.000', label: '6K — Rp 149.000' },
+          { value: '3K 99.000', label: '3K 99.000' },
+          { value: '6K 149.000', label: '6K 149.000' },
         ],
       },
     },
@@ -246,7 +263,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       ...DEFAULT_PARTICIPANT_GROUP,
       tshirt_size: {
         label: 'Ukuran Jersey',
-        placeholder: '',
+        placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
         options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
@@ -275,7 +292,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       ...DEFAULT_PARTICIPANT_GROUP,
       tshirt_size: {
         label: 'Ukuran Jersey',
-        placeholder: '',
+        placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
         options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
@@ -300,6 +317,36 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       },
     },
   },
+  umkm: {
+    registrant: {
+      ...DEFAULT_REGISTRANT_GROUP,
+      name: { label: 'Nama Usaha / Brand', placeholder: 'Contoh: Warung Makan Bu Sari', visible: true, required: true },
+      leader_name: { label: 'Nama PIC', placeholder: 'Nama lengkap penanggung jawab', visible: true, required: true },
+      phone: { label: 'No. WhatsApp PIC', placeholder: '08xxxxxxxxxx', visible: true, required: true },
+      email: { label: 'Email PIC', placeholder: 'email@usaha.com', visible: true, required: true },
+      category: {
+        label: 'Bidang Usaha',
+        placeholder: 'Pilih bidang usaha',
+        visible: true,
+        required: true,
+        options: [
+          { value: 'Kuliner / Makanan & Minuman', label: 'Kuliner / Makanan & Minuman' },
+          { value: 'Fashion & Pakaian', label: 'Fashion & Pakaian' },
+          { value: 'Kerajinan Tangan', label: 'Kerajinan Tangan' },
+          { value: 'Kecantikan & Perawatan', label: 'Kecantikan & Perawatan' },
+          { value: 'Elektronik & Gadget', label: 'Elektronik & Gadget' },
+          { value: 'Olahraga & Outdoor', label: 'Olahraga & Outdoor' },
+          { value: 'Kesehatan & Suplemen', label: 'Kesehatan & Suplemen' },
+          { value: 'Pertanian & Perkebunan', label: 'Pertanian & Perkebunan' },
+          { value: 'Jasa & Layanan', label: 'Jasa & Layanan' },
+          { value: 'Lainnya', label: 'Lainnya' },
+        ],
+      },
+    },
+    participants: {
+      ...DEFAULT_PARTICIPANT_GROUP,
+    },
+  },
 }
 
 const DEFAULT_RACEPACK_EMAIL: EmailTemplateConfig = {
@@ -322,8 +369,13 @@ export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
     bodyIntro: 'Pembayaran individu untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
     bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
   },
-  // Pacer tidak punya alur pembayaran/racepack email — entry ini inert, tidak pernah dipicu.
   pacer: { ...DEFAULT_RACEPACK_EMAIL },
+  umkm: {
+    subject: 'Konfirmasi Pembayaran Tenant UMKM - TOPSELL RUN 2026',
+    greeting: 'Halo {leaderName},',
+    bodyIntro: 'Pembayaran tenant UMKM {communityName} untuk TOPSELL RUN 2026 sebesar Rp 500.000 sudah kami terima dan pendaftaran Anda telah aktif.',
+    bodyOutro: 'Terima kasih atas partisipasi usaha Anda! Sampai jumpa di venue event. 🏬',
+  },
 }
 
 const EMPTY_WEBHOOK_PACKAGE: WebhookPackageConfig = {
@@ -335,8 +387,8 @@ export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
   community: { ...EMPTY_WEBHOOK_PACKAGE },
   family: { ...EMPTY_WEBHOOK_PACKAGE },
   individual: { ...EMPTY_WEBHOOK_PACKAGE },
-  // Pacer tidak punya alur pembayaran — entry ini inert, tidak pernah dipicu.
   pacer: { ...EMPTY_WEBHOOK_PACKAGE },
+  umkm: { ...EMPTY_WEBHOOK_PACKAGE },
 }
 
 export const DEFAULT_PACKAGES_SETTINGS: PackagesSettings = {
@@ -411,10 +463,28 @@ export const DEFAULT_PACKAGES_SETTINGS: PackagesSettings = {
         paymentStart: '',
         paymentEnd: '',
         eventDate: '',
-        // Tidak ada pembayaran — price selalu 0, tidak pernah dibaca.
         categories: [
           { value: '3K', label: '3K', price: 0, quota: 0 },
           { value: '6K', label: '6K', price: 0, quota: 0 },
+        ],
+      },
+    ],
+  },
+  umkm: {
+    label: 'Tenant UMKM',
+    enabled: true,
+    sizeChartImage: '',
+    periods: [
+      {
+        key: 'periode-1',
+        label: 'Periode 1',
+        registrationStart: '',
+        registrationEnd: '',
+        paymentStart: '',
+        paymentEnd: '',
+        eventDate: '',
+        categories: [
+          { value: 'Tenant UMKM 500.000', label: 'Tenant UMKM — Rp 500.000', price: 500000, quota: 0 },
         ],
       },
     ],

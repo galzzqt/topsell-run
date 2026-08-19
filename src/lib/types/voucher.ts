@@ -4,7 +4,7 @@
 
 export type VoucherType = 'auto' | 'code'
 export type DiscountType = 'percent' | 'flat'
-export type VoucherPackageKey = 'community' | 'family' | 'individual'
+export type VoucherPackageKey = 'community' | 'family' | 'individual' | 'umkm'
 
 export interface Voucher {
   id: string

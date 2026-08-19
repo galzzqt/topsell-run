@@ -26,10 +26,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const code      = (searchParams.get('code') || '').trim()
   const pkg       = (searchParams.get('pkg') || '') as VoucherPackageKey
-  const category  = (searchParams.get('category') || '').trim()
+  const searchCategory = (searchParams.get('category') || '').trim()
+  const category  = pkg === 'umkm' && !searchCategory ? 'Tenant UMKM 500.000' : searchCategory
   const basePrice = parseInt(searchParams.get('basePrice') || '0', 10)
 
-  if (!pkg || !['community', 'family', 'individual'].includes(pkg)) {
+  if (!pkg || !['community', 'family', 'individual', 'umkm'].includes(pkg)) {
     return NextResponse.json<VoucherValidation>(
       { valid: false, finalDiscount: 0, error: 'Parameter pkg tidak valid.' },
       { status: 400 },
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Kode mode
-    if (!category) {
+    if (!category && pkg !== 'umkm') {
       return NextResponse.json<VoucherValidation>(
         { valid: false, finalDiscount: 0, error: 'Pilih kategori terlebih dahulu.' },
         { status: 400 },

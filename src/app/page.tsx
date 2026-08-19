@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Calendar, MapPin, ArrowRight, User, Users, Building2 } from 'lucide-react'
+import { Calendar, MapPin, ArrowRight, User, Users, Building2, Store } from 'lucide-react'
 import { EventCountdown, SiteShell, useActiveSession } from '@/components/landing/shell'
 import { useSiteAssets } from '@/lib/hooks/usePackagesSettings'
 import type { PackageKey } from '@/lib/admin/settings-schema'
@@ -36,6 +36,13 @@ const PACKAGES: Array<{
     title: 'Community Package',
     description: 'Daftar bersama komunitas lari Anda.',
   },
+  {
+    key: 'umkm',
+    href: '/registrasi-tenant-umkm',
+    icon: Store,
+    title: 'Tenant UMKM',
+    description: 'Daftarkan usaha Anda sebagai tenant event.',
+  },
 ]
 
 export default function LandingPage() {
@@ -53,6 +60,7 @@ export default function LandingPage() {
           individual: packages.individual?.enabled === false,
           family: packages.family?.enabled === false,
           community: packages.community?.enabled === false,
+          umkm: packages.umkm?.enabled === false,
         })
       })
       .catch(() => undefined)
@@ -109,8 +117,8 @@ export default function LandingPage() {
       </section>
 
       {/* ——— CTA PENDAFTARAN ——— */}
-      <section id="daftar" className="px-4 pb-12 z-10 relative max-w-4xl mx-auto scroll-mt-20">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <section id="daftar" className="px-4 pb-12 z-10 relative max-w-5xl mx-auto scroll-mt-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {PACKAGES.map(({ key, href, icon: Icon, title, description }) => {
             const isSoldOut = Boolean(soldOut[key])
 

@@ -21,11 +21,17 @@ import {
   findPacerByVerificationToken,
   setPacerVerificationToken,
   verifyPacerEmail,
+  findUmkmById,
+  findUmkmByPhone,
+  findUmkmByVerificationToken,
+  setUmkmVerificationToken,
+  verifyUmkmEmail,
 } from '@/lib/db'
 import { createCommunitySession } from '@/lib/auth/community'
 import { createFamilySession } from '@/lib/auth/family'
 import { createIndividualSession } from '@/lib/auth/individual'
 import { createPacerSession } from '@/lib/auth/pacer'
+import { createUmkmSession } from '@/lib/auth/umkm'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
@@ -43,6 +49,42 @@ function isResendLimited(sentAt: string | null) {
 export async function verifyEmailToken(token: string) {
   if (!token) {
     return { error: 'Token verifikasi tidak valid.' }
+  }
+
+  // Check UMKM first
+  const umkm = await findUmkmByVerificationToken(token)
+  if (umkm) {
+    if (umkm.email_verified) {
+      return { error: 'Email sudah diverifikasi sebelumnya. Silakan login.' }
+    }
+    if (umkm.verification_token_expires) {
+      const expiresAt = new Date(umkm.verification_token_expires)
+      if (expiresAt < new Date()) {
+        return { error: 'Token verifikasi sudah kedaluwarsa. Silakan minta kirim ulang.' }
+      }
+    }
+
+    await verifyUmkmEmail(umkm.id)
+    await createUmkmSession({ id: umkm.id, phone: umkm.phone, name: umkm.name })
+
+    try {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'auth',
+        event: 'umkm_email_verified',
+        message: `Email berhasil diverifikasi untuk UMKM: ${umkm.name} (${umkm.email}).`,
+        data: { umkmId: umkm.id, name: umkm.name, email: umkm.email },
+      })
+    } catch (logError) {
+      console.error('Failed to log UMKM email verification:', logError)
+    }
+
+    return {
+      success: true,
+      accountName: umkm.name,
+      redirectPath: '/umkm-dashboard',
+      packageLabel: 'Pendaftaran UMKM',
+    }
   }
 
   const individual = await findIndividualByVerificationToken(token)
@@ -207,6 +249,35 @@ export async function verifyEmailToken(token: string) {
 }
 
 export async function resendVerificationEmail(identifier: string) {
+  // Check UMKM first
+  let umkmRecord = await findUmkmById(identifier)
+  if (!umkmRecord) umkmRecord = await findUmkmByPhone(identifier)
+  if (!umkmRecord) umkmRecord = await findUmkmByVerificationToken(identifier)
+
+  if (umkmRecord) {
+    if (umkmRecord.email_verified) return { error: 'Email sudah diverifikasi. Silakan login.' }
+
+    const waitSeconds = isResendLimited(umkmRecord.verification_sent_at)
+    if (waitSeconds) return { error: `Silakan tunggu ${waitSeconds} detik sebelum meminta kirim ulang.` }
+
+    const verificationToken = generateVerificationToken()
+    const tokenExpiry = getVerificationTokenExpiry()
+    await setUmkmVerificationToken(umkmRecord.id, verificationToken, tokenExpiry)
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
+    const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}&type=umkm`
+
+    const result = await sendVerificationEmail({
+      email: umkmRecord.email,
+      name: umkmRecord.pic_name || umkmRecord.name,
+      verificationUrl,
+      packageType: 'umkm',
+    })
+
+    if (!result.success) return { error: result.error || 'Gagal mengirim email. Silakan coba lagi.' }
+    return { success: true }
+  }
+
   let pacer = await findPacerById(identifier)
   if (!pacer) pacer = await findPacerByPhone(identifier)
   if (!pacer) pacer = await findPacerByVerificationToken(identifier)

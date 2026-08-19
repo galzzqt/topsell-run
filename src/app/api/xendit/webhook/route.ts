@@ -12,6 +12,10 @@ import {
   markFamilyPaymentExpired,
   markIndividualPaymentFailed,
   markIndividualPaymentExpired,
+  markUmkmPaymentsPaidBySessionId,
+  markUmkmPaymentsPaidByReference,
+  markUmkmPaymentFailed,
+  markUmkmPaymentExpired,
 } from '@/lib/db'
 import {
   sendRacepackEmailsForRegistration,
@@ -241,6 +245,24 @@ export async function POST(request: Request) {
           processedAny = true
         }
 
+        // Update UMKM payments
+        const umkmPayments = await db.collection('umkm_payments').find({ $or: orQuery }).toArray()
+        for (const p of umkmPayments) {
+          if (isExpired) {
+            await markUmkmPaymentExpired(p.id)
+          } else {
+            await markUmkmPaymentFailed(p.id)
+          }
+          await ingestAdminLog({
+            level: 'warning',
+            source: 'payment',
+            event: isExpired ? 'umkm_payment_webhook_expired' : 'umkm_payment_webhook_failed',
+            message: `Pembayaran UMKM ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
+            data: { paymentId: p.id, reference: p.payment_reference, amount: p.amount, status }
+          })
+          processedAny = true
+        }
+
         if (processedAny) {
           return NextResponse.json({ received: true, processed: true })
         }
@@ -311,6 +333,19 @@ export async function POST(request: Request) {
       })
       return NextResponse.json({ received: true })
     }
+
+    // Try UMKM next
+    const umkmPayments = await markUmkmPaymentsPaidBySessionId(sessionId, update)
+    if (umkmPayments.length > 0) {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'umkm_payment_webhook_paid',
+        message: `Pembayaran UMKM sukses via webhook (Session: ${sessionId}).`,
+        data: { sessionId, reference: umkmPayments[0]?.payment_reference, amount: umkmPayments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
   }
 
   for (const referenceId of referenceCandidates) {
@@ -362,6 +397,19 @@ export async function POST(request: Request) {
         event: 'individual_payment_webhook_paid',
         message: `Pembayaran individu sukses via webhook (Ref: ${referenceId}).`,
         data: { referenceId, amount: individualPayments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Try UMKM next
+    const umkmPayments = await markUmkmPaymentsPaidByReference(referenceId, update)
+    if (umkmPayments.length > 0) {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'umkm_payment_webhook_paid',
+        message: `Pembayaran UMKM sukses via webhook (Ref: ${referenceId}).`,
+        data: { referenceId, amount: umkmPayments[0]?.amount }
       })
       return NextResponse.json({ received: true })
     }

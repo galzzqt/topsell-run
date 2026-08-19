@@ -41,10 +41,10 @@ export async function findVoucherByCode(
     enabled: true,
     validFrom: { $lte: now },
     validUntil: { $gte: now },
-    packages: pkg,
     $or: [
       { categories: { $size: 0 } },    // berlaku semua kategori
       { categories: category },          // berlaku kategori ini
+      ...(pkg === 'umkm' ? [{ categories: 'Tenant UMKM 500.000' }, { categories: '' }] : []),
     ],
     $expr: {
       $or: [
@@ -74,7 +74,11 @@ export async function findBestAutoVoucher(
       validFrom: { $lte: now },
       validUntil: { $gte: now },
       packages: pkg,
-      $or: [{ categories: { $size: 0 } }, { categories: category }],
+      $or: [
+        { categories: { $size: 0 } },
+        { categories: category },
+        ...(pkg === 'umkm' ? [{ categories: 'Tenant UMKM 500.000' }, { categories: '' }] : []),
+      ],
       $expr: {
         $or: [{ $eq: ['$maxUsage', 0] }, { $lt: ['$usedCount', '$maxUsage'] }],
       },

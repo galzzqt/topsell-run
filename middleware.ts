@@ -4,6 +4,7 @@ import { getCommunitySessionFromRequest } from '@/lib/auth/community-session'
 import { getFamilySessionFromRequest } from '@/lib/auth/family-session'
 import { getIndividualSessionFromRequest } from '@/lib/auth/individual-session'
 import { getPacerSessionFromRequest } from '@/lib/auth/pacer-session'
+import { getUmkmSessionFromRequest } from '@/lib/auth/umkm-session'
 
 export const config = {
   matcher: [
@@ -66,6 +67,15 @@ export async function middleware(request: NextRequest) {
     if (!session) {
       const home = new URL('/', request.url)
       return NextResponse.redirect(home)
+    }
+  }
+
+  if (pathname.startsWith('/umkm-dashboard')) {
+    const session = await getUmkmSessionFromRequest(request)
+    if (!session) {
+      const loginUrl = new URL('/umkm-login', request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
     }
   }
 

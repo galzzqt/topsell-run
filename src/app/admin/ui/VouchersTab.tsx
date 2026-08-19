@@ -31,7 +31,7 @@ const defaultVoucherForm: VoucherFormState = {
   maxUsage: null,
   validFrom: '',
   validUntil: '',
-  packageKeys: ['community', 'family', 'individual'],
+  packageKeys: ['community', 'family', 'individual', 'umkm'],
   allowedCategories: [],
 }
 
@@ -39,6 +39,7 @@ const ALL_PACKAGES = [
   { key: 'community', label: 'Komunitas' },
   { key: 'family', label: 'Bro & Sist' },
   { key: 'individual', label: 'Individu' },
+  { key: 'umkm', label: 'Tenant UMKM' },
 ]
 
 function formatDate(iso: string) {
@@ -258,7 +259,7 @@ export function VouchersTab({
             <TicketCheck className="w-4 h-4 text-sport-purple" /> Voucher & Promo
           </h2>
           <p className="text-[11px] text-brand-muted mt-0.5">
-            Buat voucher kode atau auto-apply untuk Community, Bro &amp; Sist, dan Individu.
+            Buat voucher kode atau auto-apply untuk Community, Bro &amp; Sist, Individu, dan Tenant UMKM.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -300,13 +301,13 @@ export function VouchersTab({
                   <th className="px-4 py-2.5 text-right text-[9px] font-black uppercase tracking-widest text-brand-muted">Aksi</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-card-border">
                 {voucherList.map((v) => {
                   const status = getStatus(v)
                   return (
-                    <tr key={v.id} className="border-b border-card-border/40 hover:bg-brand-dark/30 transition-colors">
+                    <tr key={v.id} className="hover:bg-brand-dark/20 transition-colors">
                       <td className="px-4 py-3">
-                        <p className="font-bold text-foreground">{v.name}</p>
+                        <div className="font-bold text-foreground">{v.name}</div>
                         {v.type === 'code' ? (
                           <code className="text-[10px] bg-brand-dark/60 px-1.5 py-0.5 rounded text-sport-orange font-mono">{v.code}</code>
                         ) : (
@@ -322,7 +323,7 @@ export function VouchersTab({
                         <div className="flex flex-wrap gap-1">
                           {v.packages.map((pkg) => (
                             <span key={pkg} className="text-[9px] px-1.5 py-0.5 rounded bg-sport-purple/20 text-sport-purple font-bold uppercase">
-                              {pkg === 'community' ? 'Komunitas' : pkg === 'family' ? 'Bro & Sist' : 'Individu'}
+                              {pkg === 'community' ? 'Komunitas' : pkg === 'family' ? 'Bro & Sist' : pkg === 'individual' ? 'Individu' : pkg === 'umkm' ? 'Tenant UMKM' : pkg}
                             </span>
                           ))}
                         </div>

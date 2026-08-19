@@ -8,6 +8,7 @@ import { getActiveSessionAction, type ActiveSession } from '@/app/actions/sessio
 import { signOutFamily } from '@/app/actions/family-auth'
 import { signOutCommunity } from '@/app/actions/auth'
 import { signOutIndividual } from '@/app/actions/individual-auth'
+import { signOutUmkm } from '@/app/actions/umkm-auth'
 import { useSiteAssets } from '@/lib/hooks/usePackagesSettings'
 
 export function useActiveSession() {
@@ -134,7 +135,7 @@ function NavUserWidget({ session, onLogout }: { session: ActiveSession | undefin
   }
 
   const initial = session.name.charAt(0).toUpperCase()
-  const label = session.type === 'community' ? 'Komunitas' : session.type === 'individual' ? 'Individu' : 'Bro & Sist'
+  const label = session.type === 'community' ? 'Komunitas' : session.type === 'individual' ? 'Individu' : session.type === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist'
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -143,6 +144,8 @@ function NavUserWidget({ session, onLogout }: { session: ActiveSession | undefin
         await signOutFamily()
       } else if (session.type === 'individual') {
         await signOutIndividual()
+      } else if (session.type === 'umkm') {
+        await signOutUmkm()
       } else {
         await signOutCommunity()
       }

@@ -12,6 +12,8 @@ import {
   listIndividualParticipantsWithIndividual,
   listIndividualPaymentsWithRelations,
   listPacerParticipantsWithPacer,
+  listUmkms,
+  listUmkmPayments,
 } from '@/lib/db'
 import { AdminDashboardClient, type AdminCommunity, type AdminParticipant, type AdminPayment, type AdminStats, type AdminPacerRow } from './ui/AdminDashboardClient'
 import { AdminLogin } from './ui/AdminLogin'
@@ -40,6 +42,8 @@ export default async function AdminPage() {
     individualsRaw,
     individualPaymentsRaw,
     pacerParticipantsRaw,
+    umkmsRaw,
+    umkmPaymentsRaw,
     adminSettings,
     editableEnv,
     getAdminAccountsResult,
@@ -55,9 +59,11 @@ export default async function AdminPage() {
     listIndividuals(),
     listIndividualPaymentsWithRelations(),
     listPacerParticipantsWithPacer(),
+    listUmkms(),
+    listUmkmPayments(),
     readAdminSettings(),
     readEditableEnvSnapshot(),
-     getAdminPublicAccounts(),
+    getAdminPublicAccounts(),
     session.role === 'superadmin' ? queryAdminLogs(100) : Promise.resolve({ logs: [], error: null }),
   ])
 
@@ -74,7 +80,8 @@ export default async function AdminPage() {
       'scanner',
       'export_participants',
       'export_payments',
-      'pacer'
+      'pacer',
+      'umkm',
     ]
   }
 
@@ -316,6 +323,8 @@ export default async function AdminPage() {
       individuals={individualRows}
       individualPayments={individualPaymentRows}
       pacerRows={pacerRows}
+      umkmRows={umkmsRaw}
+      umkmPayments={umkmPaymentsRaw}
       adminSettings={adminSettings}
       editableEnv={editableEnv}
       currentAdmin={session}

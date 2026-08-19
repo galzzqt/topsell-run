@@ -44,6 +44,8 @@ import {
   User,
   Timer,
   Zap,
+  Store,
+  ExternalLink,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -86,6 +88,7 @@ import {
   updateAdminPaymentStatus,
   updateAdminPacerStatus,
   updateAdminPacerParticipant,
+  updateAdminUmkmStatus,
   type AdminCommunityUpdateValues,
   type AdminParticipantUpdateValues,
   type AdminPacerParticipantUpdateValues,
@@ -99,6 +102,7 @@ import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, EmailTemplateConfig, FormInputConfig, FormSelectConfig, PackageKey, PackageConfig, PackageCategory, PackagePeriod, RegistrationFormGroupSettings, RegistrationFormParticipantSettings, WebhookPackageConfig } from '@/lib/admin/settings-schema'
 import type { AdminLogEntry } from '@/lib/axiom/logs'
 import type { VoucherDoc } from '@/lib/types/voucher'
+import type { UmkmRegistration, UmkmPayment } from '@/lib/types'
 import { VouchersTab } from './VouchersTab'
 
 type VoucherFormState = {
@@ -193,7 +197,7 @@ export type AdminPayment = {
   amount: number
   payment_method: string | null
   payment_reference: string
-  status: 'pending' | 'paid' | 'failed' | 'expired'
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   paid_at: string | null
   created_at: string
   registration: Relation<RegistrationInfo>
@@ -302,6 +306,7 @@ type AdminTab =
   | 'packages'
   | 'periods'
   | 'pacer'
+  | 'umkm'
   | 'settings'
   | 'admins'
   | 'logs'
@@ -376,6 +381,8 @@ export function AdminDashboardClient({
   individuals = [],
   individualPayments = [],
   pacerRows = [],
+  umkmRows = [],
+  umkmPayments = [],
   adminSettings,
   editableEnv,
   currentAdmin,
@@ -394,6 +401,8 @@ export function AdminDashboardClient({
   individuals?: AdminCommunity[]
   individualPayments?: AdminPayment[]
   pacerRows?: AdminPacerRow[]
+  umkmRows?: UmkmRegistration[]
+  umkmPayments?: UmkmPayment[]
   adminSettings: AdminSettings
   editableEnv: AdminEnvSnapshot[]
   currentAdmin: AdminUser
@@ -407,7 +416,7 @@ export function AdminDashboardClient({
   const envFieldCounterRef = useRef(0)
   const scanRegionId = 'admin-racepack-reader'
   const [query, setQuery] = useState('')
-  const [packageType, setPackageType] = useState<'community' | 'family' | 'individual'>('community')
+  const [packageType, setPackageType] = useState<'community' | 'family' | 'individual' | 'umkm'>('community')
   const [combineFiles, setCombineFiles] = useState(false)
   const [participantStartDate, setParticipantStartDate] = useState('')
   const [participantEndDate, setParticipantEndDate] = useState('')
@@ -510,6 +519,8 @@ export function AdminDashboardClient({
   const [pacerEditing, setPacerEditing] = useState<AdminPacerRow | null>(null)
   const [pacerForm, setPacerForm] = useState<AdminPacerParticipantUpdateValues | null>(null)
   const [processingPacerId, setProcessingPacerId] = useState<string | null>(null)
+  const [umkmDetail, setUmkmDetail] = useState<UmkmRegistration | null>(null)
+  const [processingUmkmId, setProcessingUmkmId] = useState<string | null>(null)
   const [settingsForm, setSettingsForm] = useState<AdminSettings>(adminSettings)
   const [formEditingPkg, setFormEditingPkg] = useState<PackageKey | null>(null)
   const [emailEditingPkg, setEmailEditingPkg] = useState<PackageKey | null>(null)
@@ -694,23 +705,79 @@ export function AdminDashboardClient({
     [summaryPackage, dashboardSummary]
   )
 
-  // Dataset aktif per tab (Komunitas / Bro & Sist / Individu).
-  const activeCommunities = useMemo(
-    () => (packageType === 'individual' ? individuals : packageType === 'family' ? families : communities),
-    [packageType, communities, families, individuals]
-  )
-  const activeParticipants = useMemo(
-    () => (packageType === 'individual' ? individualParticipants : packageType === 'family' ? familyParticipants : participants),
-    [packageType, participants, familyParticipants, individualParticipants]
-  )
-  const activePayments = useMemo(
-    () => (packageType === 'individual' ? individualPayments : packageType === 'family' ? familyPayments : payments),
-    [packageType, payments, familyPayments, individualPayments]
-  )
-  const entityLabel = packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Individu' : 'Bro & Sist'
-  const groupWord = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'peserta' : 'grup'
-  // Individu punya koleksi pembayaran sendiri; komunitas & bro-sist seperti semula.
-  const paymentPackageType: 'community' | 'family' | 'individual' = packageType
+  const umkmPaymentRows: AdminPayment[] = useMemo(() => {
+    return umkmPayments.map((p) => {
+      const umkm = umkmRows.find((u) => u.id === p.umkm_id)
+      return {
+        id: p.id,
+        registration_id: p.umkm_id,
+        amount: p.amount,
+        payment_method: p.payment_method,
+        payment_reference: p.payment_reference,
+        status: p.status as 'pending' | 'paid' | 'failed' | 'expired' | 'testing',
+        paid_at: p.paid_at,
+        created_at: p.created_at,
+        registration: umkm
+          ? {
+              community_id: umkm.id,
+              total_participants: 1,
+              community: {
+                id: umkm.id,
+                name: umkm.name,
+                leader_name: umkm.pic_name,
+                email: umkm.email,
+                phone: umkm.phone,
+                category: umkm.business_field,
+                community_code: umkm.umkm_code,
+                provinsi: umkm.provinsi,
+                kota: umkm.kota,
+                kecamatan: umkm.kecamatan,
+              },
+            }
+          : null,
+      }
+    })
+  }, [umkmPayments, umkmRows])
+
+  // Dataset aktif per tab (Komunitas / Bro & Sist / Individu / UMKM).
+  const activeCommunities = useMemo(() => {
+    if (packageType === 'individual') return individuals
+    if (packageType === 'family') return families
+    if (packageType === 'umkm') {
+      return umkmRows.map((u) => ({
+        id: u.id,
+        name: u.name,
+        leader_name: u.pic_name,
+        email: u.email,
+        phone: u.phone,
+        category: u.business_field,
+        community_code: u.umkm_code,
+        provinsi: u.provinsi,
+        kota: u.kota,
+        kecamatan: u.kecamatan,
+        created_at: u.created_at,
+      })) as AdminCommunity[]
+    }
+    return communities
+  }, [packageType, communities, families, individuals, umkmRows])
+
+  const activeParticipants = useMemo(() => {
+    if (packageType === 'individual') return individualParticipants
+    if (packageType === 'family') return familyParticipants
+    if (packageType === 'umkm') return []
+    return participants
+  }, [packageType, participants, familyParticipants, individualParticipants])
+
+  const activePayments = useMemo(() => {
+    if (packageType === 'individual') return individualPayments
+    if (packageType === 'family') return familyPayments
+    if (packageType === 'umkm') return umkmPaymentRows
+    return payments
+  }, [packageType, payments, familyPayments, individualPayments, umkmPaymentRows])
+
+  const entityLabel = packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Individu' : packageType === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist'
+  const groupWord = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'peserta' : packageType === 'umkm' ? 'tenant' : 'grup'
+  const paymentPackageType: 'community' | 'family' | 'individual' | 'umkm' = packageType
 
   const applyParticipantFilter = useCallback(
     (rows: AdminParticipant[]) => {
@@ -1239,6 +1306,42 @@ export function AdminDashboardClient({
     XLSX.writeFile(workbook, `topsell-run-pacer-${today}.xlsx`)
   }
 
+  const buildUmkmExportRows = (rows: UmkmRegistration[]) => rows.map((row) => {
+    const payment = umkmPayments.find((p) => p.umkm_id === row.id)
+    return {
+      'Nama Usaha': row.name,
+      'Nama PIC': row.pic_name,
+      'Kode UMKM': row.umkm_code,
+      WhatsApp: row.phone,
+      Email: row.email,
+      'Bidang Usaha': row.business_field,
+      Deskripsi: row.description || '',
+      'Media Sosial': row.social_media || '',
+      Provinsi: resolveLocationName(row.provinsi) || '',
+      'Kota/Kabupaten': resolveLocationName(row.kota) || '',
+      Kecamatan: resolveLocationName(row.kecamatan) || '',
+      'Alamat Lengkap': row.address || '',
+      'Status Verifikasi Email': row.email_verified ? 'Terverifikasi' : 'Belum',
+      'Status Persetujuan': row.status,
+      'Catatan Status': row.status_note || '',
+      'Kode Voucher': row.voucher_code || '-',
+      'Diskon Voucher': row.voucher_discount || 0,
+      'Nominal Bayar': row.payment_amount,
+      'Status Pembayaran': payment?.status || row.payment_status || 'Belum Bayar',
+      'Metode Pembayaran': payment?.payment_method || '-',
+      'Waktu Bayar': payment?.paid_at ? formatDateTime(payment.paid_at) : '-',
+      'Tanggal Daftar': formatDateTime(row.created_at),
+    }
+  })
+
+  const exportUmkmRows = async () => {
+    const XLSX = await import('xlsx')
+    const today = new Date().toISOString().slice(0, 10)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildUmkmExportRows(umkmRows)), 'UMKM')
+    XLSX.writeFile(workbook, `topsell-run-umkm-${today}.xlsx`)
+  }
+
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
     const XLSX = await import('xlsx')
     const today = new Date().toISOString().slice(0, 10)
@@ -1287,7 +1390,7 @@ export function AdminDashboardClient({
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allPaymentsRows), 'Pembayaran')
       }
 
-      const segmentName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'individu' : 'bro-sist'
+      const segmentName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'individu' : packageType === 'umkm' ? 'umkm' : 'bro-sist'
       XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}${dateSuffix}-${today}.xlsx`)
     } else {
       for (const community of selectedCommunities) {
@@ -1525,6 +1628,52 @@ export function AdminDashboardClient({
         router.refresh()
       } finally {
         setProcessingPacerId(null)
+      }
+    })
+  }
+
+  const handleUmkmApprove = (row: UmkmRegistration) => {
+    if (!window.confirm(`Apakah Anda yakin ingin menyetujui (APPROVE) UMKM "${row.name}" (PIC: ${row.pic_name})?\n\nSetelah disetujui, tombol pembayaran di dashboard UMKM akan aktif.`)) {
+      return
+    }
+    setProcessingUmkmId(row.id)
+    startTransition(async () => {
+      try {
+        const result = await updateAdminUmkmStatus(row.id, 'approved')
+        if (result.error) {
+          alert(result.error)
+          return
+        }
+        router.refresh()
+      } finally {
+        setProcessingUmkmId(null)
+      }
+    })
+  }
+
+  const handleUmkmReject = (row: UmkmRegistration) => {
+    const note = window.prompt('Catatan penolakan (opsional):')
+    if (note === null) return
+
+    const confirmMessage = note.trim()
+      ? `Apakah Anda yakin ingin menolak (REJECT) UMKM "${row.name}" dengan catatan: "${note}"?`
+      : `Apakah Anda yakin ingin menolak (REJECT) UMKM "${row.name}"?`
+
+    if (!window.confirm(confirmMessage)) {
+      return
+    }
+
+    setProcessingUmkmId(row.id)
+    startTransition(async () => {
+      try {
+        const result = await updateAdminUmkmStatus(row.id, 'rejected', note || undefined)
+        if (result.error) {
+          alert(result.error)
+          return
+        }
+        router.refresh()
+      } finally {
+        setProcessingUmkmId(null)
       }
     })
   }
@@ -1979,6 +2128,7 @@ export function AdminDashboardClient({
     { id: 'export_participants', label: 'Export Peserta', icon: Download },
     { id: 'export_payments', label: 'Export Pembayaran', icon: Download },
     { id: 'pacer', label: 'Pacer', icon: UserCheck },
+    { id: 'umkm', label: 'UMKM', icon: Store },
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'packages' as const, label: 'Kelola Paket', icon: Package }] : []),
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'periods' as const, label: 'Kelola Periode', icon: Calendar }] : []),
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'vouchers' as const, label: 'Voucher', icon: TicketCheck }] : []),
@@ -2761,6 +2911,16 @@ export function AdminDashboardClient({
                 >
                   Individu
                 </button>
+                <button
+                  onClick={() => setPackageType('umkm')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                    packageType === 'umkm'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                  }`}
+                >
+                  Tenant UMKM
+                </button>
               </div>
 
               {/* Filter Toolbar: Status Filter Buttons */}
@@ -2954,7 +3114,7 @@ export function AdminDashboardClient({
                 <table className="w-full text-left">
                   <thead className="bg-brand-dark/30 border-b border-card-border">
                     <tr>
-                      {['Referensi', packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Peserta' : 'Grup', 'Nominal', 'Metode', 'Status', 'Tanggal', 'Aksi'].map((heading) => (
+                      {['Referensi', packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Peserta' : packageType === 'umkm' ? 'Tenant UMKM' : 'Grup', 'Nominal', 'Metode', 'Status', 'Tanggal', 'Aksi'].map((heading) => (
                         <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
                       ))}
                     </tr>
@@ -3162,6 +3322,7 @@ export function AdminDashboardClient({
                           { id: 'export_participants', label: 'Export Peserta' },
                           { id: 'export_payments', label: 'Export Pembayaran' },
                           { id: 'pacer', label: 'Pacer' },
+                          { id: 'umkm', label: 'UMKM' },
                           { id: 'packages', label: 'Kelola Paket' },
                           { id: 'periods', label: 'Kelola Periode' },
                           { id: 'logs', label: 'Log Axiom' },
@@ -3390,6 +3551,152 @@ export function AdminDashboardClient({
             </div>
           )}
 
+          {activeTab === 'umkm' && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Tenant UMKM</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">Pendaftar Tenant UMKM ({umkmRows.length})</h2>
+                  <p className="text-[11px] text-brand-muted mt-1">Biaya Rp 500.000 — review &amp; setujui pendaftar agar tombol pembayaran mereka aktif.</p>
+                </div>
+                <Button onClick={exportUmkmRows} disabled={umkmRows.length === 0} className="shrink-0">
+                  <Download className="w-4 h-4 mr-2" />Export ke Excel
+                </Button>
+              </div>
+
+              <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden shadow-lg">
+                {umkmRows.length === 0 ? (
+                  <div className="p-8 text-center text-xs font-bold text-brand-muted">Belum ada pendaftar UMKM.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-card-border bg-brand-dark/20">
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Usaha / PIC</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kontak</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Bidang &amp; Lokasi</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Foto</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Biaya</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Email</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Status</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Bayar</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {umkmRows.map((row) => {
+                          const payment = umkmPayments.find((p) => p.umkm_id === row.id)
+                          const isPaid = payment?.status === 'paid' || row.payment_status === 'paid'
+                          const finalAmount = row.payment_amount ?? 500000
+
+                          return (
+                            <tr key={row.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
+                              <td className="px-4 py-3.5">
+                                <p className="text-sm font-bold text-foreground">{row.name}</p>
+                                <p className="text-[10px] font-bold text-sport-orange uppercase">PIC: {row.pic_name}</p>
+                                <p className="text-[10px] text-brand-muted">{row.umkm_code}</p>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <p className="text-xs text-foreground">{row.phone}</p>
+                                <p className="text-[10px] text-brand-muted">{row.email}</p>
+                                {row.social_media && (
+                                  <a
+                                    href={row.social_media.startsWith('http') ? row.social_media : `https://${row.social_media}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-sport-orange hover:underline block truncate max-w-[150px]"
+                                  >
+                                    {row.social_media}
+                                  </a>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <p className="text-xs font-bold text-foreground">{row.business_field}</p>
+                                <p className="text-[10px] text-brand-muted">{[resolveLocationName(row.kota), resolveLocationName(row.provinsi)].filter(Boolean).join(', ') || '-'}</p>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                {(row.photo_urls || []).length > 0 ? (
+                                  <Badge variant="neutral">{row.photo_urls!.length} Foto</Badge>
+                                ) : (
+                                  <span className="text-xs text-brand-muted">-</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                {finalAmount === 0 ? (
+                                  <Badge variant="success">GRATIS</Badge>
+                                ) : (
+                                  <div>
+                                    <p className="text-xs font-black text-foreground">{formatCurrency(finalAmount)}</p>
+                                    {row.voucher_code && (
+                                      <p className="text-[9px] text-green-400 font-bold">Voucher: {row.voucher_code}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                <Badge variant={row.email_verified ? 'success' : 'warning'}>
+                                  {row.email_verified ? 'VERIFIED' : 'PENDING'}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                <Badge variant={row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
+                                  {row.status.toUpperCase()}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                <Badge variant={isPaid ? 'success' : payment?.status === 'failed' ? 'danger' : 'warning'}>
+                                  {isPaid ? 'LUNAS' : payment?.status ? payment.status.toUpperCase() : 'BELUM'}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                  <button
+                                    onClick={() => setUmkmDetail(row)}
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer"
+                                  >
+                                    Detail
+                                  </button>
+                                  {row.status !== 'approved' && (
+                                    <button
+                                      onClick={() => handleUmkmApprove(row)}
+                                      disabled={isPending || processingUmkmId !== null}
+                                      className="inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50 min-w-[28px] min-h-[28px]"
+                                      title="Setujui UMKM"
+                                    >
+                                      {processingUmkmId === row.id ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <ThumbsUp className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  )}
+                                  {row.status !== 'rejected' && (
+                                    <button
+                                      onClick={() => handleUmkmReject(row)}
+                                      disabled={isPending || processingUmkmId !== null}
+                                      className="inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-sport-red/10 hover:bg-sport-red/20 border border-sport-red/25 text-sport-red rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50 min-w-[28px] min-h-[28px]"
+                                      title="Tolak UMKM"
+                                    >
+                                      {processingUmkmId === row.id ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <ThumbsDown className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'packages' && currentAdmin.role === 'superadmin' && (
             <div className="flex flex-col gap-4">
 
@@ -3402,12 +3709,13 @@ export function AdminDashboardClient({
                     <p className="text-[11px] text-brand-muted mt-1">Atur buka/tutup paket, size chart jersey, isi form pendaftaran, template email, dan webhook per paket. Jadwal &amp; harga ada di tab Kelola Periode.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {([
                       { key: 'community'  as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
                       { key: 'family'     as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
                       { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
                       { key: 'pacer'      as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
+                      { key: 'umkm'       as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400'  },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       return (
@@ -3615,12 +3923,13 @@ export function AdminDashboardClient({
                     <p className="text-[11px] text-brand-muted mt-1">Tiap paket punya jadwal, kategori, harga, dan kuota tersendiri. Pilih salah satu paket untuk mulai mengatur periodenya.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {([
-                      { key: 'community' as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
-                      { key: 'family'    as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
-                      { key: 'individual'as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
-                      { key: 'pacer'     as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
+                      { key: 'community'  as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
+                      { key: 'family'     as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
+                      { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
+                      { key: 'pacer'      as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
+                      { key: 'umkm'       as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400'  },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       const periodCount = config.periods.length
@@ -4087,6 +4396,18 @@ export function AdminDashboardClient({
                 >
                   Individu
                 </button>
+                {activeTab === 'export_payments' && (
+                  <button
+                    onClick={() => setPackageType('umkm')}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                      packageType === 'umkm'
+                        ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                        : 'border-transparent text-brand-muted hover:text-foreground'
+                    }`}
+                  >
+                    Tenant UMKM
+                  </button>
+                )}
               </div>
 
               {/* Filter Toolbar (Status & Date) */}
@@ -4943,6 +5264,7 @@ export function AdminDashboardClient({
                     { id: 'export_participants', label: 'Export Peserta' },
                     { id: 'export_payments', label: 'Export Pembayaran' },
                     { id: 'pacer', label: 'Pacer' },
+                    { id: 'umkm', label: 'UMKM' },
                     { id: 'packages', label: 'Kelola Paket' },
                     { id: 'periods', label: 'Kelola Periode' },
                     { id: 'logs', label: 'Log Axiom' },
@@ -4990,6 +5312,208 @@ export function AdminDashboardClient({
             </div>
           </div>
         )}
+      </Dialog>
+
+      <Dialog
+        isOpen={!!umkmDetail}
+        onClose={() => setUmkmDetail(null)}
+        title="Detail Tenant UMKM"
+        className="max-w-2xl"
+      >
+        {umkmDetail && (() => {
+          const payment = umkmPayments.find((p) => p.umkm_id === umkmDetail.id)
+          const finalAmount = umkmDetail.payment_amount ?? 500000
+
+          return (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Nama Usaha</span>
+                  <span className="text-foreground font-black text-sm">{umkmDetail.name}</span>
+                </div>
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Kode UMKM</span>
+                  <span className="text-sport-orange font-black text-sm">{umkmDetail.umkm_code}</span>
+                </div>
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Nama PIC</span>
+                  <span className="text-foreground font-bold">{umkmDetail.pic_name}</span>
+                </div>
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Bidang Usaha</span>
+                  <span className="text-foreground font-bold">{umkmDetail.business_field}</span>
+                </div>
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">No. WhatsApp</span>
+                  <span className="text-foreground font-bold">{umkmDetail.phone}</span>
+                </div>
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Email</span>
+                  <span className="text-foreground font-bold">{umkmDetail.email}</span>
+                  <Badge variant={umkmDetail.email_verified ? 'success' : 'warning'} className="ml-2">
+                    {umkmDetail.email_verified ? 'VERIFIED' : 'PENDING'}
+                  </Badge>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Lokasi Wilayah</span>
+                  <span className="text-foreground font-bold">
+                    {[
+                      resolveLocationName(umkmDetail.kecamatan),
+                      resolveLocationName(umkmDetail.kota),
+                      resolveLocationName(umkmDetail.provinsi),
+                    ].filter(Boolean).join(', ') || '-'}
+                  </span>
+                </div>
+                {umkmDetail.address && (
+                  <div className="sm:col-span-2">
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Alamat Lengkap</span>
+                    <p className="text-foreground font-medium leading-relaxed bg-brand-dark/30 p-2.5 rounded-lg border border-card-border">
+                      {umkmDetail.address}
+                    </p>
+                  </div>
+                )}
+                {umkmDetail.social_media && (
+                  <div className="sm:col-span-2">
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Link Social Media</span>
+                    <a
+                      href={umkmDetail.social_media.startsWith('http') ? umkmDetail.social_media : `https://${umkmDetail.social_media}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sport-orange hover:underline font-bold text-xs inline-flex items-center gap-1"
+                    >
+                      {umkmDetail.social_media} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+                {umkmDetail.description && (
+                  <div className="sm:col-span-2">
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Deskripsi Usaha</span>
+                    <p className="text-foreground leading-relaxed bg-brand-dark/30 p-2.5 rounded-lg border border-card-border">
+                      {umkmDetail.description}
+                    </p>
+                  </div>
+                )}
+                {Array.isArray(umkmDetail.photo_urls) && umkmDetail.photo_urls.length > 0 && (
+                  <div className="sm:col-span-2 pt-2 border-t border-card-border/60">
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-2">
+                      Foto Usaha / Produk ({umkmDetail.photo_urls.length})
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {umkmDetail.photo_urls.map((url, idx) => (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative rounded-lg overflow-hidden border border-card-border bg-brand-dark/40 aspect-video block group"
+                        >
+                          <Image
+                            src={url}
+                            alt={`Foto UMKM ${idx + 1}`}
+                            fill
+                            unoptimized
+                            className="object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <ExternalLink className="w-4 h-4 text-white" />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status & Pembayaran Box */}
+              <div className="bg-brand-gray/20 border border-card-border rounded-xl p-4 flex flex-col gap-3">
+                <p className="text-[10px] font-black uppercase tracking-wider text-sport-orange">Informasi Pembayaran</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Biaya Tenant</span>
+                    <span className="text-foreground font-bold">Rp 500.000</span>
+                  </div>
+                  <div>
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Voucher Diskon</span>
+                    <span className="text-green-400 font-bold">
+                      {umkmDetail.voucher_code ? `${umkmDetail.voucher_code} (-${formatCurrency(umkmDetail.voucher_discount)})` : '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Total Bayar</span>
+                    <span className="text-foreground font-black">
+                      {finalAmount === 0 ? 'GRATIS' : formatCurrency(finalAmount)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Status Bayar</span>
+                    <Badge variant={payment?.status === 'paid' || umkmDetail.payment_status === 'paid' ? 'success' : 'warning'}>
+                      {payment?.status === 'paid' || umkmDetail.payment_status === 'paid' ? 'LUNAS' : payment?.status ? payment.status.toUpperCase() : 'BELUM'}
+                    </Badge>
+                  </div>
+                </div>
+
+                {payment && (
+                  <div className="pt-2 border-t border-card-border/50 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-brand-muted">
+                    <div>Ref: <strong className="text-foreground">{payment.payment_reference}</strong></div>
+                    <div>Metode: <strong className="text-foreground">{payment.payment_method || '-'}</strong></div>
+                    <div>Dibayar: <strong className="text-foreground">{payment.paid_at ? formatDateTime(payment.paid_at) : '-'}</strong></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Persetujuan */}
+              <div className="flex items-center justify-between p-3 rounded-lg border border-card-border bg-brand-dark/40">
+                <div>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block">Status Approval Admin</span>
+                  <Badge variant={umkmDetail.status === 'approved' ? 'success' : umkmDetail.status === 'rejected' ? 'danger' : 'warning'}>
+                    {umkmDetail.status.toUpperCase()}
+                  </Badge>
+                </div>
+                {umkmDetail.reviewed_at && (
+                  <span className="text-[10px] text-brand-muted">Direview: {formatDateTime(umkmDetail.reviewed_at)}</span>
+                )}
+              </div>
+
+              {umkmDetail.status === 'rejected' && umkmDetail.status_note && (
+                <p className="text-xs text-sport-red bg-sport-red/10 p-2.5 rounded-lg border border-sport-red/20">
+                  Catatan penolakan: {umkmDetail.status_note}
+                </p>
+              )}
+
+              {/* Action Buttons inside Dialog */}
+              <div className="flex items-center gap-2 pt-2 border-t border-card-border">
+                {umkmDetail.status !== 'approved' && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setUmkmDetail(null)
+                      handleUmkmApprove(umkmDetail)
+                    }}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                  >
+                    <ThumbsUp className="w-4 h-4 mr-2" /> Setujui (Approve)
+                  </Button>
+                )}
+                {umkmDetail.status !== 'rejected' && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setUmkmDetail(null)
+                      handleUmkmReject(umkmDetail)
+                    }}
+                    className="flex-1 text-sport-red hover:bg-sport-red/10"
+                  >
+                    <ThumbsDown className="w-4 h-4 mr-2" /> Tolak (Reject)
+                  </Button>
+                )}
+                <Button type="button" variant="secondary" onClick={() => setUmkmDetail(null)}>
+                  Tutup
+                </Button>
+              </div>
+            </div>
+          )
+        })()}
       </Dialog>
     </div>
   )

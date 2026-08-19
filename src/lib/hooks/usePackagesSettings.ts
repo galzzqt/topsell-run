@@ -38,6 +38,7 @@ export function resolvePackageLabel(packages: PackagesSettings | null, pkg: Pack
     family: 'Bro & Sist Package',
     individual: 'Individu',
     pacer: 'Pacer',
+    umkm: 'Tenant UMKM',
   }
   return packages?.[pkg]?.label || defaults[pkg]
 }

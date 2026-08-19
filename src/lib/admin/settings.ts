@@ -32,7 +32,7 @@ const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
 const ENV_PATH = path.join(process.cwd(), '.env.local')
 const FORM_SETTINGS_KEY = 'registration_form'
 
-const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'pacer']
+const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'pacer', 'umkm']
 
 function mergeInput<T extends { label: string; placeholder: string; visible: boolean; required: boolean }>(base: T, value: Partial<T> | undefined): T {
   return {
@@ -141,6 +141,7 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
     family: normalizeRegistrationFormPackage(base.family, value?.family),
     individual: normalizeRegistrationFormPackage(base.individual, value?.individual),
     pacer: normalizeRegistrationFormPackage(base.pacer, value?.pacer),
+    umkm: normalizeRegistrationFormPackage(base.umkm, value?.umkm),
   }
 }
 
@@ -216,6 +217,7 @@ function normalizePackagesSettings(value: Partial<PackagesSettings> | undefined)
     family: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.family, value?.family),
     individual: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.individual, value?.individual),
     pacer: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.pacer, value?.pacer),
+    umkm: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.umkm, value?.umkm),
   }
 }
 
@@ -235,6 +237,7 @@ function normalizeEmailTemplateSettings(value: Partial<EmailTemplateSettings> | 
     family: normalizeEmailTemplate(base.family, value?.family),
     individual: normalizeEmailTemplate(base.individual, value?.individual),
     pacer: normalizeEmailTemplate(base.pacer, value?.pacer),
+    umkm: normalizeEmailTemplate(base.umkm, value?.umkm),
   }
 }
 
@@ -258,6 +261,7 @@ function normalizeWebhookSettings(value: Partial<WebhookSettings> | undefined): 
     family: normalizeWebhookPackage(base.family, value?.family),
     individual: normalizeWebhookPackage(base.individual, value?.individual),
     pacer: normalizeWebhookPackage(base.pacer, value?.pacer),
+    umkm: normalizeWebhookPackage(base.umkm, value?.umkm),
   }
 }
 
@@ -331,22 +335,24 @@ const PACKAGE_PARTICIPANT_COLLECTION: Record<PackageKey, string> = {
   family: 'family_participants',
   individual: 'individual_participants',
   pacer: 'pacer_participants',
+  umkm: 'umkm_registrations',
 }
 
 const PACKAGE_REGISTRATION_COLLECTION: Record<PackageKey, string> = {
   community: 'registrations',
   family: 'family_registrations',
   individual: 'individual_registrations',
-  // Pacer tidak punya koleksi registrasi/payment terpisah — owner record-nya sekaligus "registrasi".
   pacer: 'pacer_registrations',
+  umkm: 'umkm_registrations',
 }
 
-// Kategori disimpan di record owner (community/family/individual/pacer), bukan di peserta.
+// Kategori disimpan di record owner (community/family/individual/pacer/umkm), bukan di peserta.
 const PACKAGE_OWNER_COLLECTION: Record<PackageKey, string> = {
   community: 'communities',
   family: 'families',
   individual: 'individuals',
   pacer: 'pacer_registrations',
+  umkm: 'umkm_registrations',
 }
 
 const PACKAGE_OWNER_ID_FIELD: Record<PackageKey, string> = {
@@ -354,6 +360,7 @@ const PACKAGE_OWNER_ID_FIELD: Record<PackageKey, string> = {
   family: 'family_id',
   individual: 'individual_id',
   pacer: 'pacer_id',
+  umkm: 'id',
 }
 
 /** Jumlah peserta aktif (pending/paid) untuk sebuah kategori dalam paket (join ke record owner). */
@@ -365,6 +372,10 @@ async function countPackageParticipantsByCategory(pkg: PackageKey, category: str
   // di level akun (pacer_registrations), exclude yang sudah 'rejected' supaya tidak makan kuota.
   if (pkg === 'pacer') {
     return db.collection('pacer_registrations').countDocuments({ category, status: { $in: ['pending', 'approved'] } })
+  }
+
+  if (pkg === 'umkm') {
+    return db.collection('umkm_registrations').countDocuments({ status: { $in: ['pending', 'approved'] } })
   }
 
   const ownerIds = await db
@@ -391,9 +402,8 @@ const PENDING_HOLD_HOURS = 24
  * Dipanggil lazily sebelum menghitung kuota — tidak perlu cron terpisah.
  */
 async function releaseExpiredPendingRegistrations(pkg: PackageKey) {
-  // Status 'pending' di pacer_registrations berarti "menunggu approval admin", bukan
-  // "checkout belum dibayar" — tidak boleh di-auto-expire oleh mekanisme hold payment ini.
-  if (pkg === 'pacer') return
+  // Status 'pending' di pacer & umkm berarti "menunggu approval admin" — tidak boleh di-auto-expire.
+  if (pkg === 'pacer' || pkg === 'umkm') return
 
   const { getDb } = await import('@/lib/mongodb/client')
   const db = await getDb()
