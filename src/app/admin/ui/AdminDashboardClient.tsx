@@ -1114,6 +1114,30 @@ export function AdminDashboardClient({
 
   const dailyParticipantChartMax = useMemo(() => Math.max(...dailyParticipants.map((item) => item.count), 1), [dailyParticipants])
 
+  // Hitung pemakaian kuota: jumlah peserta per paket+kategori (paid atau pending)
+  // key: '{packageKey}::{categoryValue}'
+  const categoryUsageMap = useMemo(() => {
+    const map = new Map<string, number>()
+    const increment = (packageKey: string, categoryValue: string | null | undefined) => {
+      if (!categoryValue) return
+      const key = `${packageKey}::${categoryValue}`
+      map.set(key, (map.get(key) ?? 0) + 1)
+    }
+    for (const p of participants) {
+      const comm = firstRelation(p.community)
+      increment('community', comm?.category)
+    }
+    for (const p of familyParticipants) {
+      const comm = firstRelation(p.community)
+      increment('family', comm?.category)
+    }
+    for (const p of individualParticipants) {
+      const comm = firstRelation(p.community)
+      increment('individual', comm?.category || p.category)
+    }
+    return map
+  }, [participants, familyParticipants, individualParticipants])
+
   const communitiesByKey = useMemo(() => {
     const map = new Map<string, AdminCommunity>()
     for (const community of activeCommunities) {
@@ -4197,6 +4221,40 @@ export function AdminDashboardClient({
                                           className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
                                         />
                                       </label>
+                                      {/* Indikator pemakaian kuota */}
+                                      {(() => {
+                                        const used = categoryUsageMap.get(`${pkg}::${cat.value}`) ?? 0
+                                        const quota = cat.quota
+                                        const pct = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : null
+                                        const isFull = quota > 0 && used >= quota
+                                        const isNearFull = quota > 0 && pct !== null && pct >= 80 && !isFull
+                                        return (
+                                          <div className="mt-0.5 flex flex-col gap-1.5">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[9px] font-black uppercase text-brand-muted">Pemakaian Kuota</span>
+                                              <span className={`text-[9px] font-black ${
+                                                isFull ? 'text-red-400' : isNearFull ? 'text-amber-400' : 'text-green-400'
+                                              }`}>
+                                                {used}{quota > 0 ? ` / ${quota}` : ' peserta'}
+                                                {pct !== null ? ` (${pct}%)` : ' (tak terbatas)'}
+                                              </span>
+                                            </div>
+                                            {quota > 0 && (
+                                              <div className="h-1.5 w-full rounded-full bg-brand-dark/60 overflow-hidden">
+                                                <div
+                                                  className={`h-full rounded-full transition-all ${
+                                                    isFull ? 'bg-red-500' : isNearFull ? 'bg-amber-400' : 'bg-green-500'
+                                                  }`}
+                                                  style={{ width: `${pct ?? 0}%` }}
+                                                />
+                                              </div>
+                                            )}
+                                            {isFull && (
+                                              <p className="text-[9px] font-bold text-red-400">⚠ Kuota penuh — pendaftaran kategori ini ditutup otomatis.</p>
+                                            )}
+                                          </div>
+                                        )
+                                      })()}
                                     </div>
                                   ))}
                                 </div>
