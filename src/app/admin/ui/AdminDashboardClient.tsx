@@ -361,6 +361,16 @@ function getPaymentCommunity(payment: AdminPayment) {
   return firstRelation(firstRelation(payment.registration)?.community || null)
 }
 
+function extractCategoryLabel(category: string | null | undefined): string | null {
+  if (!category) return null
+  const raw = category.trim()
+  const match = raw.match(/^(\d+K)/i)
+  if (match) return match[1].toUpperCase()
+  if (raw.toUpperCase().includes('3K')) return '3K'
+  if (raw.toUpperCase().includes('6K')) return '6K'
+  return raw || null
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -2769,6 +2779,11 @@ export function AdminDashboardClient({
                                     ].filter((v) => v && v !== '-').join(', ') || '-'}
                                   </span>
                                 )}
+                                {editableCommunity && extractCategoryLabel(editableCommunity.category) && (
+                                  <span className="px-1.5 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-black text-sport-orange">
+                                    {extractCategoryLabel(editableCommunity.category)}
+                                  </span>
+                                )}
                                 {group.latestCreatedAt > 0 && (
                                   <span className="text-[9px] text-brand-muted flex items-center gap-1 font-medium">
                                     <Clock className="w-2.5 h-2.5 text-sport-orange/70" />
@@ -3145,7 +3160,14 @@ export function AdminDashboardClient({
                         <tr key={payment.id} className={`border-b border-card-border hover:bg-brand-gray/20 ${hasChange ? 'bg-yellow-50' : ''}`}>
                           <td className="px-4 py-3 text-xs font-bold text-foreground">{payment.payment_reference}</td>
                           <td className="px-4 py-3">
-                            <p className="text-xs font-bold text-foreground">{community?.name || '-'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-foreground">{community?.name || '-'}</p>
+                              {extractCategoryLabel(community?.category) && (
+                                <span className="px-1.5 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-black text-sport-orange shrink-0">
+                                  {extractCategoryLabel(community?.category)}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-brand-muted">{community?.community_code || '-'}</p>
                           </td>
                           <td className="px-4 py-3 text-xs font-black text-foreground">{formatCurrency(payment.amount)}</td>
