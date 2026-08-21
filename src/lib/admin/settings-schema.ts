@@ -68,6 +68,7 @@ export type RegistrationFormParticipantSettings = {
   medical_condition: FormInputConfig
   emergency_contact_name: FormInputConfig
   emergency_contact_phone: FormInputConfig
+  community_name: FormInputConfig
   // Field khusus paket Pacer (inert/tersembunyi utk paket lain, lihat DEFAULT_PARTICIPANT_GROUP).
   age: FormInputConfig
   sosmed_instagram: FormInputConfig
@@ -214,6 +215,7 @@ const DEFAULT_PARTICIPANT_GROUP: RegistrationFormParticipantSettings = {
   medical_condition: { label: 'Riwayat Penyakit', placeholder: 'Isi "Tidak ada" jika sehat', visible: true, required: false },
   emergency_contact_name: { label: 'Nama Kontak Darurat', placeholder: 'Keluarga / kerabat terdekat', visible: true, required: true },
   emergency_contact_phone: { label: 'No. Kontak Darurat', placeholder: '08xxxxxxxxxx', visible: true, required: true },
+  community_name: { label: 'Instansi / Komunitas', placeholder: 'Contoh: Nama Perusahaan / Komunitas (Opsional)', visible: true, required: false },
   // Khusus Pacer: nonaktif di paket lain secara default.
   age: { label: 'Usia', placeholder: 'Usia (tahun)', visible: false, required: false },
   sosmed_instagram: { label: 'Link Instagram', placeholder: 'https://instagram.com/username', visible: false, required: false },

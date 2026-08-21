@@ -59,6 +59,7 @@ export const participantSchema = z.object({
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
     .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+  community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
   provinsi: z
     .string()
     .min(1, 'Provinsi wajib dipilih'),
@@ -99,6 +100,7 @@ export const participantFormSchema = z.object({
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
     .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+  community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
   provinsi: z.string().optional().or(z.literal('')),
   kota: z.string().optional().or(z.literal('')),
   kecamatan: z.string().optional().or(z.literal('')),
@@ -133,6 +135,7 @@ export const participantEditSchema = z.object({
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
     .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+  community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
 })
 
 export type ParticipantFormValues = z.infer<typeof participantFormSchema>

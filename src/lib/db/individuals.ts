@@ -56,6 +56,7 @@ export async function createIndividual(input: {
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
+  community_name?: string | null
   voucher_code?: string | null
   voucher_discount?: number
 }) {
@@ -70,6 +71,7 @@ export async function createIndividual(input: {
     phone: input.phone,
     category: input.category,
     individual_code: await createUniqueIndividualCode(),
+    community_name: input.community_name ?? null,
     provinsi: input.provinsi,
     kota: input.kota,
     kecamatan: input.kecamatan,

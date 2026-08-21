@@ -63,14 +63,16 @@ export async function listIndividualParticipantsWithIndividual() {
   const individualIds = [...new Set(participants.map((p) => p.individual_id))]
   const individuals = await db.collection('individuals')
     .find({ id: { $in: individualIds } })
-    .project({ id: 1, name: 1, leader_name: 1, email: 1, phone: 1, category: 1, individual_code: 1, provinsi: 1, kota: 1, kecamatan: 1 })
+    .project({ id: 1, name: 1, leader_name: 1, email: 1, phone: 1, category: 1, individual_code: 1, community_name: 1, provinsi: 1, kota: 1, kecamatan: 1 })
     .toArray()
   const individualMap = new Map(individuals.map((f) => [f.id as string, f]))
 
   return participants.map((participant) => {
     const individual = individualMap.get(participant.individual_id)
+    const rawParticipant = docToIndividualParticipant(stripMongoId(participant) as Record<string, unknown>)
     return {
-      ...docToIndividualParticipant(stripMongoId(participant) as Record<string, unknown>),
+      ...rawParticipant,
+      community_name: rawParticipant.community_name || (individual?.community_name as string | null) || null,
       individual: individual
         ? {
             id: individual.id as string,
@@ -80,6 +82,7 @@ export async function listIndividualParticipantsWithIndividual() {
             phone: individual.phone as string,
             category: (individual.category as string | null) ?? null,
             individual_code: individual.individual_code as string,
+            community_name: (individual.community_name as string | null) ?? null,
             provinsi: (individual.provinsi as string | null) ?? null,
             kota: (individual.kota as string | null) ?? null,
             kecamatan: (individual.kecamatan as string | null) ?? null,

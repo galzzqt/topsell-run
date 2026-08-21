@@ -22,6 +22,7 @@ import {
   // individual database imports
   findIndividualParticipantWithIndividualById,
   findIndividualParticipantById,
+  findIndividualParticipantsByIndividualId,
   markIndividualParticipantCheckedIn,
   updateIndividualParticipantById,
   updateIndividual,
@@ -268,6 +269,7 @@ export type AdminParticipantUpdateValues = {
   medical_condition: string
   emergency_contact_name: string
   emergency_contact_phone: string
+  community_name?: string | null
 }
 
 export async function updateAdminParticipant(participantId: string, values: AdminParticipantUpdateValues) {
@@ -298,6 +300,7 @@ export async function updateAdminParticipant(participantId: string, values: Admi
     medical_condition: values.medical_condition.trim() || null,
     emergency_contact_name: values.emergency_contact_name.trim(),
     emergency_contact_phone: values.emergency_contact_phone.trim(),
+    community_name: values.community_name ? values.community_name.trim() : null,
   }
 
   const existingCommunity = await findParticipantById(participantId)
@@ -347,6 +350,7 @@ export type AdminFamilyUpdateValues = {
   leader_name: string
   email: string
   phone: string
+  community_name?: string | null
   provinsi: string
   kota: string
   kecamatan: string
@@ -428,10 +432,26 @@ export async function updateAdminIndividual(values: AdminFamilyUpdateValues) {
     leader_name: values.leader_name.trim(),
     email: values.email.trim(),
     phone: values.phone.trim(),
+    community_name: values.community_name ? values.community_name.trim() : null,
     provinsi: values.provinsi.trim() || null,
     kota: values.kota.trim() || null,
     kecamatan: values.kecamatan.trim() || null,
   })
+
+  // Sinkronkan instansi ke peserta individu terkait
+  try {
+    const participants = await findIndividualParticipantsByIndividualId(values.id)
+    for (const p of participants) {
+      await updateIndividualParticipantById(p.id, {
+        full_name: values.name.trim(),
+        phone: values.phone.trim(),
+        email: values.email.trim(),
+        community_name: values.community_name ? values.community_name.trim() : null,
+      })
+    }
+  } catch (err) {
+    console.error('Failed to sync participant community_name:', err)
+  }
 
   await updateIndividualAuthPhone(values.id, values.phone)
 
@@ -462,6 +482,7 @@ export type AdminCommunityUpdateValues = {
   leader_name: string
   email: string
   phone: string
+  community_name?: string | null
   provinsi: string
   kota: string
   kecamatan: string

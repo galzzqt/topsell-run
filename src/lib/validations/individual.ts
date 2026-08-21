@@ -5,6 +5,7 @@ const emailDomainRegex = /@(gmail\.com|yahoo\.com|yahoo\.co\.id|icloud\.com|hotm
 
 export const individualProfileSchema = z.object({
   full_name: z.string().min(3, 'Nama minimal 3 karakter').max(50, 'Nama maksimal 50 karakter'),
+  community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')

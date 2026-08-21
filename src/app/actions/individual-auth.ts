@@ -127,6 +127,7 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
       provinsi: values.provinsi,
       kota: values.kota,
       kecamatan: values.kecamatan,
+      community_name: values.participants[0]?.community_name ? values.participants[0].community_name.trim() : null,
       voucher_code: finalVoucherCode,
       voucher_discount: voucherDiscount,
     })
@@ -169,6 +170,7 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
         medical_condition: p.medical_condition || null,
         emergency_contact_name: p.emergency_contact_name,
         emergency_contact_phone: p.emergency_contact_phone,
+        community_name: p.community_name ? p.community_name.trim() : null,
         provinsi: values.provinsi,
         kota: values.kota,
         kecamatan: values.kecamatan,

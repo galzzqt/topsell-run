@@ -2,11 +2,11 @@
 
 import React from 'react'
 import { Dialog } from '@/components/ui/dialog'
-import { User, Calendar, Mail, Phone, HeartPulse, AlertTriangle } from 'lucide-react'
-import type { Participant, FamilyParticipant } from '@/lib/types'
+import { User, Calendar, Mail, Phone, HeartPulse, AlertTriangle, Building2 } from 'lucide-react'
+import type { Participant, FamilyParticipant, IndividualParticipant } from '@/lib/types'
 
 interface ParticipantDetailModalProps {
-  participant: Participant | FamilyParticipant | null
+  participant: Participant | FamilyParticipant | IndividualParticipant | null
   isOpen: boolean
   onClose: () => void
 }
@@ -37,6 +37,16 @@ export function ParticipantDetailModal({ participant, isOpen, onClose }: Partici
 
         {/* Contact Info */}
         <div className="space-y-3">
+          {participant.community_name && (
+            <div className="flex items-center gap-3 p-3 bg-brand-gray/20 rounded-lg border border-card-border">
+              <Building2 className="w-4 h-4 text-brand-muted" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider">Instansi / Komunitas</p>
+                <p className="text-xs font-medium text-foreground truncate">{participant.community_name}</p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 p-3 bg-brand-gray/20 rounded-lg border border-card-border">
             <Mail className="w-4 h-4 text-brand-muted" />
             <div className="flex-1 min-w-0">

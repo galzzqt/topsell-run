@@ -65,6 +65,7 @@ const participantInputSchema = z.object({
   medical_condition: z.string().optional(),
   emergency_contact_name: z.string().min(2, 'Nama kontak darurat wajib diisi'),
   emergency_contact_phone: z.string().min(9, 'Nomor kontak darurat tidak valid'),
+  community_name: z.string().optional(),
 })
 
 // ── RE-REGISTER INDIVIDUAL ──
@@ -152,6 +153,7 @@ export async function reRegisterIndividualAction(input: {
         medical_condition: pData.medical_condition || null,
         emergency_contact_name: pData.emergency_contact_name,
         emergency_contact_phone: pData.emergency_contact_phone,
+        community_name: pData.community_name ? pData.community_name.trim() : null,
         provinsi: individual.provinsi || '-',
         kota: individual.kota || '-',
         kecamatan: individual.kecamatan || '-',

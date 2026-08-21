@@ -46,6 +46,7 @@ import {
   Zap,
   Store,
   ExternalLink,
+  MapPin,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -167,6 +168,7 @@ export type AdminParticipant = {
   medical_condition: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  community_name?: string | null
   participant_code: string | null
   qr_code_data: string | null
   payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
@@ -184,6 +186,7 @@ export type AdminCommunity = {
   phone: string
   category?: string | null
   community_code: string
+  community_name?: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
@@ -1257,6 +1260,7 @@ export function AdminDashboardClient({
     return {
       'Nama Peserta': participant.full_name,
       'Nama BIB': participant.bib_name,
+      'Instansi / Komunitas': participant.community_name || '',
       Kategori: formatParticipantCategory(participant),
       'No. KTP': participant.ktp_number,
       'Kode Peserta': participant.participant_code || '',
@@ -1570,6 +1574,7 @@ export function AdminDashboardClient({
       medical_condition: participant.medical_condition || '',
       emergency_contact_name: participant.emergency_contact_name || '',
       emergency_contact_phone: participant.emergency_contact_phone || '',
+      community_name: participant.community_name || '',
     })
   }
 
@@ -1581,6 +1586,7 @@ export function AdminDashboardClient({
       leader_name: community.leader_name,
       email: community.email || '',
       phone: community.phone,
+      community_name: community.community_name || '',
       provinsi: resolveLocationName(community.provinsi) || '',
       kota: resolveLocationName(community.kota) || '',
       kecamatan: resolveLocationName(community.kecamatan) || '',
@@ -2140,6 +2146,7 @@ export function AdminDashboardClient({
     ['full_name', 'Nama Lengkap Peserta *'],
     ['bib_name', 'Nama BIB *'],
     ['ktp_number', 'No. KTP *'],
+    ['community_name', 'Instansi / Komunitas'],
     ['email', 'Email Peserta *'],
     ['phone', 'No. WhatsApp Peserta *'],
     ['date_of_birth', 'Tanggal Lahir *'],
@@ -2781,7 +2788,7 @@ export function AdminDashboardClient({
 
                     return (
                       <div key={group.key}>
-                        <div className="w-full px-4 py-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto_auto] gap-3 text-left items-center hover:bg-brand-gray/20 transition-colors">
+                        <div className={`w-full px-4 py-4 grid grid-cols-1 ${packageType === 'individual' ? 'lg:grid-cols-[1fr_auto_auto]' : 'lg:grid-cols-[1fr_auto_auto_auto]'} gap-3 text-left items-center hover:bg-brand-gray/20 transition-colors`}>
                           <div className="min-w-0 flex items-start gap-3">
                             <button
                               type="button"
@@ -2794,13 +2801,9 @@ export function AdminDashboardClient({
                               <p className="text-sm font-black text-foreground wrap-break-word">{group.name}</p>
                               <div className="text-[10px] font-bold text-brand-muted flex flex-wrap items-center gap-2 mt-0.5">
                                 <span>{group.code}</span>
-                                {editableCommunity && (editableCommunity.provinsi || editableCommunity.kota || editableCommunity.kecamatan) && (
-                                  <span className="px-1.5 py-0.5 rounded bg-brand-gray/50 text-[9px] font-bold text-foreground">
-                                    {[
-                                      resolveLocationName(editableCommunity.kecamatan),
-                                      resolveLocationName(editableCommunity.kota),
-                                      resolveLocationName(editableCommunity.provinsi),
-                                    ].filter((v) => v && v !== '-').join(', ') || '-'}
+                                {editableCommunity?.community_name && (
+                                  <span className="px-1.5 py-0.5 rounded bg-sport-purple/10 border border-sport-purple/20 text-[9px] font-bold text-sport-purple">
+                                    Instansi: {editableCommunity.community_name}
                                   </span>
                                 )}
                                 {editableCommunity && extractCategoryLabel(editableCommunity.category) && (
@@ -2826,10 +2829,12 @@ export function AdminDashboardClient({
                             {pendingCount > 0 && <Badge variant="warning">{pendingCount} Pending</Badge>}
                           </div>
 
-                          <div className="text-xs font-bold text-brand-muted lg:text-right">
-                            Racepack
-                            <span className="block text-sm font-black text-foreground">{pickedUpCount}/{group.participants.length}</span>
-                          </div>
+                          {packageType !== 'individual' && (
+                            <div className="text-xs font-bold text-brand-muted lg:text-right">
+                              Racepack
+                              <span className="block text-sm font-black text-foreground">{pickedUpCount}/{group.participants.length}</span>
+                            </div>
+                          )}
 
                           <div className="flex items-center gap-2 lg:justify-end">
                             {editableCommunity && (
@@ -2853,6 +2858,19 @@ export function AdminDashboardClient({
 
                         {isOpen && (
                           <div className="border-t border-card-border bg-brand-dark/20 overflow-x-auto">
+                            {editableCommunity && (editableCommunity.provinsi || editableCommunity.kota || editableCommunity.kecamatan) && (
+                              <div className="px-4 py-2.5 bg-brand-dark/40 border-b border-card-border flex items-center gap-2 text-xs text-brand-muted">
+                                <MapPin className="w-3.5 h-3.5 text-sport-orange shrink-0" />
+                                <span className="font-bold text-foreground">Alamat / Lokasi:</span>
+                                <span className="text-foreground/90 font-medium">
+                                  {[
+                                    resolveLocationName(editableCommunity.kecamatan),
+                                    resolveLocationName(editableCommunity.kota),
+                                    resolveLocationName(editableCommunity.provinsi),
+                                  ].filter((v) => v && v !== '-').join(', ') || '-'}
+                                </span>
+                              </div>
+                            )}
                             <table className="w-full text-left">
                               <thead>
                                 <tr className="border-b border-card-border">
@@ -2867,7 +2885,14 @@ export function AdminDashboardClient({
                                     <td className="px-4 py-3">
                                       <p className="text-sm font-bold text-foreground">{participant.full_name}</p>
                                       <p className="text-[10px] text-sport-orange font-bold">{participant.participant_code || 'Belum ada kode'}</p>
-                                      <p className="text-[10px] text-brand-muted">{participant.bib_name}</p>
+                                      <p className="text-[10px] text-brand-muted">BIB: {participant.bib_name}</p>
+                                      {participant.community_name && (
+                                        <p className="text-[10px] text-sport-purple font-bold mt-1">
+                                          <span className="px-1.5 py-0.5 rounded bg-sport-purple/10 border border-sport-purple/20">
+                                            Instansi: {participant.community_name}
+                                          </span>
+                                        </p>
+                                      )}
                                       {participant.created_at && (
                                         <p className="text-[9px] text-brand-muted/80 flex items-center gap-1 mt-0.5">
                                           <Clock className="w-2.5 h-2.5 text-sport-orange/70" />
@@ -5126,6 +5151,7 @@ export function AdminDashboardClient({
             {[
               ['full_name', 'Nama Lengkap'],
               ['bib_name', 'Nama BIB'],
+              ['community_name', 'Instansi / Komunitas'],
               ['ktp_number', 'No. KTP'],
               ['email', 'Email'],
               ['phone', 'WhatsApp'],
@@ -5203,6 +5229,7 @@ export function AdminDashboardClient({
             {[
               ['name', packageType === 'community' ? 'Nama Komunitas' : packageType === 'individual' ? 'Nama Peserta' : 'Nama Grup'],
               ['leader_name', packageType === 'community' ? 'Nama Ketua' : packageType === 'individual' ? 'Nama Peserta' : 'Nama Perwakilan'],
+              ...(packageType === 'individual' ? [['community_name', 'Instansi / Komunitas (Opsional)']] : []),
               ['email', 'Email'],
               ['phone', 'WhatsApp'],
               ['provinsi', 'Provinsi'],

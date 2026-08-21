@@ -41,6 +41,7 @@ export interface Participant {
   medical_condition: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  community_name?: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
@@ -187,6 +188,7 @@ export interface FamilyParticipant {
   medical_condition: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  community_name?: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
@@ -255,6 +257,7 @@ export interface Individual {
   phone: string
   category: string
   individual_code: string
+  community_name?: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
@@ -285,6 +288,7 @@ export interface IndividualParticipant {
   medical_condition: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  community_name?: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null

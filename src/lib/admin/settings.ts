@@ -119,6 +119,7 @@ function normalizeRegistrationFormPackage(
       medical_condition: mergeInput(base.participants.medical_condition, value?.participants?.medical_condition),
       emergency_contact_name: mergeInput(base.participants.emergency_contact_name, value?.participants?.emergency_contact_name),
       emergency_contact_phone: mergeInput(base.participants.emergency_contact_phone, value?.participants?.emergency_contact_phone),
+      community_name: mergeInput(base.participants.community_name, value?.participants?.community_name),
       age: mergeInput(base.participants.age, value?.participants?.age),
       sosmed_instagram: mergeInput(base.participants.sosmed_instagram, value?.participants?.sosmed_instagram),
       sosmed_tiktok: mergeInput(base.participants.sosmed_tiktok, value?.participants?.sosmed_tiktok),
@@ -140,10 +141,16 @@ function normalizeRegistrationFormPackage(
 
 export function normalizeRegistrationFormSettings(value: Partial<RegistrationFormSettings> | undefined): RegistrationFormSettings {
   const base = DEFAULT_ADMIN_SETTINGS.registrationForm
+  const individualPkg = normalizeRegistrationFormPackage(base.individual, value?.individual)
+  
+  if (individualPkg.registrant.provinsi.placeholder) {
+    individualPkg.registrant.provinsi.placeholder = individualPkg.registrant.provinsi.placeholder.replace(/\s*komunitas/gi, '')
+  }
+
   return {
     community: normalizeRegistrationFormPackage(base.community, value?.community),
     family: normalizeRegistrationFormPackage(base.family, value?.family),
-    individual: normalizeRegistrationFormPackage(base.individual, value?.individual),
+    individual: individualPkg,
     pacer: normalizeRegistrationFormPackage(base.pacer, value?.pacer),
     umkm: normalizeRegistrationFormPackage(base.umkm, value?.umkm),
   }

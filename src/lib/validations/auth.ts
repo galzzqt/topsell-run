@@ -65,6 +65,7 @@ export const participantItemSchema = z.object({
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
     .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+  community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
 })
 
 export const registerSchema = z

@@ -80,6 +80,7 @@ export async function updateIndividualProfile(values: IndividualProfileValues) {
     leader_name: values.full_name,
     phone: values.phone,
     email: values.email,
+    community_name: values.community_name ? values.community_name.trim() : null,
     ...(emailChanged
       ? {
           email_verified: false,
@@ -99,7 +100,7 @@ export async function updateIndividualProfile(values: IndividualProfileValues) {
     await updateIndividualAuthPassword(session.id, createPasswordRecord(values.password))
   }
 
-  // Individu = 1 akun 1 peserta. Sinkronkan nama/email/HP ke record peserta
+  // Individu = 1 akun 1 peserta. Sinkronkan nama/email/HP/instansi ke record peserta
   // selama masih pending — setelah lunas, data BIB/QR dianggap final (dikelola admin).
   try {
     const participants = await findIndividualParticipantsByIndividualId(session.id)
@@ -108,6 +109,7 @@ export async function updateIndividualProfile(values: IndividualProfileValues) {
         full_name: values.full_name,
         phone: values.phone,
         email: values.email,
+        community_name: values.community_name ? values.community_name.trim() : null,
       })
     }
   } catch (syncError) {

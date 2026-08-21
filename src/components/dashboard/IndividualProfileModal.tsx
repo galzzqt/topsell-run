@@ -28,6 +28,7 @@ export function IndividualProfileModal({ isOpen, onClose }: IndividualProfileMod
     resolver: zodResolver(individualProfileSchema),
     defaultValues: {
       full_name: '',
+      community_name: '',
       phone: '',
       email: '',
       password: '',
@@ -39,6 +40,7 @@ export function IndividualProfileModal({ isOpen, onClose }: IndividualProfileMod
 
     reset({
       full_name: individual.name || '',
+      community_name: individual.community_name || '',
       phone: individual.phone || '',
       email: individual.email || '',
       password: '',
@@ -79,7 +81,7 @@ export function IndividualProfileModal({ isOpen, onClose }: IndividualProfileMod
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <KeyRound className="w-4 h-4 text-sport-orange shrink-0" />
           <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-            Anda dapat mengubah nama, nomor HP, email, dan password akun. Jika email diubah, akun wajib aktivasi ulang melalui email baru.
+            Anda dapat mengubah nama, instansi/komunitas, nomor HP, email, dan password akun. Jika email diubah, akun wajib aktivasi ulang melalui email baru.
           </p>
         </div>
 
@@ -90,6 +92,13 @@ export function IndividualProfileModal({ isOpen, onClose }: IndividualProfileMod
             error={errors.full_name?.message}
             disabled={isSubmitting}
             {...register('full_name')}
+          />
+          <Input
+            label="Instansi / Komunitas (Opsional)"
+            placeholder="Contoh: PT ABC / Komunitas Lari"
+            error={errors.community_name?.message}
+            disabled={isSubmitting}
+            {...register('community_name')}
           />
           <Input
             label="No. HP / WhatsApp"

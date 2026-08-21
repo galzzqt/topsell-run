@@ -63,6 +63,7 @@ export default function IndividuForm() {
       medical_condition: '',
       emergency_contact_name: '',
       emergency_contact_phone: '',
+      community_name: '',
       category: INDIVIDUAL_CATEGORY_OPTIONS[0].value,
       provinsi: '',
       kota: '',
@@ -84,6 +85,7 @@ export default function IndividuForm() {
     full_name: 'Peserta Individu',
     bib_name: 'PESERTA',
     ktp_number: '0000000000000000',
+    community_name: '',
     email: 'peserta@topsell-run.com',
     phone: '081234567890',
     date_of_birth: '2000-01-01',
@@ -395,18 +397,32 @@ export default function IndividuForm() {
                 )}
               </div>
 
-              {formSettings.individual.participants.ktp_number.visible ? (
-                <Input
-                  label={formSettings.individual.participants.ktp_number.label}
-                  required={formSettings.individual.participants.ktp_number.required}
-                  placeholder={formSettings.individual.participants.ktp_number.placeholder}
-                  error={errors.ktp_number?.message}
-                  disabled={isSubmitting}
-                  {...register('ktp_number')}
-                />
-              ) : (
-                <input type="hidden" value={individualFallbacks.ktp_number} {...register('ktp_number')} />
-              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {formSettings.individual.participants.ktp_number.visible ? (
+                  <Input
+                    label={formSettings.individual.participants.ktp_number.label}
+                    required={formSettings.individual.participants.ktp_number.required}
+                    placeholder={formSettings.individual.participants.ktp_number.placeholder}
+                    error={errors.ktp_number?.message}
+                    disabled={isSubmitting}
+                    {...register('ktp_number')}
+                  />
+                ) : (
+                  <input type="hidden" value={individualFallbacks.ktp_number} {...register('ktp_number')} />
+                )}
+                {formSettings.individual.participants.community_name?.visible ? (
+                  <Input
+                    label={formSettings.individual.participants.community_name.label}
+                    required={formSettings.individual.participants.community_name.required}
+                    placeholder={formSettings.individual.participants.community_name.placeholder}
+                    error={errors.community_name?.message}
+                    disabled={isSubmitting}
+                    {...register('community_name')}
+                  />
+                ) : (
+                  <input type="hidden" value={individualFallbacks.community_name} {...register('community_name')} />
+                )}
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {formSettings.individual.participants.email.visible ? (
@@ -560,7 +576,11 @@ export default function IndividuForm() {
                   <Select
                     label={formSettings.individual.registrant.provinsi.label}
                     required={formSettings.individual.registrant.provinsi.required}
-                    placeholder={loadingProvinsi ? 'Memuat provinsi...' : formSettings.individual.registrant.provinsi.placeholder}
+                    placeholder={
+                      loadingProvinsi
+                        ? 'Memuat provinsi...'
+                        : (formSettings.individual.registrant.provinsi.placeholder?.replace(/\s*komunitas/gi, '') || 'Pilih provinsi')
+                    }
                     error={errors.provinsi?.message}
                     disabled={isSubmitting || loadingProvinsi}
                     options={provinsiList}
@@ -573,7 +593,13 @@ export default function IndividuForm() {
                   <Select
                     label={formSettings.individual.registrant.kota.label}
                     required={formSettings.individual.registrant.kota.required}
-                    placeholder={selectedProvinsi ? (loadingKota ? 'Memuat kota...' : formSettings.individual.registrant.kota.placeholder) : 'Pilih provinsi dulu'}
+                    placeholder={
+                      selectedProvinsi
+                        ? (loadingKota
+                            ? 'Memuat kota...'
+                            : (formSettings.individual.registrant.kota.placeholder?.replace(/\s*komunitas/gi, '') || 'Pilih kota/kabupaten'))
+                        : 'Pilih provinsi dulu'
+                    }
                     error={errors.kota?.message}
                     disabled={isSubmitting || loadingKota || !selectedProvinsi}
                     options={kotaList}
@@ -586,7 +612,13 @@ export default function IndividuForm() {
                   <Select
                     label={formSettings.individual.registrant.kecamatan.label}
                     required={formSettings.individual.registrant.kecamatan.required}
-                    placeholder={selectedKota ? (loadingKecamatan ? 'Memuat kecamatan...' : formSettings.individual.registrant.kecamatan.placeholder) : 'Pilih kota dulu'}
+                    placeholder={
+                      selectedKota
+                        ? (loadingKecamatan
+                            ? 'Memuat kecamatan...'
+                            : (formSettings.individual.registrant.kecamatan.placeholder?.replace(/\s*komunitas/gi, '') || 'Pilih kecamatan'))
+                        : 'Pilih kota dulu'
+                    }
                     error={errors.kecamatan?.message}
                     disabled={isSubmitting || loadingKecamatan || !selectedKota}
                     options={kecamatanList}
