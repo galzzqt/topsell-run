@@ -21,6 +21,7 @@ import {
   findVoucherByCode,
   findBestAutoVoucher,
   incrementVoucherUsage,
+  markIndividualPaymentPaid,
 } from '@/lib/db'
 import { registerSoloSchema, loginSchema, RegisterSoloFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendIndividualRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
@@ -191,6 +192,8 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
   const paymentRef = toXenditReference(generateRandomReference('IND'))
 
   try {
+    const isFreeByVoucher = finalAmount === 0
+
     const registration = await createIndividualRegistration({
       individual_id: individual.id,
       total_participants: values.participants.length,
@@ -200,13 +203,22 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
       status: 'pending',
     })
     await linkIndividualParticipantsToRegistration(participantIds, registration.id)
-    await createIndividualPayment({
+    const payment = await createIndividualPayment({
       registration_id: registration.id,
       amount: finalAmount,
-      payment_reference: paymentRef,
+      payment_reference: isFreeByVoucher ? `FREE-IND-${individual.individual_code}` : paymentRef,
       status: 'pending',
       period_key: period?.key ?? null,
     })
+
+    // Jika gratis karena voucher: transisikan dari pending → paid sehingga
+    // activatePaidIndividualParticipants dipanggil (generate kode & QR peserta).
+    if (isFreeByVoucher) {
+      await markIndividualPaymentPaid(payment.id, {
+        payment_method: 'voucher_free',
+        paid_at: new Date().toISOString(),
+      })
+    }
 
     if (voucherId) {
       await incrementVoucherUsage(voucherId)

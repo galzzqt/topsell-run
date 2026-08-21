@@ -26,6 +26,9 @@ import {
   incrementVoucherUsage,
   findVoucherByCode,
   findBestAutoVoucher,
+  markIndividualPaymentPaid,
+  markFamilyPaymentPaid,
+  markPaymentPaid,
 } from '@/lib/db'
 import {
   checkPackageQuota,
@@ -168,7 +171,10 @@ export async function reRegisterIndividualAction(input: {
   }
 
   const participantIds = inserted.map((p) => p.id)
-  const paymentRef = toXenditReference(generateRandomReference('IND'))
+  const isFreeByVoucher = finalAmount === 0
+  const paymentRef = isFreeByVoucher
+    ? `FREE-IND-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`
+    : toXenditReference(generateRandomReference('IND'))
 
   let registration
   try {
@@ -186,13 +192,20 @@ export async function reRegisterIndividualAction(input: {
   }
 
   try {
-    await dbCreateIndividualPayment({
+    const payment = await dbCreateIndividualPayment({
       registration_id: registration.id,
       amount: finalAmount,
       payment_reference: paymentRef,
       status: 'pending',
       period_key: period?.key ?? null,
     })
+    // Jika gratis karena voucher: langsung aktifkan peserta (generate kode & QR)
+    if (isFreeByVoucher) {
+      await markIndividualPaymentPaid(payment.id, {
+        payment_method: 'voucher_free',
+        paid_at: new Date().toISOString(),
+      })
+    }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
@@ -309,7 +322,10 @@ export async function reRegisterFamilyAction(input: {
   }
 
   const participantIds = inserted.map((p) => p.id)
-  const paymentRef = toXenditReference(generateRandomReference('FAM'))
+  const isFreeByVoucherFam = finalAmount === 0
+  const paymentRef = isFreeByVoucherFam
+    ? `FREE-FAM-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`
+    : toXenditReference(generateRandomReference('FAM'))
 
   let registration
   try {
@@ -327,13 +343,20 @@ export async function reRegisterFamilyAction(input: {
   }
 
   try {
-    await dbCreateFamilyPayment({
+    const payment = await dbCreateFamilyPayment({
       registration_id: registration.id,
       amount: finalAmount,
       payment_reference: paymentRef,
       status: 'pending',
       period_key: period?.key ?? null,
     })
+    // Jika gratis karena voucher: langsung aktifkan peserta (generate kode & QR)
+    if (isFreeByVoucherFam) {
+      await markFamilyPaymentPaid(payment.id, {
+        payment_method: 'voucher_free',
+        paid_at: new Date().toISOString(),
+      })
+    }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
@@ -450,7 +473,10 @@ export async function reRegisterCommunityAction(input: {
   }
 
   const participantIds = inserted.map((p) => p.id)
-  const paymentRef = toXenditReference(generateRandomReference('COM'))
+  const isFreeByVoucherCom = finalAmount === 0
+  const paymentRef = isFreeByVoucherCom
+    ? `FREE-COM-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`
+    : toXenditReference(generateRandomReference('COM'))
 
   let registration
   try {
@@ -468,13 +494,20 @@ export async function reRegisterCommunityAction(input: {
   }
 
   try {
-    await dbCreatePayment({
+    const payment = await dbCreatePayment({
       registration_id: registration.id,
       amount: finalAmount,
       payment_reference: paymentRef,
       status: 'pending',
       period_key: period?.key ?? null,
     })
+    // Jika gratis karena voucher: langsung aktifkan peserta (generate kode & QR)
+    if (isFreeByVoucherCom) {
+      await markPaymentPaid(payment.id, {
+        payment_method: 'voucher_free',
+        paid_at: new Date().toISOString(),
+      })
+    }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }

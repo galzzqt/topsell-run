@@ -94,29 +94,34 @@ export function ReRegisterModal({
   const [errorMsg, setErrorMsg] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Initialize selectedCategory & participants when opened
+  // Initialize selectedCategory & participants when opened.
+  // PENTING: jangan pakai objek `userProfile` langsung sebagai dep — setiap re-render
+  // parent (misal polling 15 detik) membuat referensi baru → form ter-reset sendiri.
+  // Gunakan nilai primitif yang stabil saja.
+  const profileName   = userProfile?.leader_name || userProfile?.name || ''
+  const profileEmail  = userProfile?.email || ''
+  const profilePhone  = userProfile?.phone || ''
+  const profileCat    = userProfile?.category || ''
+
   useEffect(() => {
     if (!isOpen) return
-    const defaultCat = userProfile?.category || categoryOptions[0]?.value || ''
+    const defaultCat = profileCat || categoryOptions[0]?.value || ''
     setSelectedCategory(defaultCat)
     setErrorMsg('')
     setAppliedVoucher(null)
     setAgreeTerms(false)
 
-    const name = userProfile?.leader_name || userProfile?.name || ''
-    const email = userProfile?.email || ''
-    const phone = userProfile?.phone || ''
-
     if (packageKey === 'individual') {
-      setParticipants([emptyParticipant(name, email, phone)])
+      setParticipants([emptyParticipant(profileName, profileEmail, profilePhone)])
     } else {
       setParticipants([
-        emptyParticipant(name, email, phone),
+        emptyParticipant(profileName, profileEmail, profilePhone),
         emptyParticipant(),
         emptyParticipant(),
       ])
     }
-  }, [isOpen, packageKey, userProfile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, packageKey, profileName, profileEmail, profilePhone, profileCat])
 
   const selectedCategoryObj = categoryOptions.find((c) => c.value === selectedCategory)
   const unitPrice = selectedCategoryObj?.price || 0
