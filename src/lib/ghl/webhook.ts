@@ -1,5 +1,6 @@
 import { phoneToWhatsAppId } from '@/lib/utils/phone-auth'
 import { readAdminSettings } from '@/lib/admin/settings'
+import { formatCurrency } from '@/lib/utils/format'
 import type { PackageKey } from '@/lib/admin/settings-schema'
 
 type WebhookKind = 'registration' | 'racepack'
@@ -217,5 +218,45 @@ export async function sendPacerRegistrationWebhook(payload: {
     pb_media_urls: payload.pbMediaUrls || [],
     pb_media_urls_string: payload.pbMediaUrls ? payload.pbMediaUrls.join(', ') : '',
     message: `Pendaftaran pacer ${payload.fullName} (Kategori: ${payload.category}) telah diterima dengan status ${payload.status.toUpperCase()}.`,
+  })
+}
+
+/**
+ * Kabari tenant UMKM lewat WhatsApp bahwa pendaftarannya disetujui.
+ *
+ * Hanya untuk status approved — penolakan cukup lewat email
+ * (src/lib/email/umkm.ts), sesuai permintaan.
+ *
+ * Memakai kind 'registration' sehingga URL-nya diambil dari slot
+ * webhookSettings.umkm.registration di pengaturan admin. Tanpa URL terisi,
+ * postWebhook melewati diam-diam ({ skipped: true }).
+ */
+export async function sendUmkmApprovalWebhook(payload: {
+  phone: string
+  email: string
+  name: string
+  picName: string
+  umkmCode: string
+  businessField: string
+  /** Sisa tagihan; 0 untuk tenant gratis atau yang sudah lunas. */
+  amountDue: number
+}) {
+  const paymentLine =
+    payload.amountDue > 0
+      ? `Silakan masuk ke dashboard tenant untuk menyelesaikan pembayaran sebesar ${formatCurrency(payload.amountDue)}. Slot tenant terkunci setelah pembayaran diterima.`
+      : `Tidak ada biaya yang perlu dibayar dan slot tenant Anda sudah terkunci.`
+
+  return postWebhook('registration', 'umkm', {
+    event: 'umkm_approved',
+    phone: payload.phone,
+    whatsapp: phoneToWhatsAppId(payload.phone),
+    email: payload.email,
+    name: payload.name,
+    pic_name: payload.picName,
+    umkm_code: payload.umkmCode,
+    business_field: payload.businessField,
+    status: 'approved',
+    amount_due: payload.amountDue,
+    message: `Selamat! Pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 telah DISETUJUI. ${paymentLine}`,
   })
 }

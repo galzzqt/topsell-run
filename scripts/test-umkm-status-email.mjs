@@ -13,6 +13,7 @@ import assert from 'assert'
 
 const emailModule = readFileSync('src/lib/email/umkm.ts', 'utf8')
 const adminActions = readFileSync('src/app/admin/actions.ts', 'utf8')
+const ghlWebhook = readFileSync('src/lib/ghl/webhook.ts', 'utf8')
 
 // --- A: modul email menyediakan kedua keputusan ---
 assert.ok(
@@ -61,5 +62,32 @@ assert.ok(
   'status harus tersimpan ke DB sebelum email dikirim',
 )
 console.log('OK  C2  status tersimpan lebih dulu, email menyusul')
+
+// --- D: WhatsApp lewat GHL, khusus approved ---
+assert.ok(
+  /export async function sendUmkmApprovalWebhook\(/.test(ghlWebhook),
+  'sendUmkmApprovalWebhook harus diekspor dari src/lib/ghl/webhook.ts',
+)
+assert.ok(
+  /postWebhook\('registration', 'umkm',/.test(ghlWebhook),
+  "webhook UMKM harus memakai slot pengaturan paket 'umkm'",
+)
+console.log('OK  D1  modul GHL punya webhook approval UMKM')
+
+const webhookCall = body.indexOf('await sendUmkmApprovalWebhook(')
+assert.ok(webhookCall > -1, 'updateAdminUmkmStatus harus mengirim webhook WA saat approve')
+
+// Penolakan tidak boleh ikut terkirim ke GHL — hanya approved.
+const guard = body.lastIndexOf("if (status === 'approved')", webhookCall)
+assert.ok(guard > -1, "panggilan webhook harus dipagari if (status === 'approved')")
+assert.ok(
+  body.lastIndexOf('try {', webhookCall) > guard,
+  'panggilan webhook harus di dalam try/catch setelah pagar approved',
+)
+console.log('OK  D2  webhook hanya jalan untuk approved, dibungkus try/catch')
+
+// Email tetap jalan untuk kedua status — pagar approved tidak boleh menelannya.
+assert.ok(callIndex < guard, 'email status harus dikirim sebelum (dan di luar) pagar approved')
+console.log('OK  D3  email tetap terkirim untuk approved maupun rejected')
 
 console.log('\nSemua cek notifikasi status tenant UMKM lolos.')

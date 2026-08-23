@@ -40,7 +40,7 @@ import {
   findUmkmById,
   updateUmkm,
 } from '@/lib/db'
-import { sendPacerRegistrationWebhook } from '@/lib/ghl/webhook'
+import { sendPacerRegistrationWebhook, sendUmkmApprovalWebhook } from '@/lib/ghl/webhook'
 import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
@@ -1110,6 +1110,26 @@ export async function updateAdminUmkmStatus(
     }
   } catch (emailError) {
     console.error('Failed to send UMKM status email:', emailError)
+  }
+
+  // WhatsApp lewat GHL, khusus approved. Sama seperti email: gagal kirim tidak
+  // boleh membatalkan approval yang sudah tersimpan.
+  if (status === 'approved') {
+    try {
+      // Tenant gratis atau yang sudah lunas tidak punya sisa tagihan.
+      const amountDue = umkm.payment_status === 'paid' ? 0 : Math.max(0, umkm.payment_amount ?? 0)
+      await sendUmkmApprovalWebhook({
+        phone: umkm.phone,
+        email: umkm.email || '',
+        name: umkm.name,
+        picName: umkm.pic_name || umkm.name,
+        umkmCode: umkm.umkm_code,
+        businessField: umkm.business_field,
+        amountDue,
+      })
+    } catch (webhookError) {
+      console.error('Failed to send UMKM approval webhook to GHL:', webhookError)
+    }
   }
 
   revalidatePath('/admin')
