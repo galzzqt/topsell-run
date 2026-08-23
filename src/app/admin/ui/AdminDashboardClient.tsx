@@ -5280,11 +5280,21 @@ export function AdminDashboardClient({
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Nama / BIB</span>{pacerDetail.full_name} / {pacerDetail.bib_name}</div>
-              <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Kode</span>{pacerDetail.pacer_code}</div>
+              <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Kode / Kategori</span>{pacerDetail.pacer_code} / <span className="font-bold text-sport-orange">{pacerDetail.category || '-'}</span></div>
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Kontak</span>{pacerDetail.phone} / {pacerDetail.email}</div>
+              <div className="flex flex-wrap items-center gap-1.5"><span className="text-brand-muted font-bold uppercase text-[9px] w-full">Status / Aktivasi Email</span>
+                <Badge variant={pacerDetail.status === 'approved' ? 'success' : pacerDetail.status === 'rejected' ? 'danger' : 'warning'}>
+                  {pacerDetail.status.toUpperCase()}
+                </Badge>
+                <Badge variant={pacerDetail.email_verified ? 'success' : 'warning'}>
+                  {pacerDetail.email_verified ? 'VERIFIED' : 'BELUM VERIFIKASI'}
+                </Badge>
+              </div>
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">KTP</span>{pacerDetail.ktp_number}</div>
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Usia / Gender</span>{pacerDetail.age ?? '-'} tahun / {pacerDetail.gender === 'male' ? 'Laki-laki' : 'Perempuan'}</div>
+              <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Tanggal Lahir</span>{pacerDetail.date_of_birth || '-'}</div>
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Jersey / Gol. Darah</span>{pacerDetail.tshirt_size} / {pacerDetail.blood_type || '-'}</div>
+              <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Penyakit Bawaan</span>{pacerDetail.medical_condition || '-'}</div>
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Lokasi</span>{pacerDetailLocation ? [pacerDetailLocation.kecamatan, pacerDetailLocation.kota, pacerDetailLocation.provinsi].filter((v) => v && v !== '-').join(', ') || '-' : 'Memuat...'}</div>
               <div><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Kontak Darurat</span>{pacerDetail.emergency_contact_name || '-'} ({pacerDetail.emergency_contact_phone || '-'})</div>
               <div className="flex items-center gap-1.5"><AtSign className="w-3 h-3 text-brand-muted" />{pacerDetail.sosmed_instagram ? <a href={pacerDetail.sosmed_instagram} target="_blank" rel="noopener noreferrer" className="text-sport-purple hover:underline truncate">{pacerDetail.sosmed_instagram}</a> : '-'}</div>
@@ -5292,10 +5302,16 @@ export function AdminDashboardClient({
               <div className="flex items-center gap-1.5 sm:col-span-2"><LinkIcon className="w-3 h-3 text-brand-muted" />Strava: {pacerDetail.strava_username || '-'} {pacerDetail.strava_link ? `(${pacerDetail.strava_link})` : ''}</div>
               <div className="flex items-center gap-1.5"><Watch className="w-3 h-3 text-brand-muted" />Smartwatch: {pacerDetail.has_smartwatch === 'yes' ? 'Ya' : 'Tidak'}</div>
               <div className="flex items-center gap-1.5 sm:col-span-2"><Banknote className="w-3 h-3 text-brand-muted" />{pacerDetail.bank_name || '-'} — {pacerDetail.bank_account_number || '-'} a.n. {pacerDetail.bank_account_holder || '-'}</div>
+              <div className="sm:col-span-2"><span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Tanggal Daftar</span>{formatDateTime(pacerDetail.created_at)}</div>
             </div>
-            {pacerDetail.media_urls.length > 0 && (
-              <div>
-                <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mb-2">Foto Portofolio</p>
+            {/* Selalu dirender walau kosong: jumlah foto dulu terlihat dari kolom
+                tabel, jadi modal ini harus bisa membedakan "belum upload" dari
+                "tidak ditampilkan". */}
+            <div>
+              <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mb-2">
+                Foto Portofolio ({pacerDetail.media_urls.length})
+              </p>
+              {pacerDetail.media_urls.length > 0 ? (
                 <div className="flex flex-wrap gap-3">
                   {pacerDetail.media_urls.map((url) => (
                     <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="relative w-24 h-24 rounded-lg overflow-hidden border border-card-border block">
@@ -5303,11 +5319,15 @@ export function AdminDashboardClient({
                     </a>
                   ))}
                 </div>
-              </div>
-            )}
-            {pacerDetail.pb_media_urls.length > 0 && (
-              <div>
-                <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mb-2">Bukti Personal Best (PB)</p>
+              ) : (
+                <p className="text-xs text-brand-muted">Belum ada foto portofolio yang diunggah.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mb-2">
+                Bukti Personal Best / PB ({pacerDetail.pb_media_urls.length})
+              </p>
+              {pacerDetail.pb_media_urls.length > 0 ? (
                 <div className="flex flex-wrap gap-3">
                   {pacerDetail.pb_media_urls.map((url) => (
                     <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="relative w-24 h-24 rounded-lg overflow-hidden border border-card-border block">
@@ -5315,8 +5335,10 @@ export function AdminDashboardClient({
                     </a>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-brand-muted">Belum ada bukti PB yang diunggah.</p>
+              )}
+            </div>
             {pacerDetail.status === 'rejected' && pacerDetail.status_note && (
               <p className="text-xs text-sport-red">Catatan penolakan: {pacerDetail.status_note}</p>
             )}
