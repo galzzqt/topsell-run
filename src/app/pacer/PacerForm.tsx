@@ -316,8 +316,8 @@ export default function PacerForm() {
               Pendaftaran Pacer Berhasil!
             </h3>
             <p className="text-sm text-brand-muted leading-relaxed">
-              Akun Anda telah dibuat dan pendaftaran sedang <strong>menunggu review admin</strong>. Anda bisa login
-              kapan saja untuk memantau status persetujuan.
+              Akun Anda telah dibuat dan pendaftaran sedang <strong>menunggu review admin</strong>. Aktivasi akun anda terlebih dahulu dan login dashboard
+              untuk memantau status persetujuan.
             </p>
           </div>
 

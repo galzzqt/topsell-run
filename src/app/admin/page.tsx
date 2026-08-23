@@ -291,6 +291,7 @@ export default async function AdminPage() {
     kecamatan: p.kecamatan,
     status: p.pacer?.status || 'pending',
     status_note: p.pacer?.status_note || null,
+    email_verified: p.pacer?.email_verified ?? false,
     created_at: p.created_at,
   })) as AdminPacerRow[]
 

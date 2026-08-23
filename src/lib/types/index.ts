@@ -359,7 +359,7 @@ export interface PacerRegistration {
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'testing'
   status_note: string | null
   reviewed_at: string | null
   email_verified: boolean

@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { getDb } from '@/lib/mongodb/client'
-import type { PacerParticipant } from '@/lib/types'
+import type { PacerParticipant, PacerRegistration } from '@/lib/types'
 import { docToPacerParticipant, newId, normalizeEmail, nowIso, stripMongoId } from './utils'
 
 type PacerParticipantDoc = PacerParticipant & { _id?: unknown }
@@ -68,8 +68,9 @@ export async function listPacerParticipantsWithPacer() {
             provinsi: (pacer.provinsi as string | null) ?? null,
             kota: (pacer.kota as string | null) ?? null,
             kecamatan: (pacer.kecamatan as string | null) ?? null,
-            status: pacer.status as 'pending' | 'approved' | 'rejected',
+            status: pacer.status as PacerRegistration['status'],
             status_note: (pacer.status_note as string | null) ?? null,
+            email_verified: (pacer.email_verified as boolean | undefined) ?? false,
             created_at: pacer.created_at as string,
           }
         : null,

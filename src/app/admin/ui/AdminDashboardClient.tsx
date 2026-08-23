@@ -206,6 +206,8 @@ export type AdminPayment = {
   registration: Relation<RegistrationInfo>
 }
 
+export type PacerStatus = 'pending' | 'approved' | 'rejected' | 'testing'
+
 export type AdminPacerRow = {
   id: string
   pacer_id: string
@@ -237,8 +239,9 @@ export type AdminPacerRow = {
   provinsi: string | null
   kota: string | null
   kecamatan: string | null
-  status: 'pending' | 'approved' | 'rejected'
+  status: PacerStatus
   status_note: string | null
+  email_verified: boolean
   created_at: string
 }
 
@@ -531,7 +534,7 @@ export function AdminDashboardClient({
   const [pacerDetailLocation, setPacerDetailLocation] = useState<{ provinsi: string; kota: string; kecamatan: string } | null>(null)
   const [pacerEditing, setPacerEditing] = useState<AdminPacerRow | null>(null)
   const [pacerForm, setPacerForm] = useState<AdminPacerParticipantUpdateValues | null>(null)
-  const [processingPacerId, setProcessingPacerId] = useState<string | null>(null)
+  const [pacerStatusChanges, setPacerStatusChanges] = useState<Map<string, PacerStatus>>(new Map())
   const [umkmDetail, setUmkmDetail] = useState<UmkmRegistration | null>(null)
   const [processingUmkmId, setProcessingUmkmId] = useState<string | null>(null)
   const [settingsForm, setSettingsForm] = useState<AdminSettings>(adminSettings)
@@ -633,29 +636,21 @@ export function AdminDashboardClient({
         }
       }
 
-      individuals.forEach((ind) => {
-        addCode(ind.provinsi)
-        addCode(ind.kota)
-        addCode(ind.kecamatan)
-      })
+      // Semua koleksi yang lokasinya ditampilkan atau di-export lewat
+      // resolveLocationName(). Koleksi baru WAJIB didaftarkan di sini — kalau
+      // tidak, kodenya tidak pernah masuk cache dan tampil mentah ke admin
+      // sebagai angka ("12.01.04"), bukan nama daerah.
+      const locationSources: ReadonlyArray<
+        ReadonlyArray<{ provinsi: string | null; kota: string | null; kecamatan: string | null }>
+      > = [individuals, families, communities, pacerRows, umkmRows]
 
-      families.forEach((fam) => {
-        addCode(fam.provinsi)
-        addCode(fam.kota)
-        addCode(fam.kecamatan)
-      })
-
-      communities.forEach((comm) => {
-        addCode(comm.provinsi)
-        addCode(comm.kota)
-        addCode(comm.kecamatan)
-      })
-
-      pacerRows.forEach((pac) => {
-        addCode(pac.provinsi)
-        addCode(pac.kota)
-        addCode(pac.kecamatan)
-      })
+      for (const rows of locationSources) {
+        for (const row of rows) {
+          addCode(row.provinsi)
+          addCode(row.kota)
+          addCode(row.kecamatan)
+        }
+      }
 
       if (provinceIds.size === 0 && cityIds.size === 0 && districtIds.size === 0) return
 
@@ -695,7 +690,7 @@ export function AdminDashboardClient({
 
     collectAndResolveLocations()
     return () => { cancelled = true }
-  }, [individuals, families, communities, pacerRows])
+  }, [individuals, families, communities, pacerRows, umkmRows])
 
   // Resolve nama lokasi saat modal Detail Pacer dibuka
   useEffect(() => {
@@ -1626,49 +1621,52 @@ export function AdminDashboardClient({
     })
   }
 
-  const handlePacerApprove = (row: AdminPacerRow) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menyetujui (APPROVE) pacer "${row.full_name}"?`)) {
-      return
-    }
-    setProcessingPacerId(row.pacer_id)
-    startTransition(async () => {
-      try {
-        const result = await updateAdminPacerStatus(row.pacer_id, 'approved')
-        if (result.error) {
-          alert(result.error)
-          return
-        }
-        router.refresh()
-      } finally {
-        setProcessingPacerId(null)
-      }
+  const handlePacerStatusChange = (pacerId: string, newStatus: PacerStatus) => {
+    setPacerStatusChanges((prev) => {
+      const next = new Map(prev)
+      next.set(pacerId, newStatus)
+      return next
     })
   }
 
-  const handlePacerReject = (row: AdminPacerRow) => {
-    const note = window.prompt('Catatan penolakan (opsional):')
-    if (note === null) return // Jika klik Batal di prompt, batalkan aksi
+  const handleCancelPacerStatusChange = (pacerId: string) => {
+    setPacerStatusChanges((prev) => {
+      const next = new Map(prev)
+      next.delete(pacerId)
+      return next
+    })
+  }
 
-    const confirmMessage = note.trim()
-      ? `Apakah Anda yakin ingin menolak (REJECT) pacer "${row.full_name}" dengan catatan: "${note}"?`
-      : `Apakah Anda yakin ingin menolak (REJECT) pacer "${row.full_name}"?`
+  const handleSavePacerStatus = (row: AdminPacerRow) => {
+    const newStatus = pacerStatusChanges.get(row.pacer_id)
+    if (!newStatus || newStatus === row.status) return
 
-    if (!window.confirm(confirmMessage)) {
+    let note: string | undefined
+    if (newStatus === 'rejected') {
+      const input = window.prompt('Catatan penolakan (opsional):')
+      if (input === null) return // Batal di prompt = batalkan aksi
+      note = input.trim() || undefined
+    }
+
+    const effect =
+      newStatus === 'approved'
+        ? '\n\nPacer akan menerima email persetujuan.'
+        : newStatus === 'rejected'
+        ? '\n\nStatus penolakan dikirim ke GHL.'
+        : '\n\nStatus internal — tidak ada email/webhook yang dikirim.'
+
+    if (!window.confirm(`Ubah status pacer "${row.full_name}" dari ${row.status.toUpperCase()} menjadi ${newStatus.toUpperCase()}?${effect}`)) {
       return
     }
 
-    setProcessingPacerId(row.pacer_id)
     startTransition(async () => {
-      try {
-        const result = await updateAdminPacerStatus(row.pacer_id, 'rejected', note || undefined)
-        if (result.error) {
-          alert(result.error)
-          return
-        }
-        router.refresh()
-      } finally {
-        setProcessingPacerId(null)
+      const result = await updateAdminPacerStatus(row.pacer_id, newStatus, note)
+      if (result.error) {
+        alert(result.error)
+        return
       }
+      handleCancelPacerStatusChange(row.pacer_id)
+      router.refresh()
     })
   }
 
@@ -3557,16 +3555,17 @@ export function AdminDashboardClient({
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Nama / BIB</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kontak</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kategori</th>
-                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Usia</th>
-                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Foto</th>
-                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">PB</th>
+                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Aktivasi Email</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Status</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {pacerRows.map((row) => (
-                          <tr key={row.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
+                        {pacerRows.map((row) => {
+                          const hasPacerChange = pacerStatusChanges.has(row.pacer_id)
+                          const pacerStatus = pacerStatusChanges.get(row.pacer_id) || row.status
+                          return (
+                          <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasPacerChange ? 'bg-yellow-50' : ''}`}>
                             <td className="px-4 py-3.5">
                               <p className="text-sm font-bold text-foreground">{row.full_name}</p>
                               <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {row.bib_name}</p>
@@ -3577,13 +3576,30 @@ export function AdminDashboardClient({
                               <p className="text-[10px] text-brand-muted">{row.email}</p>
                             </td>
                             <td className="px-4 py-3.5 text-xs font-bold text-foreground">{row.category}</td>
-                            <td className="px-4 py-3.5 text-center text-xs text-foreground">{row.age ?? '-'}</td>
-                            <td className="px-4 py-3.5 text-center text-xs font-bold text-foreground">{row.media_urls.length}</td>
-                            <td className="px-4 py-3.5 text-center text-xs font-bold text-foreground">{row.pb_media_urls.length}</td>
                             <td className="px-4 py-3.5 text-center">
-                              <Badge variant={row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
-                                {row.status.toUpperCase()}
+                              <Badge variant={row.email_verified ? 'success' : 'warning'}>
+                                {row.email_verified ? 'VERIFIED' : 'PENDING'}
                               </Badge>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <select
+                                value={pacerStatus}
+                                onChange={(e) => handlePacerStatusChange(row.pacer_id, e.target.value as PacerStatus)}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${
+                                  pacerStatus === 'approved'
+                                    ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                                    : pacerStatus === 'rejected'
+                                    ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                                    : pacerStatus === 'testing'
+                                    ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                                    : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                                }`}
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="testing">Testing</option>
+                              </select>
                             </td>
                             <td className="px-4 py-3.5">
                               <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -3599,38 +3615,29 @@ export function AdminDashboardClient({
                                 >
                                   <Pencil className="w-3 h-3" />
                                 </button>
-                                {row.status !== 'approved' && (
-                                  <button
-                                    onClick={() => handlePacerApprove(row)}
-                                    disabled={isPending || processingPacerId !== null}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50 min-w-[28px] min-h-[28px]"
-                                    title="Setujui Pacer"
-                                  >
-                                    {processingPacerId === row.pacer_id ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <ThumbsUp className="w-3 h-3" />
-                                    )}
-                                  </button>
-                                )}
-                                {row.status !== 'rejected' && (
-                                  <button
-                                    onClick={() => handlePacerReject(row)}
-                                    disabled={isPending || processingPacerId !== null}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-sport-red/10 hover:bg-sport-red/20 border border-sport-red/25 text-sport-red rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50 min-w-[28px] min-h-[28px]"
-                                    title="Tolak Pacer"
-                                  >
-                                    {processingPacerId === row.pacer_id ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <ThumbsDown className="w-3 h-3" />
-                                    )}
-                                  </button>
+                                {hasPacerChange && (
+                                  <>
+                                    <button
+                                      onClick={() => handleSavePacerStatus(row)}
+                                      disabled={isPending}
+                                      className="px-2 py-1.5 bg-sport-orange text-white rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
+                                    >
+                                      {isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Save'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleCancelPacerStatusChange(row.pacer_id)}
+                                      disabled={isPending}
+                                      className="px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

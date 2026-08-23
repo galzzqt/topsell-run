@@ -51,6 +51,7 @@ import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { revalidatePath } from 'next/cache'
 import type { AdminSettings } from '@/lib/admin/settings-schema'
 import { sendPacerApprovalEmail } from '@/lib/email/pacer'
+import { sendUmkmStatusEmail } from '@/lib/email/umkm'
 
 function parseParticipantId(scanValue: string) {
   const value = scanValue.trim()
@@ -897,15 +898,21 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
   }
 }
 
-export async function updateAdminPacerStatus(pacerId: string, status: 'approved' | 'rejected', note?: string) {
+export type AdminPacerStatus = 'pending' | 'approved' | 'rejected' | 'testing'
+
+export async function updateAdminPacerStatus(pacerId: string, status: AdminPacerStatus, note?: string) {
   const session = await getAdminSession()
   if (!session) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
   }
 
-  if (!['approved', 'rejected'].includes(status)) {
+  if (!['pending', 'approved', 'rejected', 'testing'].includes(status)) {
     return { error: 'Status tidak valid.' }
   }
+
+  // pending & testing adalah status internal: pacer belum/tidak sedang diberi
+  // keputusan, jadi tidak ada webhook GHL maupun email yang dikirim.
+  const isDecision = status === 'approved' || status === 'rejected'
 
   await updatePacer(pacerId, {
     status,
@@ -914,7 +921,7 @@ export async function updateAdminPacerStatus(pacerId: string, status: 'approved'
   })
 
   try {
-    const pacer = await findPacerById(pacerId)
+    const pacer = isDecision ? await findPacerById(pacerId) : null
     if (pacer) {
       const participant = await findPacerParticipantByPacerId(pacerId)
       await sendPacerRegistrationWebhook({
@@ -1091,6 +1098,18 @@ export async function updateAdminUmkmStatus(
     })
   } catch (logError) {
     console.error('Failed to log admin UMKM status update:', logError)
+  }
+
+  // Kabari tenant. Approval-lah yang mengaktifkan tombol bayar di dashboard
+  // mereka, jadi tanpa email ini tenant tidak tahu sudah boleh membayar.
+  // Gagal kirim tidak boleh membatalkan keputusan yang sudah tersimpan.
+  try {
+    const emailResult = await sendUmkmStatusEmail(umkmId, status, statusNote)
+    if (!emailResult.success) {
+      console.warn('UMKM status email not sent:', emailResult.error)
+    }
+  } catch (emailError) {
+    console.error('Failed to send UMKM status email:', emailError)
   }
 
   revalidatePath('/admin')
