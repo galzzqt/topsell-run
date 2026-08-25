@@ -33,6 +33,7 @@ import {
 } from '@/lib/whatsapp/racepack'
 import { sendIndividualRacepackWhatsappsForRegistration } from '@/lib/whatsapp/individual'
 import { sendInvitationRacepackWhatsappsForRegistration } from '@/lib/whatsapp/invitation'
+import { sendUmkmPaymentConfirmation } from '@/lib/whatsapp/umkm'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId } from '@/lib/utils/xendit'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { getDb } from '@/lib/mongodb/client'
@@ -379,6 +380,7 @@ export async function POST(request: Request) {
     // Try UMKM next
     const umkmPayments = await markUmkmPaymentsPaidBySessionId(sessionId, update)
     if (umkmPayments.length > 0) {
+      await Promise.all(umkmPayments.map((payment) => sendUmkmPaymentConfirmation(payment.umkm_id, payment.amount)))
       await ingestAdminLog({
         level: 'info',
         source: 'payment',
@@ -464,6 +466,7 @@ export async function POST(request: Request) {
     // Try UMKM next
     const umkmPayments = await markUmkmPaymentsPaidByReference(referenceId, update)
     if (umkmPayments.length > 0) {
+      await Promise.all(umkmPayments.map((payment) => sendUmkmPaymentConfirmation(payment.umkm_id, payment.amount)))
       await ingestAdminLog({
         level: 'info',
         source: 'payment',

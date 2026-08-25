@@ -265,6 +265,9 @@ export async function syncUmkmXenditPaymentStatus(umkmId?: string) {
       payment_method: method,
     })
 
+    const { sendUmkmPaymentConfirmation } = await import('@/lib/whatsapp/umkm')
+    await sendUmkmPaymentConfirmation(targetId, payment.amount)
+
     const updatedPayment = await findUmkmPaymentByUmkmId(targetId)
     revalidatePath('/umkm-dashboard')
     return { success: true, paid: true, payment: updatedPayment }

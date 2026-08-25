@@ -35,8 +35,17 @@ async function getWebhookConfig(kind: WebhookKind, packageType: PackageKey) {
   }
 }
 
-async function postWebhook(kind: WebhookKind, packageType: PackageKey, payload: Record<string, unknown>) {
-  const config = await getWebhookConfig(kind, packageType)
+async function postWebhook(
+  kind: WebhookKind,
+  packageType: PackageKey,
+  payload: Record<string, unknown>,
+  /** Slot cadangan kalau slot utama belum diisi — dipakai untuk migrasi antar slot. */
+  fallbackKind?: WebhookKind
+) {
+  let config = await getWebhookConfig(kind, packageType)
+  if (!config.url && fallbackKind) {
+    config = await getWebhookConfig(fallbackKind, packageType)
+  }
   if (!config.url) {
     console.warn(`${kind.toUpperCase()} GHL webhook URL is not configured for package "${packageType}".`)
     return { skipped: true }
@@ -205,13 +214,16 @@ export async function sendIndividualRacepackWebhook(payload: {
 }) {
   return postWebhook('racepack', 'individual', {
     event: 'payment_received_check_email',
+    package: 'individual',
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
     email: payload.email,
     leader_name: payload.representativeName,
+    participant_name: payload.representativeName,
     participant_count: payload.participantCount,
     community_name: payload.familyName,
     community_code: payload.familyCode,
+    registration_code: payload.familyCode,
     message: `Pembayaran individu ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. QR Code pengambilan racepack sudah dikirim ke email ${payload.email}. Silakan cek inbox atau folder spam/promosi.`,
   })
 }
@@ -226,13 +238,16 @@ export async function sendInvitationRacepackWebhook(payload: {
 }) {
   return postWebhook('racepack', 'invitation', {
     event: 'payment_received_check_email',
+    package: 'invitation',
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
     email: payload.email,
     leader_name: payload.representativeName,
+    participant_name: payload.representativeName,
     participant_count: payload.participantCount,
     community_name: payload.familyName,
     community_code: payload.familyCode,
+    registration_code: payload.familyCode,
     message: `Pembayaran invitation ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. QR Code pengambilan racepack sudah dikirim ke email ${payload.email}. Silakan cek inbox atau folder spam/promosi.`,
   })
 }
@@ -323,9 +338,10 @@ export async function sendPacerApprovalWebhook(payload: {
  * Hanya untuk status approved — penolakan cukup lewat email
  * (src/lib/email/umkm.ts), sesuai permintaan.
  *
- * Memakai kind 'registration' sehingga URL-nya diambil dari slot
- * webhookSettings.umkm.registration di pengaturan admin. Tanpa URL terisi,
- * postWebhook melewati diam-diam ({ skipped: true }).
+ * URL diambil dari slot webhookSettings.umkm.status ("Webhook Status") sesuai
+ * fungsinya. Selama slot itu masih kosong, nilainya jatuh ke slot registration
+ * agar setelan lama tetap jalan — hapus fallback ini setelah URL dipindah.
+ * ponytail: fallback slot lama, hapus setelah migrasi setelan UMKM selesai.
  */
 export async function sendUmkmApprovalWebhook(payload: {
   phone: string
@@ -342,7 +358,7 @@ export async function sendUmkmApprovalWebhook(payload: {
       ? `Silakan masuk ke dashboard tenant untuk menyelesaikan pembayaran sebesar ${formatCurrency(payload.amountDue)}. Slot tenant terkunci setelah pembayaran diterima.`
       : `Tidak ada biaya yang perlu dibayar dan slot tenant Anda sudah terkunci.`
 
-  return postWebhook('registration', 'umkm', {
+  return postWebhook('status', 'umkm', {
     event: 'umkm_approved',
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
@@ -354,5 +370,35 @@ export async function sendUmkmApprovalWebhook(payload: {
     status: 'approved',
     amount_due: payload.amountDue,
     message: `Selamat! Pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 telah DISETUJUI. ${paymentLine}`,
+  }, 'registration')
+}
+
+/**
+ * Konfirmasi pembayaran tenant UMKM. Memakai kind 'racepack' sehingga URL-nya
+ * diambil dari slot webhookSettings.umkm.payment di pengaturan admin.
+ */
+export async function sendUmkmPaymentConfirmationWebhook(payload: {
+  phone: string
+  email: string
+  name: string
+  picName: string
+  umkmCode: string
+  businessField: string
+  amount: number
+}) {
+  return postWebhook('racepack', 'umkm', {
+    event: 'umkm_payment_received',
+    package: 'umkm',
+    phone: payload.phone,
+    whatsapp: phoneToWhatsAppId(payload.phone),
+    email: payload.email,
+    name: payload.name,
+    pic_name: payload.picName,
+    umkm_code: payload.umkmCode,
+    registration_code: payload.umkmCode,
+    business_field: payload.businessField,
+    status: 'paid',
+    amount: payload.amount,
+    message: `Pembayaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 sebesar ${formatCurrency(payload.amount)} sudah kami terima. Slot tenant Anda resmi terkunci.`,
   })
 }

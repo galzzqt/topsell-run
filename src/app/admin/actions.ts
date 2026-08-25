@@ -914,8 +914,12 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
         const individualWa = await import('@/lib/whatsapp/individual')
         const invitationEmail = await import('@/lib/email/invitation')
         const invitationWa = await import('@/lib/whatsapp/invitation')
+        const umkmWa = await import('@/lib/whatsapp/umkm')
 
         try {
+          if (packageType === 'umkm' && 'umkm_id' in payment) {
+            await umkmWa.sendUmkmPaymentConfirmation(payment.umkm_id as string, payment.amount)
+          }
           if (packageType === 'community' && 'registration_id' in payment) {
             await Promise.all([
               racepackEmail.sendRacepackEmailsForRegistration(payment.registration_id),
