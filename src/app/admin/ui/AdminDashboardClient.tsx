@@ -387,6 +387,34 @@ function slugify(value: string) {
 }
 
 const PAGE_SIZES = [5, 10, 25, 50]
+const RACE_CATEGORIES = ['3K', '6K'] as const
+type RaceCategoryFilter = 'all' | (typeof RACE_CATEGORIES)[number]
+
+function CategoryFilter({ value, onChange }: { value: RaceCategoryFilter; onChange: (next: RaceCategoryFilter) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+        <Filter className="w-3.5 h-3.5 text-sport-orange" />
+        <span>Kategori:</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+        {(['all', ...RACE_CATEGORIES] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${value === option
+                ? 'bg-sport-orange text-white shadow-xs'
+                : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+              }`}
+          >
+            {option === 'all' ? 'Semua' : option}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 type PagedState = {
   page: number
@@ -504,6 +532,7 @@ export function AdminDashboardClient({
   const [participantEndDate, setParticipantEndDate] = useState('')
   const [participantDatePreset, setParticipantDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
   const [participantSort, setParticipantSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
+  const [participantCategoryFilter, setParticipantCategoryFilter] = useState<RaceCategoryFilter>('all')
 
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'pending' | 'paid' | 'failed' | 'expired' | 'testing'>('all')
   const [paymentStartDate, setPaymentStartDate] = useState('')
@@ -512,6 +541,7 @@ export function AdminDashboardClient({
   const [paymentSort, setPaymentSort] = useState<'newest' | 'oldest' | 'amount_desc' | 'amount_asc'>('newest')
 
   const [pacerStatusFilter, setPacerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'testing'>('all')
+  const [pacerCategoryFilter, setPacerCategoryFilter] = useState<RaceCategoryFilter>('all')
   const [pacerStartDate, setPacerStartDate] = useState('')
   const [pacerEndDate, setPacerEndDate] = useState('')
   const [pacerDatePreset, setPacerDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
@@ -1041,8 +1071,15 @@ export function AdminDashboardClient({
       })
     }
 
+    if (packageType === 'individual' && participantCategoryFilter !== 'all') {
+      list = list.filter((participant) => {
+        const community = getParticipantCommunity(participant)
+        return extractCategoryLabel(community?.category || participant.category) === participantCategoryFilter
+      })
+    }
+
     return list
-  }, [activeParticipants, query, participantStartDate, participantEndDate])
+  }, [activeParticipants, query, participantStartDate, participantEndDate, packageType, participantCategoryFilter])
 
   const paymentStats = useMemo(() => {
     const total = activePayments.length
@@ -1182,6 +1219,10 @@ export function AdminDashboardClient({
       })
     }
 
+    if (pacerCategoryFilter !== 'all') {
+      list = list.filter((p) => extractCategoryLabel(p.category) === pacerCategoryFilter)
+    }
+
     if (pacerStartDate || pacerEndDate) {
       const start = pacerStartDate ? new Date(`${pacerStartDate}T00:00:00`).getTime() : -Infinity
       const end = pacerEndDate ? new Date(`${pacerEndDate}T23:59:59.999`).getTime() : Infinity
@@ -1211,7 +1252,7 @@ export function AdminDashboardClient({
       const timeB = new Date(b.created_at || 0).getTime()
       return timeB - timeA
     })
-  }, [pacerRows, query, pacerStatusFilter, pacerStartDate, pacerEndDate, pacerSort, pacerStatusChanges])
+  }, [pacerRows, query, pacerStatusFilter, pacerCategoryFilter, pacerStartDate, pacerEndDate, pacerSort, pacerStatusChanges])
 
   const umkmStats = useMemo(() => {
     let paid = 0
@@ -2967,6 +3008,12 @@ export function AdminDashboardClient({
                 </button>
               </div>
 
+              {packageType === 'individual' && (
+                <div className="p-3.5 bg-brand-dark/40 border-b border-card-border text-xs">
+                  <CategoryFilter value={participantCategoryFilter} onChange={setParticipantCategoryFilter} />
+                </div>
+              )}
+
               {/* Filter Tanggal & Pengurutan Toolbar */}
               <div className="p-3.5 bg-brand-dark/40 border-b border-card-border flex flex-col xl:flex-row xl:items-center justify-between gap-3 text-xs">
                 {/* Date Filter & Presets */}
@@ -3859,6 +3906,8 @@ export function AdminDashboardClient({
 
               {/* Filter Controls */}
               <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col gap-3 shadow-xs">
+                <CategoryFilter value={pacerCategoryFilter} onChange={setPacerCategoryFilter} />
+
                 {/* Status Tabs */}
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
@@ -4024,6 +4073,7 @@ export function AdminDashboardClient({
                     type="button"
                     onClick={() => {
                       setPacerStatusFilter('all')
+                      setPacerCategoryFilter('all')
                       handlePacerDatePresetChange('all')
                       setQuery('')
                     }}
@@ -4046,6 +4096,7 @@ export function AdminDashboardClient({
                       size="sm"
                       onClick={() => {
                         setPacerStatusFilter('all')
+                        setPacerCategoryFilter('all')
                         handlePacerDatePresetChange('all')
                         setQuery('')
                       }}
@@ -4370,7 +4421,6 @@ export function AdminDashboardClient({
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Usaha / PIC</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kontak</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Bidang &amp; Lokasi</th>
-                          <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Foto</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Biaya</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Email</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted text-center">Status</th>
@@ -4408,13 +4458,6 @@ export function AdminDashboardClient({
                               <td className="px-4 py-3.5">
                                 <p className="text-xs font-bold text-foreground">{row.business_field}</p>
                                 <p className="text-[10px] text-brand-muted">{[resolveLocationName(row.kota), resolveLocationName(row.provinsi)].filter(Boolean).join(', ') || '-'}</p>
-                              </td>
-                              <td className="px-4 py-3.5 text-center">
-                                {(row.photo_urls || []).length > 0 ? (
-                                  <Badge variant="neutral">{row.photo_urls!.length} Foto</Badge>
-                                ) : (
-                                  <span className="text-xs text-brand-muted">-</span>
-                                )}
                               </td>
                               <td className="px-4 py-3.5 text-center">
                                 {finalAmount === 0 ? (
