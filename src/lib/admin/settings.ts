@@ -151,6 +151,7 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
     community: normalizeRegistrationFormPackage(base.community, value?.community),
     family: normalizeRegistrationFormPackage(base.family, value?.family),
     individual: individualPkg,
+    invitation: normalizeRegistrationFormPackage(base.invitation, value?.invitation),
     pacer: normalizeRegistrationFormPackage(base.pacer, value?.pacer),
     umkm: normalizeRegistrationFormPackage(base.umkm, value?.umkm),
   }
@@ -227,6 +228,7 @@ function normalizePackagesSettings(value: Partial<PackagesSettings> | undefined)
     community: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.community, value?.community),
     family: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.family, value?.family),
     individual: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.individual, value?.individual),
+    invitation: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.invitation, value?.invitation),
     pacer: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.pacer, value?.pacer),
     umkm: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.umkm, value?.umkm),
   }
@@ -247,6 +249,7 @@ function normalizeEmailTemplateSettings(value: Partial<EmailTemplateSettings> | 
     community: normalizeEmailTemplate(base.community, value?.community),
     family: normalizeEmailTemplate(base.family, value?.family),
     individual: normalizeEmailTemplate(base.individual, value?.individual),
+    invitation: normalizeEmailTemplate(base.invitation, value?.invitation),
     pacer: normalizeEmailTemplate(base.pacer, value?.pacer),
     umkm: normalizeEmailTemplate(base.umkm, value?.umkm),
   }
@@ -275,6 +278,7 @@ function normalizeWebhookSettings(value: Partial<WebhookSettings> | undefined): 
     community: normalizeWebhookPackage(base.community, value?.community),
     family: normalizeWebhookPackage(base.family, value?.family),
     individual: normalizeWebhookPackage(base.individual, value?.individual),
+    invitation: normalizeWebhookPackage(base.invitation, value?.invitation),
     pacer: normalizeWebhookPackage(base.pacer, value?.pacer),
     umkm: normalizeWebhookPackage(base.umkm, value?.umkm),
   }
@@ -349,6 +353,7 @@ const PACKAGE_PARTICIPANT_COLLECTION: Record<PackageKey, string> = {
   community: 'participants',
   family: 'family_participants',
   individual: 'individual_participants',
+  invitation: 'invitation_participants',
   pacer: 'pacer_participants',
   umkm: 'umkm_registrations',
 }
@@ -357,6 +362,7 @@ const PACKAGE_REGISTRATION_COLLECTION: Record<PackageKey, string> = {
   community: 'registrations',
   family: 'family_registrations',
   individual: 'individual_registrations',
+  invitation: 'invitation_registrations',
   pacer: 'pacer_registrations',
   umkm: 'umkm_registrations',
 }
@@ -366,6 +372,7 @@ const PACKAGE_OWNER_COLLECTION: Record<PackageKey, string> = {
   community: 'communities',
   family: 'families',
   individual: 'individuals',
+  invitation: 'invitations',
   pacer: 'pacer_registrations',
   umkm: 'umkm_registrations',
 }
@@ -374,6 +381,7 @@ const PACKAGE_OWNER_ID_FIELD: Record<PackageKey, string> = {
   community: 'community_id',
   family: 'family_id',
   individual: 'individual_id',
+  invitation: 'invitation_id',
   pacer: 'pacer_id',
   umkm: 'id',
 }

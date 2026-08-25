@@ -149,6 +149,36 @@ export async function ensureIndexes() {
       { key: { id: 1 }, unique: true },
       { key: { phone: 1 }, unique: true },
     ]),
+    db.collection('invitations').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { phone: 1 }, unique: true },
+      { key: { invitation_code: 1 }, unique: true },
+    ]),
+    db.collection('invitation_participants').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { invitation_id: 1 } },
+      { key: { registration_id: 1 } },
+      { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
+      { key: { payment_status: 1 } },
+      { key: { period_key: 1 } },
+    ]),
+    db.collection('invitation_registrations').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { invitation_id: 1 } },
+      { key: { status: 1 } },
+    ]),
+    db.collection('invitation_payments').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { registration_id: 1 } },
+      { key: { payment_reference: 1 }, unique: true },
+      { key: { xendit_session_id: 1 }, sparse: true },
+      { key: { status: 1 } },
+      { key: { period_key: 1 } },
+    ]),
+    db.collection('invitation_auth').createIndexes([
+      { key: { id: 1 }, unique: true },
+      { key: { phone: 1 }, unique: true },
+    ]),
     db.collection('vouchers').createIndexes([
       { key: { id: 1 }, unique: true },
       { key: { code: 1 } },

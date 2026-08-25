@@ -9,6 +9,7 @@ import { Activity, Lock, ArrowLeft, Mail } from 'lucide-react'
 import { loginSchema, LoginFormValues } from '@/lib/validations/auth'
 import { signInFamily } from '@/app/actions/family-auth'
 import { signInIndividual } from '@/app/actions/individual-auth'
+import { signInInvitation } from '@/app/actions/invitation-auth'
 import { signInPacer } from '@/app/actions/pacer-auth'
 import { resendVerificationEmail } from '@/app/actions/email-verification'
 import { Input } from '@/components/ui/input'
@@ -59,6 +60,19 @@ export default function LoginPage() {
       return
     }
 
+    const invitationResult = await signInInvitation(values)
+    if (invitationResult.success) {
+      router.refresh()
+      router.push('/invitation-dashboard')
+      return
+    }
+    if ('needsVerification' in invitationResult && invitationResult.needsVerification) {
+      setAuthError(invitationResult.error || null)
+      setNeedsVerification(true)
+      setResendId(invitationResult.invitationId || null)
+      return
+    }
+
     // Pacer — verifikasi email juga diperlukan.
     const pacerResult = await signInPacer(values)
     if (pacerResult.success) {
@@ -73,7 +87,7 @@ export default function LoginPage() {
       return
     }
 
-    setAuthError(pacerResult.error || individualResult.error || familyResult.error || 'Login gagal.')
+    setAuthError(pacerResult.error || invitationResult.error || individualResult.error || familyResult.error || 'Login gagal.')
   }
 
   const handleResendVerification = async () => {

@@ -10,6 +10,7 @@ import { usePackagesSettings, resolveCategoryLabel } from '@/lib/hooks/usePackag
 import type { AppliedVoucher, VoucherPackageKey } from '@/lib/types/voucher'
 import {
   reRegisterIndividualAction,
+  reRegisterInvitationAction,
   reRegisterFamilyAction,
   reRegisterCommunityAction,
 } from '@/app/actions/re-registration'
@@ -47,7 +48,7 @@ const emptyParticipant = (defaultName = '', defaultEmail = '', defaultPhone = ''
 interface ReRegisterModalProps {
   isOpen: boolean
   onClose: () => void
-  packageKey: 'individual' | 'family' | 'community'
+  packageKey: 'individual' | 'invitation' | 'family' | 'community'
   userProfile: {
     name?: string | null
     leader_name?: string | null
@@ -67,6 +68,8 @@ export function ReRegisterModal({
   existingParticipants = [],
   onSuccess,
 }: ReRegisterModalProps) {
+  // Individu & invitation = pendaftaran 1 peserta; family/community minimal 3.
+  const isSolo = packageKey === 'individual' || packageKey === 'invitation'
   const packages = usePackagesSettings()
   const pkgConfig = packages?.[packageKey]
 
@@ -111,7 +114,7 @@ export function ReRegisterModal({
     setAppliedVoucher(null)
     setAgreeTerms(false)
 
-    if (packageKey === 'individual') {
+    if (isSolo) {
       setParticipants([emptyParticipant(profileName, profileEmail, profilePhone)])
     } else {
       setParticipants([
@@ -148,11 +151,11 @@ export function ReRegisterModal({
   }
 
   const handleRemoveParticipant = (index: number) => {
-    if (packageKey !== 'individual' && participants.length <= 3) {
+    if (!isSolo && participants.length <= 3) {
       alert('Minimal 3 peserta untuk paket ini.')
       return
     }
-    if (packageKey === 'individual' && participants.length <= 1) return
+    if (isSolo && participants.length <= 1) return
     setParticipants((prev) => prev.filter((_, i) => i !== index))
   }
 
@@ -170,8 +173,8 @@ export function ReRegisterModal({
     setIsSubmitting(true)
 
     try {
-      if (packageKey === 'individual') {
-        const res = await reRegisterIndividualAction({
+      if (isSolo) {
+        const res = await (packageKey === 'invitation' ? reRegisterInvitationAction : reRegisterIndividualAction)({
           category: selectedCategory,
           participant: participants[0],
           voucherCode: appliedVoucher?.code === 'AUTO' ? undefined : appliedVoucher?.code,
@@ -212,7 +215,7 @@ export function ReRegisterModal({
   }
 
   const packageTitle =
-    packageKey === 'individual' ? 'Individu' : packageKey === 'family' ? 'Bro & Sist' : 'Komunitas'
+    packageKey === 'individual' ? 'Individu' : packageKey === 'invitation' ? 'Invitation' : packageKey === 'family' ? 'Bro & Sist' : 'Komunitas'
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={`Daftar Kembali — Paket ${packageTitle}`} className="max-w-3xl">
@@ -282,7 +285,7 @@ export function ReRegisterModal({
             <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
               Data Peserta ({participants.length} Peserta)
             </label>
-            {packageKey !== 'individual' && (
+            {!isSolo && (
               <Button type="button" variant="ghost" size="sm" onClick={handleAddParticipant} className="text-xs">
                 <Plus className="w-3.5 h-3.5 mr-1" /> Tambah Peserta
               </Button>
@@ -296,7 +299,7 @@ export function ReRegisterModal({
                   <span className="text-[10px] font-black uppercase tracking-wider text-sport-orange">
                     Peserta #{idx + 1}
                   </span>
-                  {packageKey !== 'individual' && participants.length > 3 && (
+                  {!isSolo && participants.length > 3 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveParticipant(idx)}

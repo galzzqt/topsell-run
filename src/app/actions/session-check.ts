@@ -3,12 +3,14 @@
 import { getCommunitySession } from '@/lib/auth/community'
 import { getFamilySession } from '@/lib/auth/family'
 import { getIndividualSession } from '@/lib/auth/individual'
+import { getInvitationSession } from '@/lib/auth/invitation'
 import { getUmkmSession } from '@/lib/auth/umkm'
 
 export type ActiveSession =
   | { type: 'community'; name: string; dashboardUrl: string }
   | { type: 'family'; name: string; dashboardUrl: string }
   | { type: 'individual'; name: string; dashboardUrl: string }
+  | { type: 'invitation'; name: string; dashboardUrl: string }
   | { type: 'umkm'; name: string; dashboardUrl: string }
   | null
 
@@ -17,10 +19,11 @@ export type ActiveSession =
  * Used by the landing page header to show the logged-in user's name.
  */
 export async function getActiveSessionAction(): Promise<ActiveSession> {
-  const [communitySession, familySession, individualSession, umkmSession] = await Promise.all([
+  const [communitySession, familySession, individualSession, invitationSession, umkmSession] = await Promise.all([
     getCommunitySession().catch(() => null),
     getFamilySession().catch(() => null),
     getIndividualSession().catch(() => null),
+    getInvitationSession().catch(() => null),
     getUmkmSession().catch(() => null),
   ])
 
@@ -45,6 +48,13 @@ export async function getActiveSessionAction(): Promise<ActiveSession> {
       type: 'individual',
       name: individualSession.name,
       dashboardUrl: '/individu-dashboard',
+    }
+  }
+  if (invitationSession?.name) {
+    return {
+      type: 'invitation',
+      name: invitationSession.name,
+      dashboardUrl: '/invitation-dashboard',
     }
   }
 

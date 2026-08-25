@@ -2,31 +2,39 @@
 
 import { z } from 'zod'
 import { getIndividualSession } from '@/lib/auth/individual'
+import { getInvitationSession } from '@/lib/auth/invitation'
 import { getFamilySession } from '@/lib/auth/family'
 import { getCommunitySession } from '@/lib/auth/community'
 import {
   findIndividualById,
+  findInvitationById,
   findFamilyById,
   findCommunityById,
   findIndividualParticipantsByIndividualId,
+  findInvitationParticipantsByInvitationId,
   findFamilyParticipantsByFamilyId,
   findParticipantsByCommunityId,
   insertIndividualParticipants,
+  insertInvitationParticipants,
   insertFamilyParticipants,
   insertParticipants,
   createIndividualRegistration,
+  createInvitationRegistration,
   createFamilyRegistration,
   createRegistration,
   createIndividualPayment as dbCreateIndividualPayment,
+  createInvitationPayment as dbCreateInvitationPayment,
   createFamilyPayment as dbCreateFamilyPayment,
   createPayment as dbCreatePayment,
   linkIndividualParticipantsToRegistration,
+  linkInvitationParticipantsToRegistration,
   linkFamilyParticipantsToRegistration,
   linkParticipantsToRegistration,
   incrementVoucherUsage,
   findVoucherByCode,
   findBestAutoVoucher,
   markIndividualPaymentPaid,
+  markInvitationPaymentPaid,
   markFamilyPaymentPaid,
   markPaymentPaid,
 } from '@/lib/db'
@@ -204,6 +212,154 @@ export async function reRegisterIndividualAction(input: {
     // Jika gratis karena voucher: langsung aktifkan peserta (generate kode & QR)
     if (isFreeByVoucher) {
       await markIndividualPaymentPaid(payment.id, {
+        payment_method: 'voucher_free',
+        paid_at: new Date().toISOString(),
+      })
+    }
+    if (voucherId) await incrementVoucherUsage(voucherId)
+  } catch (err) {
+    return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  return { success: true, registrationId: registration.id }
+}
+
+// ── RE-REGISTER FAMILY (BRO & SIST) ──
+export async function reRegisterInvitationAction(input: {
+  category: string
+  participant: z.infer<typeof participantInputSchema>
+  voucherCode?: string
+}) {
+  const session = await getInvitationSession()
+  if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
+
+  const invitation = await findInvitationById(session.id)
+  if (!invitation) return { error: 'Data akun invitation tidak ditemukan.' }
+
+  const pVal = participantInputSchema.safeParse(input.participant)
+  if (!pVal.success) {
+    return { error: pVal.error.issues[0]?.message || 'Data peserta tidak valid.' }
+  }
+
+  const category = input.category.trim()
+  if (!category) return { error: 'Pilih kategori terlebih dahulu.' }
+
+  const quota = await checkPackageQuota('invitation', 1, category)
+  if (!quota.ok) return { error: quota.reason || 'Kuota peserta untuk kategori ini sudah penuh.' }
+
+  const period = await resolvePeriodForCategory('invitation', category)
+
+  // Block re-registration if user ALREADY has a PAID participant for this period
+  const existingParticipants = await findInvitationParticipantsByInvitationId(session.id)
+  const hasPaidInPeriod = existingParticipants.some(
+    (p) => p.payment_status === 'paid' && (!period?.key || p.period_key === period.key)
+  )
+  if (hasPaidInPeriod) {
+    return {
+      error: 'Anda sudah memiliki pendaftaran LUNAS untuk periode ini. Pendaftaran ulang hanya dapat dilakukan jika status sebelumnya kadaluarsa/gagal atau untuk periode baru.',
+    }
+  }
+
+  const unitPrice = await resolvePackagePrice('invitation', category)
+  const basePrice = unitPrice
+  const now = getWibNowString()
+
+  // Voucher calculation
+  let voucherDiscount = 0
+  let voucherCodeUsed: string | null = null
+  let voucherId: string | null = null
+
+  if (input.voucherCode && input.voucherCode.trim() && input.voucherCode.trim().toUpperCase() !== 'AUTO') {
+    const code = input.voucherCode.trim().toUpperCase()
+    const v = await findVoucherByCode(code, 'invitation', category, now)
+    if (!v) {
+      return { error: 'Kode voucher tidak valid, sudah kadaluarsa, atau tidak berlaku untuk kategori ini.' }
+    }
+    voucherDiscount = calcDiscount(v.discountType, v.discountValue, basePrice)
+    voucherCodeUsed = v.code
+    voucherId = v.id
+  } else {
+    const autoV = await findBestAutoVoucher('invitation', category, now)
+    if (autoV) {
+      voucherDiscount = calcDiscount(autoV.discountType, autoV.discountValue, basePrice)
+      voucherCodeUsed = 'AUTO'
+      voucherId = autoV.id
+    }
+  }
+
+  const finalAmount = Math.max(0, basePrice - voucherDiscount)
+  const pData = pVal.data
+
+  let inserted
+  try {
+    inserted = await insertInvitationParticipants([
+      {
+        invitation_id: session.id,
+        registration_id: null,
+        period_key: period?.key ?? null,
+        full_name: pData.full_name,
+        bib_name: pData.bib_name,
+        ktp_number: pData.ktp_number,
+        email: pData.email,
+        phone: pData.phone,
+        date_of_birth: pData.date_of_birth,
+        gender: pData.gender,
+        tshirt_size: pData.tshirt_size,
+        blood_type: pData.blood_type,
+        medical_condition: pData.medical_condition || null,
+        emergency_contact_name: pData.emergency_contact_name,
+        emergency_contact_phone: pData.emergency_contact_phone,
+        community_name: pData.community_name ? pData.community_name.trim() : null,
+        provinsi: invitation.provinsi || '-',
+        kota: invitation.kota || '-',
+        kecamatan: invitation.kecamatan || '-',
+        participant_code: null,
+        qr_code_data: null,
+        payment_status: 'pending',
+        checked_in: false,
+        checked_in_at: null,
+        racepack_email_sent_at: null,
+        racepack_email_error: null,
+        racepack_whatsapp_sent_at: null,
+        racepack_whatsapp_error: null,
+      },
+    ])
+  } catch (err) {
+    return { error: 'Gagal menyimpan peserta: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  const participantIds = inserted.map((p) => p.id)
+  const isFreeByVoucher = finalAmount === 0
+  const paymentRef = isFreeByVoucher
+    ? `FREE-INV-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`
+    : toXenditReference(generateRandomReference('IND'))
+
+  let registration
+  try {
+    registration = await createInvitationRegistration({
+      invitation_id: session.id,
+      total_participants: 1,
+      total_amount: finalAmount,
+      voucher_code: voucherCodeUsed,
+      voucher_discount: voucherDiscount,
+      status: 'pending',
+    })
+    await linkInvitationParticipantsToRegistration(participantIds, registration.id)
+  } catch (err) {
+    return { error: 'Gagal membuat registrasi: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  try {
+    const payment = await dbCreateInvitationPayment({
+      registration_id: registration.id,
+      amount: finalAmount,
+      payment_reference: paymentRef,
+      status: 'pending',
+      period_key: period?.key ?? null,
+    })
+    // Jika gratis karena voucher: langsung aktifkan peserta (generate kode & QR)
+    if (isFreeByVoucher) {
+      await markInvitationPaymentPaid(payment.id, {
         payment_method: 'voucher_free',
         paid_at: new Date().toISOString(),
       })

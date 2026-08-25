@@ -147,6 +147,12 @@ export const INDIVIDUAL_CATEGORY_OPTIONS = [
   { value: '6K 149.000', label: '6K — Rp 149.000' },
 ] as const
 
+// Pilihan kategori untuk pendaftaran invitation (dikelola admin lewat Kelola Paket)
+export const INVITATION_CATEGORY_OPTIONS = [
+  { value: '3K 99.000', label: '3K — Rp 99.000' },
+  { value: '6K 149.000', label: '6K — Rp 149.000' },
+] as const
+
 export interface Family {
   id: string
   name: string
@@ -342,6 +348,106 @@ export interface IndividualDashboardStats {
   pendingParticipants: number
   totalAmountPaid: number
   individualCode: string
+}
+
+// ==========================================
+// INDIVIDU — koleksi terpisah dari family/community
+// (struktur sama, tapi owner-id = invitation_id, kode = invitation_code)
+// ==========================================
+
+export interface Invitation {
+  id: string
+  name: string
+  leader_name: string
+  email: string | null
+  phone: string
+  category: string
+  invitation_code: string
+  community_name?: string | null
+  provinsi: string | null
+  kota: string | null
+  kecamatan: string | null
+  email_verified: boolean
+  verification_token: string | null
+  verification_token_expires: string | null
+  verification_sent_at: string | null
+  voucher_code?: string | null
+  voucher_discount?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface InvitationParticipant {
+  id: string
+  invitation_id: string
+  registration_id: string | null
+  period_key: string | null
+  full_name: string
+  bib_name: string
+  ktp_number: string
+  email: string
+  phone: string
+  date_of_birth: string | null
+  gender: 'male' | 'female'
+  tshirt_size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL' | '4XL' | '5XL'
+  blood_type: 'A' | 'B' | 'AB' | 'O' | null
+  medical_condition: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  community_name?: string | null
+  provinsi: string | null
+  kota: string | null
+  kecamatan: string | null
+  participant_code: string | null
+  qr_code_data: string | null
+  payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
+  checked_in: boolean
+  checked_in_at: string | null
+  racepack_email_sent_at: string | null
+  racepack_email_error: string | null
+  racepack_whatsapp_sent_at: string | null
+  racepack_whatsapp_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InvitationRegistration {
+  id: string
+  invitation_id: string
+  total_participants: number
+  total_amount: number
+  /** Kode voucher yang dipakai saat pendaftaran; null jika tidak ada. */
+  voucher_code: string | null
+  /** Potongan harga dalam Rp dari voucher; 0 jika tidak ada. */
+  voucher_discount: number
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
+  created_at: string
+  updated_at: string
+}
+
+export interface InvitationPayment {
+  id: string
+  registration_id: string
+  amount: number
+  payment_method: string | null
+  payment_reference: string
+  snap_token: string | null
+  provider: string | null
+  xendit_session_id: string | null
+  checkout_url: string | null
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
+  period_key: string | null
+  paid_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InvitationDashboardStats {
+  totalParticipants: number
+  paidParticipants: number
+  pendingParticipants: number
+  totalAmountPaid: number
+  invitationCode: string
 }
 
 // ==========================================

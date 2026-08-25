@@ -18,7 +18,7 @@ function calcDiscount(
  * GET /api/voucher/validate
  * Query params:
  *   code      — kode voucher (wajib jika type=code; gunakan 'AUTO' untuk auto-apply)
- *   pkg       — 'community' | 'family' | 'individual'
+ *   pkg       — 'community' | 'family' | 'individual' | 'invitation'
  *   category  — nilai kategori, mis. '6K 149.000'
  *   basePrice — harga dasar dalam Rp (integer)
  */
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   const category  = pkg === 'umkm' && !searchCategory ? 'Tenant UMKM 500.000' : searchCategory
   const basePrice = parseInt(searchParams.get('basePrice') || '0', 10)
 
-  if (!pkg || !['community', 'family', 'individual', 'umkm'].includes(pkg)) {
+  if (!pkg || !['community', 'family', 'individual', 'invitation', 'umkm'].includes(pkg)) {
     return NextResponse.json<VoucherValidation>(
       { valid: false, finalDiscount: 0, error: 'Parameter pkg tidak valid.' },
       { status: 400 },

@@ -12,22 +12,32 @@ export function WhatsAppButton() {
   }
 
   const phoneNumber = '6282119227871'
-  const defaultMessage = 'Saya mau tanya seputar topsellrun 2026.'
+  const defaultMessage = 'Saya mau tanya seputar topsellrun 2026'
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(defaultMessage)}`
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex items-center group">
+      {/* Goyangan ~1 detik tiap siklus 10 detik */}
+      <style>{`
+        @keyframes wa-wiggle {
+          0%, 88%, 100% { transform: rotate(0deg); }
+          90% { transform: rotate(-12deg); }
+          92% { transform: rotate(10deg); }
+          94% { transform: rotate(-8deg); }
+          96% { transform: rotate(6deg); }
+          98% { transform: rotate(-3deg); }
+        }
+        .wa-wiggle { animation: wa-wiggle 10s ease-in-out infinite; transform-origin: center; }
+        @media (prefers-reduced-motion: reduce) { .wa-wiggle { animation: none; } }
+      `}</style>
       {/* Tooltip Label (muncul saat hover di desktop) */}
       <a
         href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Chat WhatsApp Admin Topsell Run"
-        className="flex items-center gap-2.5 bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white pl-3.5 pr-4 py-3 rounded-full shadow-[0_4px_20px_rgba(37,211,102,0.4)] hover:shadow-[0_6px_25px_rgba(37,211,102,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 group cursor-pointer"
+        className="wa-wiggle flex items-center justify-center gap-0 sm:gap-2.5 bg-gradient-to-r from-[#25D366] to-[#128C7E] text-white w-14 h-14 p-0 sm:w-auto sm:h-auto sm:pl-3.5 sm:pr-4 sm:py-3 rounded-full shadow-[0_4px_20px_rgba(37,211,102,0.4)] hover:shadow-[0_6px_25px_rgba(37,211,102,0.6)] active:scale-95 transition-shadow duration-300 cursor-pointer"
       >
-        {/* Pulsing ring */}
-        <span className="absolute -inset-0.5 rounded-full bg-[#25D366] opacity-30 group-hover:opacity-60 animate-ping pointer-events-none -z-10" />
-
         {/* WhatsApp Icon */}
         <svg
           className="w-6 h-6 fill-current shrink-0"
@@ -38,7 +48,7 @@ export function WhatsAppButton() {
         </svg>
 
         {/* Text Label */}
-        <div className="flex flex-col items-start leading-tight">
+        <div className="hidden sm:flex flex-col items-start leading-tight">
           <span className="text-[10px] uppercase font-bold text-white/80 tracking-wider">Butuh Bantuan?</span>
           <span className="text-xs font-black tracking-wide text-white">Chat Admin</span>
         </div>

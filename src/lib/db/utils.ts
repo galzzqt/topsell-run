@@ -3,6 +3,7 @@ import type {
   Community, Participant, Payment, Registration,
   Family, FamilyParticipant, FamilyRegistration, FamilyPayment,
   Individual, IndividualParticipant, IndividualRegistration, IndividualPayment,
+  Invitation, InvitationParticipant, InvitationRegistration, InvitationPayment,
   PacerRegistration, PacerParticipant
 } from '@/lib/types'
 
@@ -33,6 +34,10 @@ export function generateFamilyCode() {
 
 export function generateIndividualCode() {
   return `IND-${randomBytes(3).toString('hex').toUpperCase()}`
+}
+
+export function generateInvitationCode() {
+  return `INV-${randomBytes(3).toString('hex').toUpperCase()}`
 }
 
 export function generatePacerCode() {
@@ -75,16 +80,32 @@ export function docToIndividual(doc: Record<string, unknown>): Individual {
   return doc as unknown as Individual
 }
 
+export function docToInvitation(doc: Record<string, unknown>): Invitation {
+  return doc as unknown as Invitation
+}
+
 export function docToIndividualParticipant(doc: Record<string, unknown>): IndividualParticipant {
   return doc as unknown as IndividualParticipant
+}
+
+export function docToInvitationParticipant(doc: Record<string, unknown>): InvitationParticipant {
+  return doc as unknown as InvitationParticipant
 }
 
 export function docToIndividualRegistration(doc: Record<string, unknown>): IndividualRegistration {
   return doc as unknown as IndividualRegistration
 }
 
+export function docToInvitationRegistration(doc: Record<string, unknown>): InvitationRegistration {
+  return doc as unknown as InvitationRegistration
+}
+
 export function docToIndividualPayment(doc: Record<string, unknown>): IndividualPayment {
   return doc as unknown as IndividualPayment
+}
+
+export function docToInvitationPayment(doc: Record<string, unknown>): InvitationPayment {
+  return doc as unknown as InvitationPayment
 }
 
 export function docToPacer(doc: Record<string, unknown>): PacerRegistration {

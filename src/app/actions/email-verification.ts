@@ -12,10 +12,15 @@ import {
   verifyCommunityEmail,
   verifyFamilyEmail,
   findIndividualById,
+  findInvitationById,
   findIndividualByPhone,
+  findInvitationByPhone,
   findIndividualByVerificationToken,
+  findInvitationByVerificationToken,
   setIndividualVerificationToken,
+  setInvitationVerificationToken,
   verifyIndividualEmail,
+  verifyInvitationEmail,
   findPacerById,
   findPacerByPhone,
   findPacerByVerificationToken,
@@ -30,6 +35,7 @@ import {
 import { createCommunitySession } from '@/lib/auth/community'
 import { createFamilySession } from '@/lib/auth/family'
 import { createIndividualSession } from '@/lib/auth/individual'
+import { createInvitationSession } from '@/lib/auth/invitation'
 import { createPacerSession } from '@/lib/auth/pacer'
 import { createUmkmSession } from '@/lib/auth/umkm'
 import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
@@ -119,6 +125,41 @@ export async function verifyEmailToken(token: string) {
       accountName: individual.name,
       redirectPath: '/individu-dashboard',
       packageLabel: 'Pendaftaran Individu',
+    }
+  }
+
+  const invitation = await findInvitationByVerificationToken(token)
+  if (invitation) {
+    if (invitation.email_verified) {
+      return { error: 'Email sudah diverifikasi sebelumnya. Silakan login.' }
+    }
+    if (invitation.verification_token_expires) {
+      const expiresAt = new Date(invitation.verification_token_expires)
+      if (expiresAt < new Date()) {
+        return { error: 'Token verifikasi sudah kedaluwarsa. Silakan minta kirim ulang.' }
+      }
+    }
+
+    await verifyInvitationEmail(invitation.id)
+    await createInvitationSession({ id: invitation.id, phone: invitation.phone, name: invitation.name })
+
+    try {
+      await ingestAdminLog({
+        level: 'info',
+        source: 'auth',
+        event: 'invitation_email_verified',
+        message: `Email berhasil diverifikasi untuk peserta invitation: ${invitation.name} (${invitation.email}).`,
+        data: { invitationId: invitation.id, name: invitation.name, email: invitation.email },
+      })
+    } catch (logError) {
+      console.error('Failed to log email verification:', logError)
+    }
+
+    return {
+      success: true,
+      accountName: invitation.name,
+      redirectPath: '/invitation-dashboard',
+      packageLabel: 'Pendaftaran Invitation',
     }
   }
 
@@ -329,6 +370,35 @@ export async function resendVerificationEmail(identifier: string) {
       name: individual.leader_name || individual.name,
       verificationUrl,
       packageType: 'individual',
+    })
+
+    if (!result.success) return { error: result.error || 'Gagal mengirim email. Silakan coba lagi.' }
+    return { success: true }
+  }
+
+  let invitation = await findInvitationById(identifier)
+  if (!invitation) invitation = await findInvitationByPhone(identifier)
+  if (!invitation) invitation = await findInvitationByVerificationToken(identifier)
+
+  if (invitation) {
+    if (invitation.email_verified) return { error: 'Email sudah diverifikasi. Silakan login.' }
+    if (!invitation.email) return { error: 'Email tidak terdaftar untuk akun ini.' }
+
+    const waitSeconds = isResendLimited(invitation.verification_sent_at)
+    if (waitSeconds) return { error: `Silakan tunggu ${waitSeconds} detik sebelum meminta kirim ulang.` }
+
+    const verificationToken = generateVerificationToken()
+    const tokenExpiry = getVerificationTokenExpiry()
+    await setInvitationVerificationToken(invitation.id, verificationToken, tokenExpiry)
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
+    const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}&type=invitation`
+
+    const result = await sendVerificationEmail({
+      email: invitation.email,
+      name: invitation.leader_name || invitation.name,
+      verificationUrl,
+      packageType: 'invitation',
     })
 
     if (!result.success) return { error: result.error || 'Gagal mengirim email. Silakan coba lagi.' }

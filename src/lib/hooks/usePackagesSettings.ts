@@ -37,6 +37,7 @@ export function resolvePackageLabel(packages: PackagesSettings | null, pkg: Pack
     community: 'Community Package',
     family: 'Bro & Sist Package',
     individual: 'Individu',
+    invitation: 'Invitation',
     pacer: 'Pacer',
     umkm: 'Tenant UMKM',
   }

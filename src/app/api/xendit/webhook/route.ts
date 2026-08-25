@@ -5,13 +5,17 @@ import {
   markFamilyPaymentsPaidByReference,
   markFamilyPaymentsPaidBySessionId,
   markIndividualPaymentsPaidByReference,
+  markInvitationPaymentsPaidByReference,
   markIndividualPaymentsPaidBySessionId,
+  markInvitationPaymentsPaidBySessionId,
   markPaymentFailed,
   markPaymentExpired,
   markFamilyPaymentFailed,
   markFamilyPaymentExpired,
   markIndividualPaymentFailed,
+  markInvitationPaymentFailed,
   markIndividualPaymentExpired,
+  markInvitationPaymentExpired,
   markUmkmPaymentsPaidBySessionId,
   markUmkmPaymentsPaidByReference,
   markUmkmPaymentFailed,
@@ -22,11 +26,13 @@ import {
   sendFamilyRacepackEmailsForRegistration,
 } from '@/lib/email/racepack'
 import { sendIndividualRacepackEmailsForRegistration, sendIndividualReceiptEmail } from '@/lib/email/individual'
+import { sendInvitationRacepackEmailsForRegistration, sendInvitationReceiptEmail } from '@/lib/email/invitation'
 import {
   sendRacepackWhatsappsForRegistration,
   sendFamilyRacepackWhatsappsForRegistration,
 } from '@/lib/whatsapp/racepack'
 import { sendIndividualRacepackWhatsappsForRegistration } from '@/lib/whatsapp/individual'
+import { sendInvitationRacepackWhatsappsForRegistration } from '@/lib/whatsapp/invitation'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId } from '@/lib/utils/xendit'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { getDb } from '@/lib/mongodb/client'
@@ -245,6 +251,24 @@ export async function POST(request: Request) {
           processedAny = true
         }
 
+        // Update invitation payments
+        const invitationPayments = await db.collection('invitation_payments').find({ $or: orQuery }).toArray()
+        for (const p of invitationPayments) {
+          if (isExpired) {
+            await markInvitationPaymentExpired(p.id)
+          } else {
+            await markInvitationPaymentFailed(p.id)
+          }
+          await ingestAdminLog({
+            level: 'warning',
+            source: 'payment',
+            event: isExpired ? 'invitation_payment_webhook_expired' : 'invitation_payment_webhook_failed',
+            message: `Pembayaran invitation ${isExpired ? 'expired' : 'gagal'} via webhook (Ref: ${p.payment_reference}).`,
+            data: { paymentId: p.id, reference: p.payment_reference, amount: p.amount, status }
+          })
+          processedAny = true
+        }
+
         // Update UMKM payments
         const umkmPayments = await db.collection('umkm_payments').find({ $or: orQuery }).toArray()
         for (const p of umkmPayments) {
@@ -334,6 +358,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true })
     }
 
+    // Try invitation next
+    const invitationPayments = await markInvitationPaymentsPaidBySessionId(sessionId, update)
+    if (invitationPayments.length > 0) {
+      await Promise.all(invitationPayments.flatMap((payment) => [
+        sendInvitationReceiptEmail(payment.registration_id),
+        sendInvitationRacepackEmailsForRegistration(payment.registration_id),
+        sendInvitationRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'invitation_payment_webhook_paid',
+        message: `Pembayaran invitation sukses via webhook (Session: ${sessionId}).`,
+        data: { sessionId, reference: invitationPayments[0]?.payment_reference, amount: invitationPayments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
+
     // Try UMKM next
     const umkmPayments = await markUmkmPaymentsPaidBySessionId(sessionId, update)
     if (umkmPayments.length > 0) {
@@ -397,6 +439,24 @@ export async function POST(request: Request) {
         event: 'individual_payment_webhook_paid',
         message: `Pembayaran individu sukses via webhook (Ref: ${referenceId}).`,
         data: { referenceId, amount: individualPayments[0]?.amount }
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Try invitation next
+    const invitationPayments = await markInvitationPaymentsPaidByReference(referenceId, update)
+    if (invitationPayments.length > 0) {
+      await Promise.all(invitationPayments.flatMap((payment) => [
+        sendInvitationReceiptEmail(payment.registration_id),
+        sendInvitationRacepackEmailsForRegistration(payment.registration_id),
+        sendInvitationRacepackWhatsappsForRegistration(payment.registration_id),
+      ]))
+      await ingestAdminLog({
+        level: 'info',
+        source: 'payment',
+        event: 'invitation_payment_webhook_paid',
+        message: `Pembayaran invitation sukses via webhook (Ref: ${referenceId}).`,
+        data: { referenceId, amount: invitationPayments[0]?.amount }
       })
       return NextResponse.json({ received: true })
     }

@@ -23,6 +23,13 @@ const PACKAGES: Array<{
     description: 'Daftar untuk diri sendiri — 1 peserta.',
   },
   {
+    key: 'invitation',
+    href: '/invitation',
+    icon: User,
+    title: 'Invitation',
+    description: 'Pendaftaran khusus undangan — 1 peserta.',
+  },
+  {
     key: 'family',
     href: '/bro-and-sist',
     icon: Users,
@@ -58,6 +65,7 @@ export default function LandingPage() {
         if (!packages) return
         setSoldOut({
           individual: packages.individual?.enabled === false,
+          invitation: packages.invitation?.enabled === false,
           family: packages.family?.enabled === false,
           community: packages.community?.enabled === false,
           umkm: packages.umkm?.enabled === false,

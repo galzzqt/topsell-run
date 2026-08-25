@@ -29,6 +29,16 @@ import {
   updateIndividualAuthPhone,
   updateIndividualAuthPassword,
   findIndividualByPhoneExcept,
+  // invitation database imports
+  findInvitationParticipantWithInvitationById,
+  findInvitationParticipantById,
+  findInvitationParticipantsByInvitationId,
+  markInvitationParticipantCheckedIn,
+  updateInvitationParticipantById,
+  updateInvitation,
+  updateInvitationAuthPhone,
+  updateInvitationAuthPassword,
+  findInvitationByPhoneExcept,
   // pacer database imports
   findPacerParticipantById,
   updatePacerParticipantById,
@@ -133,6 +143,7 @@ export async function markRacepackPickedUp(scanValue: string) {
   let participant = (await findParticipantWithCommunityById(participantId)) as ScannedParticipantType | null
   let isFamily = false
   let isIndividual = false
+  let isInvitation = false
 
   if (!participant) {
     const familyParticipant = await findFamilyParticipantWithFamilyById(participantId)
@@ -152,6 +163,17 @@ export async function markRacepackPickedUp(scanValue: string) {
       participant = {
         ...individualParticipant,
         community: individualParticipant.individual ? { name: individualParticipant.individual.name, community_code: individualParticipant.individual.individual_code } : null
+      } as unknown as ScannedParticipantType
+    }
+  }
+
+  if (!participant) {
+    const invitationParticipant = await findInvitationParticipantWithInvitationById(participantId)
+    if (invitationParticipant) {
+      isInvitation = true
+      participant = {
+        ...invitationParticipant,
+        community: invitationParticipant.invitation ? { name: invitationParticipant.invitation.name, community_code: invitationParticipant.invitation.invitation_code } : null
       } as unknown as ScannedParticipantType
     }
   }
@@ -196,14 +218,24 @@ export async function markRacepackPickedUp(scanValue: string) {
     }
   }
 
-  const pickedUpAt = isIndividual
+  const pickedUpAt = isInvitation
+    ? await markInvitationParticipantCheckedIn(participantId)
+    : isIndividual
     ? await markIndividualParticipantCheckedIn(participantId)
     : isFamily
     ? await markFamilyParticipantCheckedIn(participantId)
     : await markParticipantCheckedIn(participantId)
 
   let updated = null
-  if (isIndividual) {
+  if (isInvitation) {
+    const invitationParticipant = await findInvitationParticipantWithInvitationById(participantId)
+    if (invitationParticipant) {
+      updated = {
+        ...invitationParticipant,
+        community: invitationParticipant.invitation ? { name: invitationParticipant.invitation.name, community_code: invitationParticipant.invitation.invitation_code } : null
+      } as unknown as ScannedParticipantType
+    }
+  } else if (isIndividual) {
     const individualParticipant = await findIndividualParticipantWithIndividualById(participantId)
     if (individualParticipant) {
       updated = {
@@ -316,7 +348,12 @@ export async function updateAdminParticipant(participantId: string, values: Admi
       if (existingIndividual) {
         await updateIndividualParticipantById(participantId, payload)
       } else {
-        return { error: 'Peserta tidak ditemukan.' }
+        const existingInvitation = await findInvitationParticipantById(participantId)
+        if (existingInvitation) {
+          await updateInvitationParticipantById(participantId, payload)
+        } else {
+          return { error: 'Peserta tidak ditemukan.' }
+        }
       }
     }
   }
@@ -471,6 +508,69 @@ export async function updateAdminIndividual(values: AdminFamilyUpdateValues) {
     })
   } catch (logError) {
     console.error('Failed to log admin individual update:', logError)
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export async function updateAdminInvitation(values: AdminFamilyUpdateValues) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  if (!values.name.trim() || !values.leader_name.trim()) return { error: 'Nama peserta wajib diisi.' }
+  if (!emailRegex.test(values.email)) return { error: 'Email peserta tidak valid.' }
+  if (!phoneRegex.test(values.phone)) return { error: 'Nomor HP peserta tidak valid.' }
+  if (values.password && values.password.length < 6) return { error: 'Password minimal 6 karakter.' }
+
+  const duplicate = await findInvitationByPhoneExcept(values.phone, values.id)
+  if (duplicate) return { error: 'Nomor HP sudah digunakan peserta invitation lain.' }
+
+  await updateInvitation(values.id, {
+    name: values.name.trim(),
+    leader_name: values.leader_name.trim(),
+    email: values.email.trim(),
+    phone: values.phone.trim(),
+    community_name: values.community_name ? values.community_name.trim() : null,
+    provinsi: values.provinsi.trim() || null,
+    kota: values.kota.trim() || null,
+    kecamatan: values.kecamatan.trim() || null,
+  })
+
+  // Sinkronkan instansi ke peserta invitation terkait
+  try {
+    const participants = await findInvitationParticipantsByInvitationId(values.id)
+    for (const p of participants) {
+      await updateInvitationParticipantById(p.id, {
+        full_name: values.name.trim(),
+        phone: values.phone.trim(),
+        email: values.email.trim(),
+        community_name: values.community_name ? values.community_name.trim() : null,
+      })
+    }
+  } catch (err) {
+    console.error('Failed to sync participant community_name:', err)
+  }
+
+  await updateInvitationAuthPhone(values.id, values.phone)
+
+  if (values.password) {
+    await updateInvitationAuthPassword(values.id, createCommunityPasswordRecord(values.password))
+  }
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'admin',
+      event: 'admin_invitation_updated',
+      message: `Admin ${session.name} memperbarui data peserta invitation: ${values.name} (HP: ${values.phone}).`,
+      actor: session,
+      data: { invitationId: values.id, name: values.name, phone: values.phone, email: values.email },
+    })
+  } catch (logError) {
+    console.error('Failed to log admin invitation update:', logError)
   }
 
   revalidatePath('/admin')
@@ -726,7 +826,7 @@ export async function refreshAxiomLogs() {
 
 export type UpdatePaymentStatusValues = {
   paymentId: string
-  packageType: 'community' | 'family' | 'individual' | 'umkm'
+  packageType: 'community' | 'family' | 'individual' | 'invitation' | 'umkm'
   status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
   paymentMethod?: string
 }
@@ -751,36 +851,42 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
       community: db.findPaymentById,
       family: db.findFamilyPaymentById,
       individual: db.findIndividualPaymentById,
+      invitation: db.findInvitationPaymentById,
       umkm: db.findUmkmPaymentById,
     }[packageType]
     const markPaid = {
       community: db.markPaymentPaid,
       family: db.markFamilyPaymentPaid,
       individual: db.markIndividualPaymentPaid,
+      invitation: db.markInvitationPaymentPaid,
       umkm: db.markUmkmPaymentPaid,
     }[packageType]
     const markFailed = {
       community: db.markPaymentFailed,
       family: db.markFamilyPaymentFailed,
       individual: db.markIndividualPaymentFailed,
+      invitation: db.markInvitationPaymentFailed,
       umkm: db.markUmkmPaymentFailed,
     }[packageType]
     const markExpired = {
       community: db.markPaymentExpired,
       family: db.markFamilyPaymentExpired,
       individual: db.markIndividualPaymentExpired,
+      invitation: db.markInvitationPaymentExpired,
       umkm: db.markUmkmPaymentExpired,
     }[packageType]
     const markTesting = {
       community: db.markPaymentTesting,
       family: db.markFamilyPaymentTesting,
       individual: db.markIndividualPaymentTesting,
+      invitation: db.markInvitationPaymentTesting,
       umkm: async (id: string) => { await db.updateUmkmPayment(id, { status: 'testing' as any }) },
     }[packageType]
     const updatePaymentPending = {
       community: db.updatePayment,
       family: db.updateFamilyPayment,
       individual: db.updateIndividualPayment,
+      invitation: db.updateInvitationPayment,
       umkm: db.updateUmkmPayment,
     }[packageType]
 
@@ -790,8 +896,8 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
     }
 
     const oldStatus = payment.status
-    const packageName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'Individu' : packageType === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist Package'
-    const eventPrefix = packageType === 'community' ? 'admin_payment' : packageType === 'individual' ? 'admin_individual_payment' : packageType === 'umkm' ? 'admin_umkm_payment' : 'admin_family_payment'
+    const packageName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'Individu' : packageType === 'invitation' ? 'Invitation' : packageType === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist Package'
+    const eventPrefix = packageType === 'community' ? 'admin_payment' : packageType === 'individual' ? 'admin_individual_payment' : packageType === 'invitation' ? 'admin_invitation_payment' : packageType === 'umkm' ? 'admin_umkm_payment' : 'admin_family_payment'
 
     if (status === 'paid') {
       const updateValues = {
@@ -806,6 +912,8 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
         const racepackWa = await import('@/lib/whatsapp/racepack')
         const individualEmail = await import('@/lib/email/individual')
         const individualWa = await import('@/lib/whatsapp/individual')
+        const invitationEmail = await import('@/lib/email/invitation')
+        const invitationWa = await import('@/lib/whatsapp/invitation')
 
         try {
           if (packageType === 'community' && 'registration_id' in payment) {
@@ -819,6 +927,11 @@ export async function updateAdminPaymentStatus(values: UpdatePaymentStatusValues
               individualEmail.sendIndividualRacepackEmailsForRegistration(payment.registration_id),
               individualEmail.sendIndividualReceiptEmail(payment.registration_id),
               individualWa.sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
+            ])          } else if (packageType === 'invitation' && 'registration_id' in payment) {
+            await Promise.all([
+              invitationEmail.sendInvitationRacepackEmailsForRegistration(payment.registration_id),
+              invitationEmail.sendInvitationReceiptEmail(payment.registration_id),
+              invitationWa.sendInvitationRacepackWhatsappsForRegistration(payment.registration_id),
             ])
           } else if (packageType === 'family' && 'registration_id' in payment) {
             await Promise.all([

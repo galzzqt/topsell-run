@@ -9,8 +9,11 @@ import {
   listFamilyParticipantsWithFamily,
   listFamilyPaymentsWithRelations,
   listIndividuals,
+  listInvitations,
   listIndividualParticipantsWithIndividual,
+  listInvitationParticipantsWithInvitation,
   listIndividualPaymentsWithRelations,
+  listInvitationPaymentsWithRelations,
   listPacerParticipantsWithPacer,
   listUmkms,
   listUmkmPayments,
@@ -39,8 +42,11 @@ export default async function AdminPage() {
     families,
     familyPayments,
     individualParticipantsRaw,
+    invitationParticipantsRaw,
     individualsRaw,
+    invitationsRaw,
     individualPaymentsRaw,
+    invitationPaymentsRaw,
     pacerParticipantsRaw,
     umkmsRaw,
     umkmPaymentsRaw,
@@ -56,8 +62,11 @@ export default async function AdminPage() {
     listFamilies(),
     listFamilyPaymentsWithRelations(),
     listIndividualParticipantsWithIndividual(),
+    listInvitationParticipantsWithInvitation(),
     listIndividuals(),
+    listInvitations(),
     listIndividualPaymentsWithRelations(),
+    listInvitationPaymentsWithRelations(),
     listPacerParticipantsWithPacer(),
     listUmkms(),
     listUmkmPayments(),
@@ -258,6 +267,89 @@ export default async function AdminPage() {
       : null,
   })) as AdminPayment[]
 
+  // Map invitation rows to AdminCommunity shape for UI compatibility
+  const invitationRows = invitationsRaw.map((f) => ({
+    id: f.id,
+    name: f.name,
+    leader_name: f.leader_name,
+    email: f.email,
+    phone: f.phone,
+    category: f.category,
+    community_code: f.invitation_code,
+    community_name: f.community_name ?? null,
+    provinsi: f.provinsi,
+    kota: f.kota,
+    kecamatan: f.kecamatan,
+    created_at: f.created_at,
+  })) as AdminCommunity[]
+
+  const invitationParticipantRows = invitationParticipantsRaw.map((fp) => ({
+    id: fp.id,
+    full_name: fp.full_name,
+    bib_name: fp.bib_name,
+    ktp_number: fp.ktp_number,
+    email: fp.email,
+    phone: fp.phone,
+    date_of_birth: fp.date_of_birth,
+    gender: fp.gender,
+    tshirt_size: fp.tshirt_size,
+    blood_type: fp.blood_type,
+    medical_condition: fp.medical_condition,
+    emergency_contact_name: fp.emergency_contact_name,
+    emergency_contact_phone: fp.emergency_contact_phone,
+    community_name: fp.community_name ?? null,
+    participant_code: fp.participant_code,
+    qr_code_data: fp.qr_code_data,
+    payment_status: fp.payment_status as 'pending' | 'paid' | 'failed' | 'expired',
+    checked_in: fp.checked_in,
+    checked_in_at: fp.checked_in_at,
+    created_at: fp.created_at,
+    community: fp.invitation
+      ? {
+        id: fp.invitation.id,
+        name: fp.invitation.name,
+        leader_name: fp.invitation.leader_name,
+        email: fp.invitation.email,
+        phone: fp.invitation.phone,
+        category: fp.invitation.category,
+        community_code: fp.invitation.invitation_code,
+        provinsi: fp.invitation.provinsi,
+        kota: fp.invitation.kota,
+        kecamatan: fp.invitation.kecamatan,
+      }
+      : null,
+  })) as AdminParticipant[]
+
+  const invitationPaymentRows = invitationPaymentsRaw.map((fp) => ({
+    id: fp.id,
+    registration_id: fp.registration_id,
+    amount: fp.amount,
+    payment_method: fp.payment_method,
+    payment_reference: fp.payment_reference,
+    status: fp.status as 'pending' | 'paid' | 'failed' | 'expired',
+    paid_at: fp.paid_at,
+    created_at: fp.created_at,
+    registration: fp.registration
+      ? {
+        community_id: fp.registration.invitation_id,
+        total_participants: fp.registration.total_participants,
+        community: fp.registration.invitation
+          ? {
+            id: fp.registration.invitation.id,
+            name: fp.registration.invitation.name,
+            leader_name: fp.registration.invitation.leader_name,
+            email: fp.registration.invitation.email,
+            phone: fp.registration.invitation.phone,
+            community_code: fp.registration.invitation.invitation_code,
+            provinsi: fp.registration.invitation.provinsi,
+            kota: fp.registration.invitation.kota,
+            kecamatan: fp.registration.invitation.kecamatan,
+          }
+          : null,
+      }
+      : null,
+  })) as AdminPayment[]
+
   const pacerRows = pacerParticipantsRaw.map((p) => ({
     id: p.id,
     pacer_id: p.pacer_id,
@@ -297,21 +389,24 @@ export default async function AdminPage() {
 
   // Combined stats
   const stats: AdminStats = {
-    communities: communityRows.length + familyRows.length + individualRows.length,
-    participants: participantRows.length + familyParticipantRows.length + individualParticipantRows.length,
+    communities: communityRows.length + familyRows.length + individualRows.length + invitationRows.length,
+    participants: participantRows.length + familyParticipantRows.length + individualParticipantRows.length + invitationParticipantRows.length,
     paidParticipants:
       participantRows.filter((p) => p.payment_status === 'paid').length +
       familyParticipantRows.filter((p) => p.payment_status === 'paid').length +
-      individualParticipantRows.filter((p) => p.payment_status === 'paid').length,
+      individualParticipantRows.filter((p) => p.payment_status === 'paid').length +
+      invitationParticipantRows.filter((p) => p.payment_status === 'paid').length,
     pendingParticipants:
       participantRows.filter((p) => p.payment_status === 'pending').length +
       familyParticipantRows.filter((p) => p.payment_status === 'pending').length +
-      individualParticipantRows.filter((p) => p.payment_status === 'pending').length,
+      individualParticipantRows.filter((p) => p.payment_status === 'pending').length +
+      invitationParticipantRows.filter((p) => p.payment_status === 'pending').length,
     racepacksPickedUp:
       participantRows.filter((p) => p.checked_in).length +
       familyParticipantRows.filter((p) => p.checked_in).length +
-      individualParticipantRows.filter((p) => p.checked_in).length,
-    revenue: sumPaidAmount(paymentRows) + sumPaidAmount(familyPaymentRows) + sumPaidAmount(individualPaymentRows),
+      individualParticipantRows.filter((p) => p.checked_in).length +
+      invitationParticipantRows.filter((p) => p.checked_in).length,
+    revenue: sumPaidAmount(paymentRows) + sumPaidAmount(familyPaymentRows) + sumPaidAmount(individualPaymentRows) + sumPaidAmount(invitationPaymentRows),
   }
 
   return (
@@ -326,6 +421,9 @@ export default async function AdminPage() {
       individualParticipants={individualParticipantRows}
       individuals={individualRows}
       individualPayments={individualPaymentRows}
+      invitationParticipants={invitationParticipantRows}
+      invitations={invitationRows}
+      invitationPayments={invitationPaymentRows}
       pacerRows={pacerRows}
       umkmRows={umkmsRaw}
       umkmPayments={umkmPaymentsRaw}

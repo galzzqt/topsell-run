@@ -86,6 +86,7 @@ import {
   updateAdminCommunity,
   updateAdminFamily,
   updateAdminIndividual,
+  updateAdminInvitation,
   updateAdminParticipant,
   updateAdminPaymentStatus,
   updateAdminPacerStatus,
@@ -129,7 +130,7 @@ const defaultVoucherForm: VoucherFormState = {
   maxUsage: null,
   validFrom: '',
   validUntil: '',
-  packageKeys: ['community', 'family', 'individual'],
+  packageKeys: ['community', 'family', 'individual', 'invitation'],
   allowedCategories: [],
 }
 
@@ -288,7 +289,7 @@ type DailyMetric = {
   revenue: number
 }
 
-type DashboardPackageKey = 'community' | 'family' | 'individual'
+type DashboardPackageKey = 'community' | 'family' | 'individual' | 'invitation'
 
 type DashboardPackageSummary = {
   label: string
@@ -488,8 +489,11 @@ export function AdminDashboardClient({
   families = [],
   familyPayments = [],
   individualParticipants = [],
+  invitationParticipants = [],
   individuals = [],
+  invitations = [],
   individualPayments = [],
+  invitationPayments = [],
   pacerRows = [],
   umkmRows = [],
   umkmPayments = [],
@@ -508,8 +512,11 @@ export function AdminDashboardClient({
   families?: AdminCommunity[]
   familyPayments?: AdminPayment[]
   individualParticipants?: AdminParticipant[]
+  invitationParticipants?: AdminParticipant[]
   individuals?: AdminCommunity[]
+  invitations?: AdminCommunity[]
   individualPayments?: AdminPayment[]
+  invitationPayments?: AdminPayment[]
   pacerRows?: AdminPacerRow[]
   umkmRows?: UmkmRegistration[]
   umkmPayments?: UmkmPayment[]
@@ -526,7 +533,7 @@ export function AdminDashboardClient({
   const envFieldCounterRef = useRef(0)
   const scanRegionId = 'admin-racepack-reader'
   const [query, setQuery] = useState('')
-  const [packageType, setPackageType] = useState<'community' | 'family' | 'individual' | 'umkm'>('community')
+  const [packageType, setPackageType] = useState<'community' | 'family' | 'individual' | 'invitation' | 'umkm'>('community')
   const [combineFiles, setCombineFiles] = useState(false)
   const [participantStartDate, setParticipantStartDate] = useState('')
   const [participantEndDate, setParticipantEndDate] = useState('')
@@ -820,7 +827,7 @@ export function AdminDashboardClient({
       // sebagai angka ("12.01.04"), bukan nama daerah.
       const locationSources: ReadonlyArray<
         ReadonlyArray<{ provinsi: string | null; kota: string | null; kecamatan: string | null }>
-      > = [individuals, families, communities, pacerRows, umkmRows]
+      > = [individuals, invitations, families, communities, pacerRows, umkmRows]
 
       for (const rows of locationSources) {
         for (const row of rows) {
@@ -868,7 +875,7 @@ export function AdminDashboardClient({
 
     collectAndResolveLocations()
     return () => { cancelled = true }
-  }, [individuals, families, communities, pacerRows, umkmRows])
+  }, [individuals, invitations, families, communities, pacerRows, umkmRows])
 
   // Resolve nama lokasi saat modal Detail Pacer dibuka
   useEffect(() => {
@@ -928,6 +935,7 @@ export function AdminDashboardClient({
   // Dataset aktif per tab (Komunitas / Bro & Sist / Individu / UMKM).
   const activeCommunities = useMemo(() => {
     if (packageType === 'individual') return individuals
+    if (packageType === 'invitation') return invitations
     if (packageType === 'family') return families
     if (packageType === 'umkm') {
       return umkmRows.map((u) => ({
@@ -945,25 +953,29 @@ export function AdminDashboardClient({
       })) as AdminCommunity[]
     }
     return communities
-  }, [packageType, communities, families, individuals, umkmRows])
+  }, [packageType, communities, families, individuals, invitations, umkmRows])
 
   const activeParticipants = useMemo(() => {
     if (packageType === 'individual') return individualParticipants
+    if (packageType === 'invitation') return invitationParticipants
     if (packageType === 'family') return familyParticipants
     if (packageType === 'umkm') return []
     return participants
-  }, [packageType, participants, familyParticipants, individualParticipants])
+  }, [packageType, participants, familyParticipants, individualParticipants, invitationParticipants])
 
   const activePayments = useMemo(() => {
     if (packageType === 'individual') return individualPayments
+    if (packageType === 'invitation') return invitationPayments
     if (packageType === 'family') return familyPayments
     if (packageType === 'umkm') return umkmPaymentRows
     return payments
-  }, [packageType, payments, familyPayments, individualPayments, umkmPaymentRows])
+  }, [packageType, payments, familyPayments, individualPayments, invitationPayments, umkmPaymentRows])
 
-  const entityLabel = packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Individu' : packageType === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist'
-  const groupWord = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'peserta' : packageType === 'umkm' ? 'tenant' : 'grup'
-  const paymentPackageType: 'community' | 'family' | 'individual' | 'umkm' = packageType
+  // Individu & Invitation = 1 peserta per pendaftar (tanpa kolom grup).
+  const isSoloPackage = packageType === 'individual' || packageType === 'invitation'
+  const entityLabel = packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Individu' : packageType === 'invitation' ? 'Invitation' : packageType === 'umkm' ? 'Tenant UMKM' : 'Bro & Sist'
+  const groupWord = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'peserta' : packageType === 'invitation' ? 'peserta' : packageType === 'umkm' ? 'tenant' : 'grup'
+  const paymentPackageType: 'community' | 'family' | 'individual' | 'invitation' | 'umkm' = packageType
 
   const applyParticipantFilter = useCallback(
     (rows: AdminParticipant[]) => {
@@ -1071,7 +1083,7 @@ export function AdminDashboardClient({
       })
     }
 
-    if (packageType === 'individual' && participantCategoryFilter !== 'all') {
+    if (isSoloPackage && participantCategoryFilter !== 'all') {
       list = list.filter((participant) => {
         const community = getParticipantCommunity(participant)
         return extractCategoryLabel(community?.category || participant.category) === participantCategoryFilter
@@ -1489,8 +1501,12 @@ export function AdminDashboardClient({
       const comm = firstRelation(p.community)
       increment('individual', comm?.category || p.category)
     }
+    for (const p of invitationParticipants) {
+      const comm = firstRelation(p.community)
+      increment('invitation', comm?.category || p.category)
+    }
     return map
-  }, [participants, familyParticipants, individualParticipants])
+  }, [participants, familyParticipants, individualParticipants, invitationParticipants])
 
   const communitiesByKey = useMemo(() => {
     const map = new Map<string, AdminCommunity>()
@@ -1699,7 +1715,7 @@ export function AdminDashboardClient({
     const payment = umkmPayments.find((p) => p.umkm_id === row.id)
     return {
       'Nama Usaha': row.name,
-      'Nama PIC': row.pic_name,
+      'Nama Pemilik': row.pic_name,
       'Kode UMKM': row.umkm_code,
       WhatsApp: row.phone,
       Email: row.email,
@@ -1779,7 +1795,7 @@ export function AdminDashboardClient({
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allPaymentsRows), 'Pembayaran')
       }
 
-      const segmentName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'individu' : packageType === 'umkm' ? 'umkm' : 'bro-sist'
+      const segmentName = packageType === 'community' ? 'komunitas' : packageType === 'individual' ? 'individu' : packageType === 'invitation' ? 'invitation' : packageType === 'umkm' ? 'umkm' : 'bro-sist'
       XLSX.writeFile(workbook, `topsell-run-gabungan-${segmentName}-${type}${filterSuffix}${dateSuffix}-${today}.xlsx`)
     } else {
       for (const community of selectedCommunities) {
@@ -1964,6 +1980,8 @@ export function AdminDashboardClient({
     startTransition(async () => {
       const result = packageType === 'community'
         ? await updateAdminCommunity(communityForm)
+        : packageType === 'invitation'
+          ? await updateAdminInvitation(communityForm)
         : packageType === 'individual'
           ? await updateAdminIndividual(communityForm)
           : await updateAdminFamily(communityForm)
@@ -2485,7 +2503,7 @@ export function AdminDashboardClient({
     ['social_media', 'Link Media Sosial Usaha *'],
     ['description', 'Deskripsi Usaha / Produk *'],
     ['photo_urls', 'Foto Usaha / Produk UMKM *'],
-    ['leader_name', 'Nama PIC *'],
+    ['leader_name', 'Nama Pemilik *'],
     ['phone', 'No. WhatsApp PIC *'],
     ['email', 'Email PIC *'],
     ['provinsi', 'Provinsi *'],
@@ -2763,6 +2781,7 @@ export function AdminDashboardClient({
                   <option value="community">Community Package</option>
                   <option value="family">Bro & Sist Package</option>
                   <option value="individual">Individu</option>
+                  <option value="invitation">Invitation</option>
                 </select>
               </div>
 
@@ -3006,6 +3025,15 @@ export function AdminDashboardClient({
                 >
                   Individu
                 </button>
+                <button
+                  onClick={() => setPackageType('invitation')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'invitation'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                    }`}
+                >
+                  Invitation
+                </button>
               </div>
 
               {packageType === 'individual' && (
@@ -3150,7 +3178,7 @@ export function AdminDashboardClient({
 
                     return (
                       <div key={group.key}>
-                        <div className={`w-full px-4 py-4 grid grid-cols-1 ${packageType === 'individual' ? 'lg:grid-cols-[1fr_auto_auto]' : 'lg:grid-cols-[1fr_auto_auto_auto]'} gap-3 text-left items-center hover:bg-brand-gray/20 transition-colors`}>
+                        <div className={`w-full px-4 py-4 grid grid-cols-1 ${isSoloPackage ? 'lg:grid-cols-[1fr_auto_auto]' : 'lg:grid-cols-[1fr_auto_auto_auto]'} gap-3 text-left items-center hover:bg-brand-gray/20 transition-colors`}>
                           <div className="min-w-0 flex items-start gap-3">
                             <button
                               type="button"
@@ -3191,7 +3219,7 @@ export function AdminDashboardClient({
                             {pendingCount > 0 && <Badge variant="warning">{pendingCount} Pending</Badge>}
                           </div>
 
-                          {packageType !== 'individual' && (
+                          {!isSoloPackage && (
                             <div className="text-xs font-bold text-brand-muted lg:text-right">
                               Racepack
                               <span className="block text-sm font-black text-foreground">{pickedUpCount}/{group.participants.length}</span>
@@ -3205,7 +3233,7 @@ export function AdminDashboardClient({
                                 onClick={() => openCommunityEditor(editableCommunity)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground cursor-pointer"
                               >
-                                <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Peserta' : 'Grup'}
+                                <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : isSoloPackage ? 'Peserta' : 'Grup'}
                               </button>
                             )}
                             <button
@@ -3352,6 +3380,15 @@ export function AdminDashboardClient({
                     }`}
                 >
                   Individu
+                </button>
+                <button
+                  onClick={() => setPackageType('invitation')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'invitation'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                    }`}
+                >
+                  Invitation
                 </button>
                 <button
                   onClick={() => setPackageType('umkm')}
@@ -3552,7 +3589,7 @@ export function AdminDashboardClient({
                 <table className="w-full text-left">
                   <thead className="bg-brand-dark/30 border-b border-card-border">
                     <tr>
-                      {['Referensi', packageType === 'community' ? 'Komunitas' : packageType === 'individual' ? 'Peserta' : packageType === 'umkm' ? 'Tenant UMKM' : 'Grup', 'Nominal', 'Metode', 'Status', 'Tanggal', 'Aksi'].map((heading) => (
+                      {['Referensi', packageType === 'community' ? 'Komunitas' : isSoloPackage ? 'Peserta' : packageType === 'umkm' ? 'Tenant UMKM' : 'Grup', 'Nominal', 'Metode', 'Status', 'Tanggal', 'Aksi'].map((heading) => (
                         <th key={heading} className="px-4 py-3 text-[9px] font-black uppercase tracking-wider text-brand-muted">{heading}</th>
                       ))}
                     </tr>
@@ -4554,6 +4591,7 @@ export function AdminDashboardClient({
                       { key: 'community' as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
                       { key: 'family' as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
                       { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/30', badge: 'bg-blue-500/20 text-blue-400' },
+                      { key: 'invitation' as PackageKey, icon: <User className="w-6 h-6 text-indigo-400" />, iconBg: 'bg-indigo-500/10 border-indigo-500/20', accent: 'from-indigo-500/20 to-indigo-500/5', border: 'border-indigo-500/30', badge: 'bg-indigo-500/20 text-indigo-400' },
                       { key: 'pacer' as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400' },
                       { key: 'umkm' as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400' },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
@@ -4768,6 +4806,7 @@ export function AdminDashboardClient({
                       { key: 'community' as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
                       { key: 'family' as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
                       { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/30', badge: 'bg-blue-500/20 text-blue-400' },
+                      { key: 'invitation' as PackageKey, icon: <User className="w-6 h-6 text-indigo-400" />, iconBg: 'bg-indigo-500/10 border-indigo-500/20', accent: 'from-indigo-500/20 to-indigo-500/5', border: 'border-indigo-500/30', badge: 'bg-indigo-500/20 text-indigo-400' },
                       { key: 'pacer' as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400' },
                       { key: 'umkm' as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400' },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
@@ -5264,6 +5303,15 @@ export function AdminDashboardClient({
                     }`}
                 >
                   Individu
+                </button>
+                <button
+                  onClick={() => setPackageType('invitation')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'invitation'
+                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                      : 'border-transparent text-brand-muted hover:text-foreground'
+                    }`}
+                >
+                  Invitation
                 </button>
                 {activeTab === 'export_payments' && (
                   <button
@@ -5984,15 +6032,15 @@ export function AdminDashboardClient({
           setCommunityEditing(null)
           setCommunityForm(null)
         }}
-        title={packageType === 'community' ? 'Edit Data Komunitas' : packageType === 'individual' ? 'Edit Data Peserta Individu' : 'Edit Data Bro & Sist Package'}
+        title={packageType === 'community' ? 'Edit Data Komunitas' : packageType === 'individual' ? 'Edit Data Peserta Individu' : packageType === 'invitation' ? 'Edit Data Peserta Invitation' : 'Edit Data Bro & Sist Package'}
         className="max-w-2xl"
       >
         {communityForm && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
-              ['name', packageType === 'community' ? 'Nama Komunitas' : packageType === 'individual' ? 'Nama Peserta' : 'Nama Grup'],
-              ['leader_name', packageType === 'community' ? 'Nama Ketua' : packageType === 'individual' ? 'Nama Peserta' : 'Nama Perwakilan'],
-              ...(packageType === 'individual' ? [['community_name', 'Instansi / Komunitas (Opsional)']] : []),
+              ['name', packageType === 'community' ? 'Nama Komunitas' : isSoloPackage ? 'Nama Peserta' : 'Nama Grup'],
+              ['leader_name', packageType === 'community' ? 'Nama Ketua' : isSoloPackage ? 'Nama Peserta' : 'Nama Perwakilan'],
+              ...(isSoloPackage ? [['community_name', 'Instansi / Komunitas (Opsional)']] : []),
               ['email', 'Email'],
               ['phone', 'WhatsApp'],
               ['provinsi', 'Provinsi'],
@@ -6337,7 +6385,7 @@ export function AdminDashboardClient({
                   <span className="text-sport-orange font-black text-sm">{umkmDetail.umkm_code}</span>
                 </div>
                 <div>
-                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Nama PIC</span>
+                  <span className="text-brand-muted font-bold uppercase text-[9px] block mb-0.5">Nama Pemilik</span>
                   <span className="text-foreground font-bold">{umkmDetail.pic_name}</span>
                 </div>
                 <div>

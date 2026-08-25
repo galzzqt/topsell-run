@@ -14,7 +14,7 @@ export type FormSelectConfig = FormInputConfig & {
   options: FormSelectOptionConfig[]
 }
 
-export type PackageKey = 'community' | 'family' | 'individual' | 'pacer' | 'umkm'
+export type PackageKey = 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm'
 
 export type EmailTemplateConfig = {
   subject: string
@@ -285,6 +285,35 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       },
     },
   },
+  invitation: {
+    registrant: {
+      ...DEFAULT_REGISTRANT_GROUP,
+      name: { label: 'Nama Lengkap', placeholder: 'Nama lengkap Anda', visible: true, required: true },
+      leader_name: { label: 'Nama Lengkap', placeholder: 'Nama lengkap Anda', visible: true, required: true },
+      phone: { label: 'No. WhatsApp', placeholder: '08xxxxxxxxxx', visible: true, required: true },
+      email: { label: 'Email', placeholder: 'email@anda.com', visible: true, required: true },
+      category: {
+        label: 'Kategori',
+        placeholder: 'Pilih kategori',
+        visible: true,
+        required: true,
+        options: [
+          { value: '3K 99.000', label: '3K 99.000' },
+          { value: '6K 149.000', label: '6K 149.000' },
+        ],
+      },
+    },
+    participants: {
+      ...DEFAULT_PARTICIPANT_GROUP,
+      tshirt_size: {
+        label: 'Ukuran Jersey',
+        placeholder: 'Pilih ukuran',
+        visible: true,
+        required: true,
+        options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
+      },
+    },
+  },
   pacer: {
     registrant: {
       ...DEFAULT_REGISTRANT_GROUP,
@@ -357,7 +386,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       social_media: { label: 'Link Media Sosial Usaha', placeholder: 'Contoh: https://instagram.com/warungmakanbusari', visible: true, required: true },
       description: { label: 'Deskripsi Usaha / Produk', placeholder: 'Jelaskan secara singkat jenis produk, menu, atau konsep tenant usaha Anda...', visible: true, required: true },
       photo_urls: { label: 'Foto Usaha / Produk UMKM', placeholder: 'Upload foto usaha/produk', visible: true, required: true },
-      leader_name: { label: 'Nama PIC', placeholder: 'Nama lengkap penanggung jawab', visible: true, required: true },
+      leader_name: { label: 'Nama Pemilik', placeholder: 'Nama lengkap penanggung jawab', visible: true, required: true },
       phone: { label: 'No. WhatsApp PIC', placeholder: '08xxxxxxxxxx', visible: true, required: true },
       email: { label: 'Email PIC', placeholder: 'email@usaha.com', visible: true, required: true },
       provinsi: { label: 'Provinsi', placeholder: 'Pilih provinsi', visible: true, required: true },
@@ -393,6 +422,12 @@ export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
     bodyIntro: 'Pembayaran individu untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
     bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
   },
+  invitation: {
+    subject: 'Pembayaran Diterima - TOPSELL RUN 2026 ({invitationCode})',
+    greeting: 'Halo {invitationName},',
+    bodyIntro: 'Pembayaran invitation untuk TOPSELL RUN 2026 sudah kami terima. Kode QR untuk pengambilan racepack akan dikirimkan maksimal H-5 sebelum tanggal pengambilan racepack.',
+    bodyOutro: 'Terima kasih sudah mendaftar! Sampai jumpa di start line. Semangat berlari! 🏃‍♂️',
+  },
   pacer: { ...DEFAULT_RACEPACK_EMAIL },
   umkm: {
     subject: 'Konfirmasi Pembayaran Tenant UMKM - TOPSELL RUN 2026',
@@ -408,10 +443,15 @@ const EMPTY_WEBHOOK_PACKAGE: WebhookPackageConfig = {
   status: { url: '', token: '' },
 }
 
+/** Webhook GHL pendaftaran untuk paket Individu & Invitation. */
+const SOLO_REGISTRATION_WEBHOOK_URL =
+  'https://services.leadconnectorhq.com/hooks/FCXCaXzwNxN3BXWaoDM6/webhook-trigger/b8943b3f-9920-4380-b24b-c59631a31edb'
+
 export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
   community: { ...EMPTY_WEBHOOK_PACKAGE },
   family: { ...EMPTY_WEBHOOK_PACKAGE },
-  individual: { ...EMPTY_WEBHOOK_PACKAGE },
+  individual: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: SOLO_REGISTRATION_WEBHOOK_URL, token: '' } },
+  invitation: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: SOLO_REGISTRATION_WEBHOOK_URL, token: '' } },
   pacer: { ...EMPTY_WEBHOOK_PACKAGE },
   umkm: { ...EMPTY_WEBHOOK_PACKAGE },
 }
@@ -457,6 +497,26 @@ export const DEFAULT_PACKAGES_SETTINGS: PackagesSettings = {
   },
   individual: {
     label: 'Individu',
+    enabled: true,
+    sizeChartImage: '',
+    periods: [
+      {
+        key: 'periode-1',
+        label: 'Periode 1',
+        registrationStart: '',
+        registrationEnd: '',
+        paymentStart: '',
+        paymentEnd: '',
+        eventDate: '',
+        categories: [
+          { value: '3K 99.000', label: '3K — Rp 99.000', price: 99000, quota: 0 },
+          { value: '6K 149.000', label: '6K — Rp 149.000', price: 149000, quota: 0 },
+        ],
+      },
+    ],
+  },
+  invitation: {
+    label: 'Invitation',
     enabled: true,
     sizeChartImage: '',
     periods: [

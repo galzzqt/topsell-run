@@ -23,7 +23,7 @@ export type AdminDashboardDailyMetric = {
   revenue: number
 }
 
-export type AdminDashboardPackageKey = 'community' | 'family' | 'individual'
+export type AdminDashboardPackageKey = 'community' | 'family' | 'individual' | 'invitation'
 
 export type AdminDashboardPackageSummary = {
   label: string
@@ -112,7 +112,7 @@ function addParticipantCounts(
 }
 
 function addPaymentCounts(
-  packageType: 'community' | 'family' | 'individual',
+  packageType: 'community' | 'family' | 'individual' | 'invitation',
   payments: PaymentSummaryDoc[],
   registrations: Map<string, RegistrationSummaryDoc>,
   metricsByDate: Map<string, AdminDashboardDailyMetric>,
@@ -144,14 +144,16 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
   const db = await getDb()
 
   // Registrasi dengan payment berstatus 'testing' dikecualikan total dari Ringkasan — itu cuma data uji, bukan data real.
-  const [communityTestingDocs, familyTestingDocs, individualTestingDocs] = await Promise.all([
+  const [communityTestingDocs, familyTestingDocs, individualTestingDocs, invitationTestingDocs] = await Promise.all([
     db.collection<PaymentSummaryDoc>('payments').find({ status: 'testing' }, { projection: { _id: 0, registration_id: 1 } }).toArray(),
     db.collection<PaymentSummaryDoc>('family_payments').find({ status: 'testing' }, { projection: { _id: 0, registration_id: 1 } }).toArray(),
     db.collection<PaymentSummaryDoc>('individual_payments').find({ status: 'testing' }, { projection: { _id: 0, registration_id: 1 } }).toArray(),
+    db.collection<PaymentSummaryDoc>('invitation_payments').find({ status: 'testing' }, { projection: { _id: 0, registration_id: 1 } }).toArray(),
   ])
   const communityTestingRegIds = communityTestingDocs.map((p) => p.registration_id).filter((id): id is string => Boolean(id))
   const familyTestingRegIds = familyTestingDocs.map((p) => p.registration_id).filter((id): id is string => Boolean(id))
   const individualTestingRegIds = individualTestingDocs.map((p) => p.registration_id).filter((id): id is string => Boolean(id))
+  const invitationTestingRegIds = invitationTestingDocs.map((p) => p.registration_id).filter((id): id is string => Boolean(id))
   const excludeTesting = (regIds: string[]) => (regIds.length > 0 ? { registration_id: { $nin: regIds } } : {})
 
   const [
@@ -176,6 +178,13 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
     individualRacepackCount,
     individualParticipantDocuments,
     paidIndividualPayments,
+    invitationCount,
+    invitationParticipantCount,
+    paidInvitationParticipantCount,
+    pendingInvitationParticipantCount,
+    invitationRacepackCount,
+    invitationParticipantDocuments,
+    paidInvitationPayments,
   ] = await Promise.all([
     // "Komunitas" = jumlah akun yang punya minimal 1 peserta non-testing (akun yang seluruh registrasinya testing tidak dihitung).
     db.collection('participants').distinct('community_id', excludeTesting(communityTestingRegIds)).then((ids) => ids.length),
@@ -211,6 +220,17 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
     db.collection<PaymentSummaryDoc>('individual_payments')
       .find({ status: 'paid' }, { projection: { _id: 0, registration_id: 1, amount: 1, paid_at: 1, created_at: 1 } })
       .toArray(),
+    db.collection('invitation_participants').distinct('invitation_id', excludeTesting(invitationTestingRegIds)).then((ids) => ids.length),
+    db.collection('invitation_participants').countDocuments(excludeTesting(invitationTestingRegIds)),
+    db.collection('invitation_participants').countDocuments({ payment_status: 'paid', ...excludeTesting(invitationTestingRegIds) }),
+    db.collection('invitation_participants').countDocuments({ payment_status: 'pending', ...excludeTesting(invitationTestingRegIds) }),
+    db.collection('invitation_participants').countDocuments({ checked_in: true, ...excludeTesting(invitationTestingRegIds) }),
+    db.collection<ParticipantSummaryDoc>('invitation_participants')
+      .find(excludeTesting(invitationTestingRegIds), { projection: { _id: 0, created_at: 1 } })
+      .toArray(),
+    db.collection<PaymentSummaryDoc>('invitation_payments')
+      .find({ status: 'paid' }, { projection: { _id: 0, registration_id: 1, amount: 1, paid_at: 1, created_at: 1 } })
+      .toArray(),
   ])
 
   const communityRegistrationIds = paidPayments
@@ -222,8 +242,11 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
   const individualRegistrationIds = paidIndividualPayments
     .map((payment) => payment.registration_id)
     .filter((id): id is string => Boolean(id))
+  const invitationRegistrationIds = paidInvitationPayments
+    .map((payment) => payment.registration_id)
+    .filter((id): id is string => Boolean(id))
 
-  const [communityRegistrations, familyRegistrations, individualRegistrations] = await Promise.all([
+  const [communityRegistrations, familyRegistrations, individualRegistrations, invitationRegistrations] = await Promise.all([
     db.collection<RegistrationSummaryDoc>('registrations')
       .find({ id: { $in: communityRegistrationIds } }, { projection: { _id: 0, id: 1, total_participants: 1 } })
       .toArray(),
@@ -232,6 +255,9 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
       .toArray(),
     db.collection<RegistrationSummaryDoc>('individual_registrations')
       .find({ id: { $in: individualRegistrationIds } }, { projection: { _id: 0, id: 1, total_participants: 1 } })
+      .toArray(),
+    db.collection<RegistrationSummaryDoc>('invitation_registrations')
+      .find({ id: { $in: invitationRegistrationIds } }, { projection: { _id: 0, id: 1, total_participants: 1 } })
       .toArray(),
   ])
 
@@ -250,26 +276,33 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
   for (const registration of individualRegistrations) {
     if (registration.id) individualRegistrationMap.set(registration.id, registration)
   }
+  const invitationRegistrationMap = new Map<string, RegistrationSummaryDoc>()
+  for (const registration of invitationRegistrations) {
+    if (registration.id) invitationRegistrationMap.set(registration.id, registration)
+  }
 
   // Metrik harian dihitung per paket dulu (bukan ke satu map gabungan) supaya breakdown per-paket bisa disimpan.
   const communityDaily = createDailyMetrics(now)
   const familyDaily = createDailyMetrics(now)
   const individualDaily = createDailyMetrics(now)
+  const invitationDaily = createDailyMetrics(now)
 
   addParticipantCounts(participantDocuments, new Map(communityDaily.map((m) => [m.dateKey, m])))
   addParticipantCounts(familyParticipantDocuments, new Map(familyDaily.map((m) => [m.dateKey, m])))
   addParticipantCounts(individualParticipantDocuments, new Map(individualDaily.map((m) => [m.dateKey, m])))
+  addParticipantCounts(invitationParticipantDocuments, new Map(invitationDaily.map((m) => [m.dateKey, m])))
 
   addPaymentCounts('community', paidPayments, communityRegistrationMap, new Map(communityDaily.map((m) => [m.dateKey, m])), new Set())
   addPaymentCounts('family', paidFamilyPayments, familyRegistrationMap, new Map(familyDaily.map((m) => [m.dateKey, m])), new Set())
   addPaymentCounts('individual', paidIndividualPayments, individualRegistrationMap, new Map(individualDaily.map((m) => [m.dateKey, m])), new Set())
+  addPaymentCounts('invitation', paidInvitationPayments, invitationRegistrationMap, new Map(invitationDaily.map((m) => [m.dateKey, m])), new Set())
 
   const daily: AdminDashboardDailyMetric[] = communityDaily.map((c, i) => ({
     dateKey: c.dateKey,
     label: c.label,
-    participants: c.participants + familyDaily[i].participants + individualDaily[i].participants,
-    paidParticipants: c.paidParticipants + familyDaily[i].paidParticipants + individualDaily[i].paidParticipants,
-    revenue: c.revenue + familyDaily[i].revenue + individualDaily[i].revenue,
+    participants: c.participants + familyDaily[i].participants + individualDaily[i].participants + invitationDaily[i].participants,
+    paidParticipants: c.paidParticipants + familyDaily[i].paidParticipants + individualDaily[i].paidParticipants + invitationDaily[i].paidParticipants,
+    revenue: c.revenue + familyDaily[i].revenue + individualDaily[i].revenue + invitationDaily[i].revenue,
   }))
 
   const communityStats: AdminDashboardStats = {
@@ -296,21 +329,30 @@ export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary>
     racepacksPickedUp: individualRacepackCount,
     revenue: paidIndividualPayments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0),
   }
+  const invitationStats: AdminDashboardStats = {
+    communities: invitationCount,
+    participants: invitationParticipantCount,
+    paidParticipants: paidInvitationParticipantCount,
+    pendingParticipants: pendingInvitationParticipantCount,
+    racepacksPickedUp: invitationRacepackCount,
+    revenue: paidInvitationPayments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0),
+  }
 
   return {
     stats: {
-      communities: communityStats.communities + familyStats.communities + individualStats.communities,
-      participants: communityStats.participants + familyStats.participants + individualStats.participants,
-      paidParticipants: communityStats.paidParticipants + familyStats.paidParticipants + individualStats.paidParticipants,
-      pendingParticipants: communityStats.pendingParticipants + familyStats.pendingParticipants + individualStats.pendingParticipants,
-      racepacksPickedUp: communityStats.racepacksPickedUp + familyStats.racepacksPickedUp + individualStats.racepacksPickedUp,
-      revenue: communityStats.revenue + familyStats.revenue + individualStats.revenue,
+      communities: communityStats.communities + familyStats.communities + individualStats.communities + invitationStats.communities,
+      participants: communityStats.participants + familyStats.participants + individualStats.participants + invitationStats.participants,
+      paidParticipants: communityStats.paidParticipants + familyStats.paidParticipants + individualStats.paidParticipants + invitationStats.paidParticipants,
+      pendingParticipants: communityStats.pendingParticipants + familyStats.pendingParticipants + individualStats.pendingParticipants + invitationStats.pendingParticipants,
+      racepacksPickedUp: communityStats.racepacksPickedUp + familyStats.racepacksPickedUp + individualStats.racepacksPickedUp + invitationStats.racepacksPickedUp,
+      revenue: communityStats.revenue + familyStats.revenue + individualStats.revenue + invitationStats.revenue,
     },
     daily,
     byPackage: {
       community: { label: 'Community Package', stats: communityStats, daily: communityDaily },
       family: { label: 'Bro & Sist Package', stats: familyStats, daily: familyDaily },
       individual: { label: 'Individu', stats: individualStats, daily: individualDaily },
+      invitation: { label: 'Invitation', stats: invitationStats, daily: invitationDaily },
     },
     updatedAt: new Date().toISOString(),
   }

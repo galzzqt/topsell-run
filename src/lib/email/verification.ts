@@ -7,15 +7,17 @@ type VerificationEmailParams = {
   email: string
   name: string
   verificationUrl: string
-  packageType: 'community' | 'family' | 'individual' | 'pacer' | 'umkm'
+  packageType: 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm'
 }
 
-function getPackageDisplayName(packageType: 'community' | 'family' | 'individual' | 'pacer' | 'umkm'): string {
+function getPackageDisplayName(packageType: 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm'): string {
   switch (packageType) {
     case 'community':
       return 'Community Package'
     case 'individual':
       return 'Pendaftaran Individu'
+    case 'invitation':
+      return 'Pendaftaran Invitation'
     case 'pacer':
       return 'Pendaftaran Pacer'
     case 'umkm':
@@ -66,7 +68,7 @@ export function getVerificationTokenExpiry(): Date {
   return expiry
 }
 
-function renderVerificationEmail(name: string, verificationUrl: string, packageType: 'community' | 'family' | 'individual' | 'pacer' | 'umkm'): string {
+function renderVerificationEmail(name: string, verificationUrl: string, packageType: 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm'): string {
   const packageName = getPackageDisplayName(packageType)
   const waLinkText = 'Halo%20Admin%20Topsell%20Run%2C%20saya%20mengalami%20kesulitan%20aktivasi%20email%20pendaftaran.'
   

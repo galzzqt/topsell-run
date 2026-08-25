@@ -1,27 +1,27 @@
 'use server'
 
-import { getIndividualSession } from '@/lib/auth/individual'
+import { getInvitationSession } from '@/lib/auth/invitation'
 import { generateRandomReference } from '@/lib/utils/format'
 import { extractXenditPaymentMethod, extractXenditPaymentRequestId, hasSpecificPaymentMethod } from '@/lib/utils/xendit'
-import { sendIndividualRacepackEmailsForRegistration, sendIndividualReceiptEmail } from '@/lib/email/individual'
-import { sendIndividualRacepackWhatsappsForRegistration } from '@/lib/whatsapp/individual'
+import { sendInvitationRacepackEmailsForRegistration, sendInvitationReceiptEmail } from '@/lib/email/invitation'
+import { sendInvitationRacepackWhatsappsForRegistration } from '@/lib/whatsapp/invitation'
 import { resolvePackagePrice, checkPaymentWindow, resolvePeriodForCategory } from '@/lib/admin/settings'
 import { revalidatePath } from 'next/cache'
 import {
-  createIndividualPayment as dbCreateIndividualPayment,
-  createIndividualRegistration,
-  deleteIndividualRegistration,
-  findIndividualById,
-  findIndividualPaymentWithRegistration,
-  findIndividualPaymentWithRegistrationByReference,
-  findPendingIndividualParticipantsWithoutRegistration,
-  findPendingIndividualPaymentByRegistrationIds,
-  findPendingIndividualRegistrationsByIndividualId,
-  linkIndividualParticipantsToRegistration,
-  markIndividualPaymentPaid,
-  updateIndividualPayment,
-  markIndividualPaymentFailed,
-  markIndividualPaymentExpired,
+  createInvitationPayment as dbCreateInvitationPayment,
+  createInvitationRegistration,
+  deleteInvitationRegistration,
+  findInvitationById,
+  findInvitationPaymentWithRegistration,
+  findInvitationPaymentWithRegistrationByReference,
+  findPendingInvitationParticipantsWithoutRegistration,
+  findPendingInvitationPaymentByRegistrationIds,
+  findPendingInvitationRegistrationsByInvitationId,
+  linkInvitationParticipantsToRegistration,
+  markInvitationPaymentPaid,
+  updateInvitationPayment,
+  markInvitationPaymentFailed,
+  markInvitationPaymentExpired,
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 
@@ -46,14 +46,14 @@ function canUseReturnUrl(appUrl: string | undefined) {
   }
 }
 
-function getIndividualReturnUrls(paymentRef?: string) {
+function getInvitationReturnUrls(paymentRef?: string) {
   const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL
   if (!rawAppUrl || !canUseReturnUrl(rawAppUrl)) return {}
   const appUrl = rawAppUrl.replace(/\/+$/, '')
   const refQuery = paymentRef ? `&ref=${encodeURIComponent(paymentRef)}` : ''
   return {
-    success_return_url: `${appUrl}/individu-dashboard?payment=success${refQuery}`,
-    cancel_return_url: `${appUrl}/individu-dashboard?payment=cancelled${refQuery}`,
+    success_return_url: `${appUrl}/invitation-dashboard?payment=success${refQuery}`,
+    cancel_return_url: `${appUrl}/invitation-dashboard?payment=cancelled${refQuery}`,
   }
 }
 
@@ -85,17 +85,73 @@ async function resolveXenditPaymentMethod(sessionData: unknown, authHeader: stri
   return extractXenditPaymentMethod(paymentRequest.data)
 }
 
-export async function createIndividualPayment() {
-  const session = await getIndividualSession()
+/**
+ * Pendaftaran gratis (harga kategori 0 atau voucher menutup penuh): lewati Xendit,
+ * tandai invoice lunas, lalu kirim e-receipt + racepack seperti pembayaran biasa.
+ */
+async function settleFreeInvitationPayment(params: {
+  invitationId: string
+  invitationName: string
+  paymentId: string
+  registrationId: string
+  reference: string
+  participantCount: number
+}) {
+  await markInvitationPaymentPaid(params.paymentId, { payment_method: 'free' })
+
+  await Promise.all([
+    sendInvitationReceiptEmail(params.registrationId),
+    sendInvitationRacepackEmailsForRegistration(params.registrationId),
+    sendInvitationRacepackWhatsappsForRegistration(params.registrationId),
+  ])
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'payment',
+      event: 'invitation_payment_free_paid',
+      message: `Pendaftaran invitation gratis langsung lunas: ${params.invitationName} (Ref: ${params.reference}).`,
+      data: { invitationId: params.invitationId, paymentId: params.paymentId, reference: params.reference, amount: 0 },
+    })
+  } catch (logError) {
+    console.error('Failed to log free invitation payment:', logError)
+  }
+
+  revalidatePath('/invitation-dashboard')
+
+  return {
+    success: true,
+    freePaid: true as const,
+    paymentId: params.paymentId,
+    registrationId: params.registrationId,
+    amount: 0,
+    reference: params.reference,
+    participantCount: params.participantCount,
+  }
+}
+
+export async function createInvitationPayment() {
+  const session = await getInvitationSession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const individual = await findIndividualById(session.id)
-  const pendingRegistrations = await findPendingIndividualRegistrationsByIndividualId(session.id)
+  const invitation = await findInvitationById(session.id)
+  const pendingRegistrations = await findPendingInvitationRegistrationsByInvitationId(session.id)
 
   if (pendingRegistrations.length > 0) {
-    const existingPayment = await findPendingIndividualPaymentByRegistrationIds(pendingRegistrations.map((r) => r.id))
+    const existingPayment = await findPendingInvitationPaymentByRegistrationIds(pendingRegistrations.map((r) => r.id))
     if (existingPayment) {
       const existingRegistration = pendingRegistrations.find((r) => r.id === existingPayment.registration_id)
+
+      if (existingPayment.amount === 0) {
+        return settleFreeInvitationPayment({
+          invitationId: session.id,
+          invitationName: session.name,
+          paymentId: existingPayment.id,
+          registrationId: existingPayment.registration_id,
+          reference: existingPayment.payment_reference,
+          participantCount: existingRegistration?.total_participants || 0,
+        })
+      }
 
       // Invoice pending dibuat saat signup TANPA checkout Xendit — generate sekarang jika belum ada.
       if (!existingPayment.checkout_url && !existingPayment.xendit_session_id?.startsWith('demo-xendit-session-')) {
@@ -105,7 +161,7 @@ export async function createIndividualPayment() {
         // Tanpa key asli → jalankan mode demo agar tombol simulasi muncul.
         if (noRealKey) {
           const demoSessionId = 'demo-xendit-session-' + Math.random().toString(36).substring(2, 15)
-          await updateIndividualPayment(existingPayment.id, { payment_method: 'xendit_demo', xendit_session_id: demoSessionId })
+          await updateInvitationPayment(existingPayment.id, { payment_method: 'xendit_demo', xendit_session_id: demoSessionId })
           return {
             success: true,
             paymentId: existingPayment.id,
@@ -138,14 +194,14 @@ export async function createIndividualPayment() {
                 mode: 'PAYMENT_LINK',
                 capture_method: 'AUTOMATIC',
                 allowed_payment_channels: getXenditChannels(),
-                description: `TOPSELL RUN Individu ${individual?.category || ''} - ${existingRegistration?.total_participants || 0} peserta`.trim(),
+                description: `TOPSELL RUN Invitation ${invitation?.category || ''} - ${existingRegistration?.total_participants || 0} peserta`.trim(),
                 customer: {
                   reference_id: `${toXenditReference(session.id)}_${existingPayment.payment_reference}`,
                   type: 'INDIVIDUAL',
-                  individual_detail: { given_names: toXenditName(individual?.leader_name || individual?.name) },
-                  email: individual?.email || undefined,
+                  individual_detail: { given_names: toXenditName(invitation?.leader_name || invitation?.name) },
+                  email: invitation?.email || undefined,
                 },
-                ...getIndividualReturnUrls(existingPayment.payment_reference),
+                ...getInvitationReturnUrls(existingPayment.payment_reference),
               }),
             })
 
@@ -154,7 +210,7 @@ export async function createIndividualPayment() {
               newXenditSessionId = xenditData.payment_session_id || xenditData.id || null
               newCheckoutUrl = xenditData.payment_link_url || null
               if (newCheckoutUrl && newXenditSessionId) {
-                await updateIndividualPayment(existingPayment.id, {
+                await updateInvitationPayment(existingPayment.id, {
                   payment_method: null,
                   snap_token: newCheckoutUrl,
                   provider: 'xendit',
@@ -164,11 +220,11 @@ export async function createIndividualPayment() {
               }
             } else {
               const errorText = await res.text()
-              console.error('Xendit error (reused individual):', res.status, errorText)
+              console.error('Xendit error (reused invitation):', res.status, errorText)
               return { error: `Gagal membuat checkout Xendit: ${errorText}` }
             }
           } catch (err) {
-            console.error('Failed to generate checkout URL for existing individual payment:', err)
+            console.error('Failed to generate checkout URL for existing invitation payment:', err)
             return { error: 'Gagal menghubungi Xendit. Periksa koneksi server dan konfigurasi XENDIT_SECRET_KEY.' }
           }
         }
@@ -202,32 +258,32 @@ export async function createIndividualPayment() {
     }
   }
 
-  const participants = await findPendingIndividualParticipantsWithoutRegistration(session.id)
+  const participants = await findPendingInvitationParticipantsWithoutRegistration(session.id)
   if (participants.length === 0) {
     return { error: 'Tidak ada tagihan yang perlu dibayar. Refresh dashboard untuk melihat invoice pending.' }
   }
 
-  const paymentWindow = await checkPaymentWindow('individual', individual?.category)
+  const paymentWindow = await checkPaymentWindow('invitation', invitation?.category)
   if (!paymentWindow.ok) {
     return { error: paymentWindow.reason || 'Jendela pembayaran periode ini sedang tidak buka.' }
   }
 
-  const period = await resolvePeriodForCategory('individual', individual?.category)
+  const period = await resolvePeriodForCategory('invitation', invitation?.category)
   const participantIds = participants.map((p) => p.id)
-  const unitPrice = await resolvePackagePrice('individual', individual?.category)
+  const unitPrice = await resolvePackagePrice('invitation', invitation?.category)
   const totalAmount = participants.length * unitPrice
 
-  // Terapkan voucher yang sudah tersimpan di profil individual (disimpan saat signup)
-  const voucherDiscount = individual?.voucher_discount ?? 0
-  const voucherCode = individual?.voucher_code ?? null
+  // Terapkan voucher yang sudah tersimpan di profil invitation (disimpan saat signup)
+  const voucherDiscount = invitation?.voucher_discount ?? 0
+  const voucherCode = invitation?.voucher_code ?? null
   const finalAmount = Math.max(0, totalAmount - voucherDiscount)
 
   const paymentRef = toXenditReference(generateRandomReference('IND'))
 
   let registration
   try {
-    registration = await createIndividualRegistration({
-      individual_id: session.id,
+    registration = await createInvitationRegistration({
+      invitation_id: session.id,
       total_participants: participants.length,
       total_amount: finalAmount,
       voucher_code: voucherCode,
@@ -239,15 +295,15 @@ export async function createIndividualPayment() {
   }
 
   try {
-    await linkIndividualParticipantsToRegistration(participantIds, registration.id)
+    await linkInvitationParticipantsToRegistration(participantIds, registration.id)
   } catch {
-    await deleteIndividualRegistration(registration.id)
+    await deleteInvitationRegistration(registration.id)
     return { error: 'Gagal menautkan peserta ke registrasi.' }
   }
 
   let payment
   try {
-    payment = await dbCreateIndividualPayment({
+    payment = await dbCreateInvitationPayment({
       registration_id: registration.id,
       amount: finalAmount,
       payment_reference: paymentRef,
@@ -255,8 +311,19 @@ export async function createIndividualPayment() {
       period_key: period?.key ?? null,
     })
   } catch {
-    await deleteIndividualRegistration(registration.id)
+    await deleteInvitationRegistration(registration.id)
     return { error: 'Gagal membuat invoice pembayaran.' }
+  }
+
+  if (finalAmount === 0) {
+    return settleFreeInvitationPayment({
+      invitationId: session.id,
+      invitationName: session.name,
+      paymentId: payment.id,
+      registrationId: registration.id,
+      reference: paymentRef,
+      participantCount: participants.length,
+    })
   }
 
   const xenditSecretKey = process.env.XENDIT_SECRET_KEY || ''
@@ -282,23 +349,23 @@ export async function createIndividualPayment() {
           mode: 'PAYMENT_LINK',
           capture_method: 'AUTOMATIC',
           allowed_payment_channels: getXenditChannels(),
-          description: `TOPSELL RUN Individu ${individual?.category || ''} - ${participants.length} peserta`.trim(),
+          description: `TOPSELL RUN Invitation ${invitation?.category || ''} - ${participants.length} peserta`.trim(),
           customer: {
             reference_id: `${toXenditReference(session.id)}_${paymentRef}`,
             type: 'INDIVIDUAL',
-            individual_detail: { given_names: toXenditName(individual?.leader_name || individual?.name) },
-            email: individual?.email || undefined,
+            individual_detail: { given_names: toXenditName(invitation?.leader_name || invitation?.name) },
+            email: invitation?.email || undefined,
           },
           items: participants.map((p) => ({
             reference_id: p.id,
             type: 'DIGITAL_PRODUCT',
             category: 'EVENT_TICKET',
-            name: `TOPSELL RUN ${individual?.category || ''} - ${p.full_name.substring(0, 40)}`.trim(),
+            name: `TOPSELL RUN ${invitation?.category || ''} - ${p.full_name.substring(0, 40)}`.trim(),
             quantity: 1,
             net_unit_amount: participants.length > 0 ? Math.round(finalAmount / participants.length) : unitPrice,
             currency: 'IDR',
           })),
-          ...getIndividualReturnUrls(paymentRef),
+          ...getInvitationReturnUrls(paymentRef),
         }),
       })
 
@@ -309,18 +376,18 @@ export async function createIndividualPayment() {
       } else {
         const errorText = await res.text()
         console.error('Xendit error:', res.status, errorText)
-        await deleteIndividualRegistration(registration.id)
+        await deleteInvitationRegistration(registration.id)
         return { error: `Gagal membuat checkout Xendit: ${errorText}` }
       }
     } catch (err) {
       console.error('Xendit API failed:', err)
-      await deleteIndividualRegistration(registration.id)
+      await deleteInvitationRegistration(registration.id)
       return { error: 'Gagal menghubungi Xendit. Periksa koneksi server dan konfigurasi XENDIT_SECRET_KEY.' }
     }
   }
 
   try {
-    await updateIndividualPayment(payment.id, {
+    await updateInvitationPayment(payment.id, {
       payment_method: isDemoMode ? 'xendit_demo' : null,
       snap_token: checkoutUrl,
       provider: 'xendit',
@@ -328,7 +395,7 @@ export async function createIndividualPayment() {
       checkout_url: checkoutUrl,
     })
   } catch (error) {
-    await deleteIndividualRegistration(registration.id)
+    await deleteInvitationRegistration(registration.id)
     return { error: 'Gagal menyimpan data checkout Xendit: ' + (error instanceof Error ? error.message : 'Unknown error') }
   }
 
@@ -336,15 +403,15 @@ export async function createIndividualPayment() {
     await ingestAdminLog({
       level: 'info',
       source: 'payment',
-      event: 'individual_payment_created',
-      message: `Invoice checkout pendaftaran individu dibuat: ${session.name} (Ref: ${paymentRef}, Total: IDR ${finalAmount.toLocaleString('id-ID')}${voucherCode ? `, Voucher: ${voucherCode}, Diskon: ${voucherDiscount.toLocaleString('id-ID')}` : ''}).`,
-      data: { individualId: session.id, paymentId: payment.id, reference: paymentRef, amount: finalAmount, voucherCode, voucherDiscount, isDemoMode },
+      event: 'invitation_payment_created',
+      message: `Invoice checkout pendaftaran invitation dibuat: ${session.name} (Ref: ${paymentRef}, Total: IDR ${finalAmount.toLocaleString('id-ID')}${voucherCode ? `, Voucher: ${voucherCode}, Diskon: ${voucherDiscount.toLocaleString('id-ID')}` : ''}).`,
+      data: { invitationId: session.id, paymentId: payment.id, reference: paymentRef, amount: finalAmount, voucherCode, voucherDiscount, isDemoMode },
     })
   } catch (logError) {
-    console.error('Failed to log individual payment creation:', logError)
+    console.error('Failed to log invitation payment creation:', logError)
   }
 
-  revalidatePath('/individu-dashboard')
+  revalidatePath('/invitation-dashboard')
 
   return {
     success: true,
@@ -359,35 +426,35 @@ export async function createIndividualPayment() {
   }
 }
 
-export async function simulateIndividualPaymentSuccess(paymentId: string) {
-  const session = await getIndividualSession()
+export async function simulateInvitationPaymentSuccess(paymentId: string) {
+  const session = await getInvitationSession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const payment = await findIndividualPaymentWithRegistration(paymentId)
+  const payment = await findInvitationPaymentWithRegistration(paymentId)
   if (!payment) return { error: 'Invoice tidak ditemukan.' }
-  if (payment.registration?.individual_id !== session.id) return { error: 'Tidak memiliki akses.' }
+  if (payment.registration?.invitation_id !== session.id) return { error: 'Tidak memiliki akses.' }
 
-  await markIndividualPaymentPaid(paymentId, { payment_method: 'xendit_demo' })
+  await markInvitationPaymentPaid(paymentId, { payment_method: 'xendit_demo' })
 
   await Promise.all([
-    sendIndividualReceiptEmail(payment.registration_id),
-    sendIndividualRacepackEmailsForRegistration(payment.registration_id),
-    sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
+    sendInvitationReceiptEmail(payment.registration_id),
+    sendInvitationRacepackEmailsForRegistration(payment.registration_id),
+    sendInvitationRacepackWhatsappsForRegistration(payment.registration_id),
   ])
 
   try {
     await ingestAdminLog({
       level: 'info',
       source: 'payment',
-      event: 'individual_payment_simulated',
-      message: `Simulasi pembayaran individu sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      event: 'invitation_payment_simulated',
+      message: `Simulasi pembayaran invitation sukses (ID: ${paymentId}, Ref: ${payment.payment_reference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
       data: { paymentId, reference: payment.payment_reference, amount: payment.amount }
     })
   } catch (logError) {
-    console.error('Failed to log individual payment simulation:', logError)
+    console.error('Failed to log invitation payment simulation:', logError)
   }
 
-  revalidatePath('/individu-dashboard')
+  revalidatePath('/invitation-dashboard')
   return { success: true }
 }
 
@@ -396,13 +463,13 @@ function isXenditPaidStatus(status: unknown) {
   return value === 'SUCCEEDED' || value === 'COMPLETED' || value === 'PAID' || value === 'SETTLED' || value === 'SUCCESS'
 }
 
-export async function syncXenditIndividualPaymentStatus(paymentReference: string) {
-  const session = await getIndividualSession()
+export async function syncXenditInvitationPaymentStatus(paymentReference: string) {
+  const session = await getInvitationSession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
-  const payment = await findIndividualPaymentWithRegistrationByReference(paymentReference)
+  const payment = await findInvitationPaymentWithRegistrationByReference(paymentReference)
   if (!payment) return { error: 'Invoice tidak ditemukan.' }
-  if (payment.registration?.individual_id !== session.id) return { error: 'Tidak memiliki akses.' }
+  if (payment.registration?.invitation_id !== session.id) return { error: 'Tidak memiliki akses.' }
   if (payment.status === 'paid' && hasSpecificPaymentMethod(payment.payment_method)) {
     return { success: true, status: 'paid' as const, paymentMethod: payment.payment_method }
   }
@@ -422,21 +489,21 @@ export async function syncXenditIndividualPaymentStatus(paymentReference: string
   const xenditData = sessionResult.data
   if (!isXenditPaidStatus(xenditData?.status)) {
     const status = (xenditData?.status || '').toUpperCase()
-    if (status === 'EXPIRED') await markIndividualPaymentExpired(payment.id)
-    else if (status === 'FAILED') await markIndividualPaymentFailed(payment.id)
+    if (status === 'EXPIRED') await markInvitationPaymentExpired(payment.id)
+    else if (status === 'FAILED') await markInvitationPaymentFailed(payment.id)
     if (status === 'EXPIRED' || status === 'FAILED') {
       try {
         await ingestAdminLog({
           level: 'warning',
           source: 'payment',
-          event: status === 'EXPIRED' ? 'individual_payment_synced_expired' : 'individual_payment_synced_failed',
-          message: `Sinkronisasi pembayaran individu: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+          event: status === 'EXPIRED' ? 'invitation_payment_synced_expired' : 'invitation_payment_synced_failed',
+          message: `Sinkronisasi pembayaran invitation: ${status.toLowerCase()} (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
           data: { paymentId: payment.id, reference: paymentReference, status }
         })
       } catch (logError) {
-        console.error('Failed to log individual payment sync failure:', logError)
+        console.error('Failed to log invitation payment sync failure:', logError)
       }
-      revalidatePath('/individu-dashboard')
+      revalidatePath('/invitation-dashboard')
       return { success: true, status }
     }
 
@@ -444,38 +511,38 @@ export async function syncXenditIndividualPaymentStatus(paymentReference: string
       await ingestAdminLog({
         level: 'info',
         source: 'payment',
-        event: 'individual_payment_synced_pending',
-        message: `Sinkronisasi pembayaran individu: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+        event: 'invitation_payment_synced_pending',
+        message: `Sinkronisasi pembayaran invitation: status pending (${status}) (Ref: ${paymentReference}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
         data: { paymentId: payment.id, reference: paymentReference, status }
       })
     } catch (logError) {
-      console.error('Failed to log individual payment sync pending:', logError)
+      console.error('Failed to log invitation payment sync pending:', logError)
     }
 
     return { success: true, status: xenditData?.status || 'UNKNOWN' }
   }
 
   const paymentMethod = (await resolveXenditPaymentMethod(xenditData, authHeader)) || payment.payment_method || 'xendit'
-  await markIndividualPaymentPaid(payment.id, { payment_method: paymentMethod })
+  await markInvitationPaymentPaid(payment.id, { payment_method: paymentMethod })
 
   await Promise.all([
-    sendIndividualReceiptEmail(payment.registration_id),
-    sendIndividualRacepackEmailsForRegistration(payment.registration_id),
-    sendIndividualRacepackWhatsappsForRegistration(payment.registration_id),
+    sendInvitationReceiptEmail(payment.registration_id),
+    sendInvitationRacepackEmailsForRegistration(payment.registration_id),
+    sendInvitationRacepackWhatsappsForRegistration(payment.registration_id),
   ])
 
   try {
     await ingestAdminLog({
       level: 'info',
       source: 'payment',
-      event: 'individual_payment_synced_paid',
-      message: `Sinkronisasi pembayaran individu: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
+      event: 'invitation_payment_synced_paid',
+      message: `Sinkronisasi pembayaran invitation: lunas (Ref: ${paymentReference}, Method: ${paymentMethod}, Jumlah: IDR ${payment.amount.toLocaleString('id-ID')}).`,
       data: { paymentId: payment.id, reference: paymentReference, paymentMethod }
     })
   } catch (logError) {
-    console.error('Failed to log individual payment sync success:', logError)
+    console.error('Failed to log invitation payment sync success:', logError)
   }
 
-  revalidatePath('/individu-dashboard')
+  revalidatePath('/invitation-dashboard')
   return { success: true, status: 'paid' as const, paymentMethod }
 }

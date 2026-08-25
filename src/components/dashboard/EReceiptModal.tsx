@@ -15,7 +15,7 @@ interface EReceiptModalProps {
   payment: Payment | FamilyPayment
   participants: (Participant | FamilyParticipant)[]
   payer: Community | Family
-  type: 'community' | 'family' | 'individual'
+  type: 'community' | 'family' | 'individual' | 'invitation'
 }
 
 export function EReceiptModal({
@@ -36,8 +36,8 @@ export function EReceiptModal({
   const rawCategory = (payer as { category?: string }).category
   const eventCategory = resolveCategoryLabel(packages, type, rawCategory, perParticipantPrice) || TOPSELL_RUN_EVENT.category
   const packageLabel = resolvePackageLabel(packages, type)
-  const nameLabel = type === 'community' ? 'Nama Komunitas' : type === 'individual' ? 'Nama Peserta' : 'Nama Keluarga'
-  const codeLabel = type === 'community' ? 'Kode Komunitas' : type === 'individual' ? 'Kode Peserta' : 'Kode Keluarga'
+  const nameLabel = type === 'community' ? 'Nama Komunitas' : type === 'individual' || type === 'invitation' ? 'Nama Peserta' : 'Nama Keluarga'
+  const codeLabel = type === 'community' ? 'Kode Komunitas' : type === 'individual' || type === 'invitation' ? 'Kode Peserta' : 'Kode Keluarga'
 
   const handleDownload = () => {
     window.print()

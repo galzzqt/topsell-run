@@ -1,7 +1,7 @@
 import { phoneToWhatsAppId } from '@/lib/utils/phone-auth'
 import { readAdminSettings } from '@/lib/admin/settings'
 import { formatCurrency } from '@/lib/utils/format'
-import type { PackageKey } from '@/lib/admin/settings-schema'
+import { DEFAULT_WEBHOOK_SETTINGS, type PackageKey } from '@/lib/admin/settings-schema'
 
 type WebhookKind = 'registration' | 'racepack' | 'status'
 
@@ -16,6 +16,10 @@ async function getWebhookConfig(kind: WebhookKind, packageType: PackageKey) {
   } catch {
     // Fall through to env fallback.
   }
+
+  // Belum diisi admin → pakai default bawaan kode (mis. webhook pendaftaran Individu & Invitation).
+  const fallback = DEFAULT_WEBHOOK_SETTINGS[packageType][settingKind]
+  if (fallback.url) return fallback
 
   // Webhook status TIDAK boleh jatuh ke webhook pendaftaran/racepack: workflow di
   // sana punya pesan yang berbeda, dan pernah menyebabkan pacer yang di-approve
@@ -100,15 +104,52 @@ export async function sendIndividualRegistrationConfirmationWebhook(payload: {
   familyName: string
   representativeName: string
   participantCount: number
+  email?: string | null
+  category?: string | null
+  registrationCode?: string | null
+  amount?: number | null
 }) {
   return postWebhook('registration', 'individual', {
     event: 'registration_confirmation',
+    package: 'individual',
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
     community_name: payload.familyName,
     leader_name: payload.representativeName,
+    participant_name: payload.representativeName,
     participant_count: payload.participantCount,
+    email: payload.email || '',
+    category: payload.category || '',
+    registration_code: payload.registrationCode || '',
+    amount: payload.amount ?? null,
     message: `Pendaftaran individu ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
+  })
+}
+
+export async function sendInvitationRegistrationConfirmationWebhook(payload: {
+  phone: string
+  familyName: string
+  representativeName: string
+  participantCount: number
+  email?: string | null
+  category?: string | null
+  registrationCode?: string | null
+  amount?: number | null
+}) {
+  return postWebhook('registration', 'invitation', {
+    event: 'registration_confirmation',
+    package: 'invitation',
+    phone: payload.phone,
+    whatsapp: phoneToWhatsAppId(payload.phone),
+    community_name: payload.familyName,
+    leader_name: payload.representativeName,
+    participant_name: payload.representativeName,
+    participant_count: payload.participantCount,
+    email: payload.email || '',
+    category: payload.category || '',
+    registration_code: payload.registrationCode || '',
+    amount: payload.amount ?? null,
+    message: `Pendaftaran invitation ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
   })
 }
 
@@ -172,6 +213,27 @@ export async function sendIndividualRacepackWebhook(payload: {
     community_name: payload.familyName,
     community_code: payload.familyCode,
     message: `Pembayaran individu ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. QR Code pengambilan racepack sudah dikirim ke email ${payload.email}. Silakan cek inbox atau folder spam/promosi.`,
+  })
+}
+
+export async function sendInvitationRacepackWebhook(payload: {
+  phone: string
+  email: string
+  representativeName: string
+  participantCount: number
+  familyName: string
+  familyCode: string
+}) {
+  return postWebhook('racepack', 'invitation', {
+    event: 'payment_received_check_email',
+    phone: payload.phone,
+    whatsapp: phoneToWhatsAppId(payload.phone),
+    email: payload.email,
+    leader_name: payload.representativeName,
+    participant_count: payload.participantCount,
+    community_name: payload.familyName,
+    community_code: payload.familyCode,
+    message: `Pembayaran invitation ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. QR Code pengambilan racepack sudah dikirim ke email ${payload.email}. Silakan cek inbox atau folder spam/promosi.`,
   })
 }
 

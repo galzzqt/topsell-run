@@ -31,7 +31,7 @@ const defaultVoucherForm: VoucherFormState = {
   maxUsage: null,
   validFrom: '',
   validUntil: '',
-  packageKeys: ['community', 'family', 'individual', 'umkm'],
+  packageKeys: ['community', 'family', 'individual', 'invitation', 'umkm'],
   allowedCategories: [],
 }
 
@@ -39,6 +39,7 @@ const ALL_PACKAGES = [
   { key: 'community', label: 'Komunitas' },
   { key: 'family', label: 'Bro & Sist' },
   { key: 'individual', label: 'Individu' },
+  { key: 'invitation', label: 'Invitation' },
   { key: 'umkm', label: 'Tenant UMKM' },
 ]
 
@@ -323,7 +324,7 @@ export function VouchersTab({
                         <div className="flex flex-wrap gap-1">
                           {v.packages.map((pkg) => (
                             <span key={pkg} className="text-[9px] px-1.5 py-0.5 rounded bg-sport-purple/20 text-sport-purple font-bold uppercase">
-                              {pkg === 'community' ? 'Komunitas' : pkg === 'family' ? 'Bro & Sist' : pkg === 'individual' ? 'Individu' : pkg === 'umkm' ? 'Tenant UMKM' : pkg}
+                              {pkg === 'community' ? 'Komunitas' : pkg === 'family' ? 'Bro & Sist' : pkg === 'individual' ? 'Individu' : pkg === 'invitation' ? 'Invitation' : pkg === 'umkm' ? 'Tenant UMKM' : pkg}
                             </span>
                           ))}
                         </div>
