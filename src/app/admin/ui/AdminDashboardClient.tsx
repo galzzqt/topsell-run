@@ -13,6 +13,7 @@ import {
   Camera,
   CheckCircle,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock,
   CreditCard,
@@ -383,6 +384,71 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60) || 'komunitas'
+}
+
+const PAGE_SIZES = [5, 10, 25, 50]
+
+type PagedState = {
+  page: number
+  setPage: (n: number) => void
+  size: number
+  setSize: (n: number) => void
+  totalPages: number
+  total: number
+}
+
+function usePaged<T>(rows: T[], initial = 10): PagedState & { pageRows: T[] } {
+  const [size, setSize] = useState(initial)
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(rows.length / size))
+  const current = Math.min(page, totalPages)
+  const pageRows = useMemo(() => rows.slice((current - 1) * size, current * size), [rows, current, size])
+  return { pageRows, page: current, setPage, size, setSize, totalPages, total: rows.length }
+}
+
+function Pagination({ state, label }: { state: PagedState; label: string }) {
+  const { page, setPage, size, setSize, totalPages, total } = state
+  if (total === 0) return null
+  const from = (page - 1) * size + 1
+  const to = Math.min(page * size, total)
+  const navClass =
+    'inline-flex items-center justify-center w-7 h-7 rounded border border-card-border text-brand-muted hover:text-foreground cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-t border-card-border bg-brand-dark/20">
+      <div className="flex items-center gap-2 text-[10px] font-bold text-brand-muted">
+        <span className="uppercase tracking-wider">Tampilkan</span>
+        <select
+          value={size}
+          onChange={(event) => {
+            setSize(Number(event.target.value))
+            setPage(1)
+          }}
+          className="bg-card-bg border border-card-border rounded px-2 py-1 text-[10px] font-bold text-foreground cursor-pointer"
+        >
+          {PAGE_SIZES.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <span>
+          {from}-{to} dari {total} {label}
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button type="button" className={navClass} disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Halaman sebelumnya">
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        <span className="px-2 text-[10px] font-black uppercase text-foreground">
+          Hal {page} / {totalPages}
+        </span>
+        <button type="button" className={navClass} disabled={page >= totalPages} onClick={() => setPage(page + 1)} aria-label="Halaman berikutnya">
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function AdminDashboardClient({
@@ -809,21 +875,21 @@ export function AdminDashboardClient({
         created_at: p.created_at,
         registration: umkm
           ? {
-              community_id: umkm.id,
-              total_participants: 1,
-              community: {
-                id: umkm.id,
-                name: umkm.name,
-                leader_name: umkm.pic_name,
-                email: umkm.email,
-                phone: umkm.phone,
-                category: umkm.business_field,
-                community_code: umkm.umkm_code,
-                provinsi: umkm.provinsi,
-                kota: umkm.kota,
-                kecamatan: umkm.kecamatan,
-              },
-            }
+            community_id: umkm.id,
+            total_participants: 1,
+            community: {
+              id: umkm.id,
+              name: umkm.name,
+              leader_name: umkm.pic_name,
+              email: umkm.email,
+              phone: umkm.phone,
+              category: umkm.business_field,
+              community_code: umkm.umkm_code,
+              provinsi: umkm.provinsi,
+              kota: umkm.kota,
+              kecamatan: umkm.kecamatan,
+            },
+          }
           : null,
       }
     })
@@ -1250,8 +1316,8 @@ export function AdminDashboardClient({
         (packageType === 'community'
           ? 'Tanpa Komunitas'
           : packageType === 'individual'
-          ? 'Tanpa Nama'
-          : 'Tanpa Grup')
+            ? 'Tanpa Nama'
+            : 'Tanpa Grup')
       const key = `${code}:${name}`
       const pTime = participant.created_at ? new Date(participant.created_at).getTime() : 0
       const current = groups.get(key)
@@ -1323,6 +1389,10 @@ export function AdminDashboardClient({
 
     return groupArray
   }, [filteredParticipants, packageType, participantSort])
+
+  const pagedGroups = usePaged(groupedParticipants)
+  const pagedPacer = usePaged(filteredPacerRows)
+  const pagedUmkm = usePaged(filteredUmkmRows)
 
   const dailyParticipants = useMemo<SummaryDailyParticipant[]>(() => {
     const DAYS_TO_SHOW = 14
@@ -1638,10 +1708,10 @@ export function AdminDashboardClient({
     const dateSuffix = exportStartDate && exportEndDate
       ? `-${exportStartDate}_sd_${exportEndDate}`
       : exportStartDate
-      ? `-sejak_${exportStartDate}`
-      : exportEndDate
-      ? `-hingga_${exportEndDate}`
-      : ''
+        ? `-sejak_${exportStartDate}`
+        : exportEndDate
+          ? `-hingga_${exportEndDate}`
+          : ''
 
     if (combineFiles) {
       const workbook = XLSX.utils.book_new()
@@ -1748,7 +1818,7 @@ export function AdminDashboardClient({
     const payment = activePayments.find(p => p.id === paymentId)
 
     if (!payment) return
-    
+
     const statusLabels = {
       pending: 'PENDING',
       paid: 'PAID (Lunas)',
@@ -1756,13 +1826,13 @@ export function AdminDashboardClient({
       expired: 'EXPIRED (Kadaluarsa)',
       testing: 'TESTING'
     }
-    
+
     const confirmMessage = `Ubah status pembayaran dari ${statusLabels[payment.status as keyof typeof statusLabels]} menjadi ${statusLabels[newStatus]}?\n\nRef: ${payment.payment_reference}\n\n${newStatus === 'paid' ? '⚠️ Mengubah ke PAID akan:\n- Mengaktifkan semua peserta\n- Menggenerate QR Code\n- Mengirim email racepack\n- Mengirim notifikasi WhatsApp' : ''}`
-    
+
     if (!window.confirm(confirmMessage)) {
       return
     }
-    
+
     startTransition(async () => {
       const result = await updateAdminPaymentStatus({
         paymentId,
@@ -1770,7 +1840,7 @@ export function AdminDashboardClient({
         status: newStatus,
         paymentMethod: newStatus === 'paid' ? 'manual_admin' : undefined,
       })
-      
+
       if (result.error) {
         alert(`Gagal mengubah status: ${result.error}`)
       } else {
@@ -1782,7 +1852,7 @@ export function AdminDashboardClient({
           return next
         })
       }
-      
+
       router.refresh()
     })
   }
@@ -1854,8 +1924,8 @@ export function AdminDashboardClient({
       const result = packageType === 'community'
         ? await updateAdminCommunity(communityForm)
         : packageType === 'individual'
-        ? await updateAdminIndividual(communityForm)
-        : await updateAdminFamily(communityForm)
+          ? await updateAdminIndividual(communityForm)
+          : await updateAdminFamily(communityForm)
       if (result.error) {
         alert(result.error)
         return
@@ -1897,8 +1967,8 @@ export function AdminDashboardClient({
       newStatus === 'approved'
         ? '\n\nPacer akan menerima email persetujuan.'
         : newStatus === 'rejected'
-        ? '\n\nStatus penolakan dikirim ke GHL.'
-        : '\n\nStatus internal — tidak ada email/webhook yang dikirim.'
+          ? '\n\nStatus penolakan dikirim ke GHL.'
+          : '\n\nStatus internal — tidak ada email/webhook yang dikirim.'
 
     if (!window.confirm(`Ubah status pacer "${row.full_name}" dari ${row.status.toUpperCase()} menjadi ${newStatus.toUpperCase()}?${effect}`)) {
       return
@@ -2478,9 +2548,8 @@ export function AdminDashboardClient({
 
       {/* SIDEBAR */}
       <aside
-        className={`w-64 bg-linear-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`w-64 bg-linear-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         {/* Brand Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3">
@@ -2512,11 +2581,10 @@ export function AdminDashboardClient({
                   setActiveTab(tab.id)
                   setSidebarOpen(false)
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                  isActive
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${isActive
                     ? 'bg-white/15 text-white border border-white/20 font-black shadow-md'
                     : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
-                }`}
+                  }`}
               >
                 <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-white/50'}`} />
                 {tab.label}
@@ -2557,39 +2625,39 @@ export function AdminDashboardClient({
               {activeTab === 'summary'
                 ? 'Ringkasan Admin'
                 : activeTab === 'scanner'
-                ? 'Scan Racepack'
-                : activeTab === 'participants'
-                ? 'Daftar Peserta'
-                : activeTab === 'payments'
-                ? 'Daftar Pembayaran'
-                : activeTab === 'export_participants'
-                ? 'Export Peserta'
-                : activeTab === 'export_payments'
-                ? 'Export Pembayaran'
-                : activeTab === 'logs'
-                ? 'Log Axiom'
-                : activeTab === 'admins'
-                ? 'Manajemen Admin'
-                : 'Pengaturan Form'}
+                  ? 'Scan Racepack'
+                  : activeTab === 'participants'
+                    ? 'Daftar Peserta'
+                    : activeTab === 'payments'
+                      ? 'Daftar Pembayaran'
+                      : activeTab === 'export_participants'
+                        ? 'Export Peserta'
+                        : activeTab === 'export_payments'
+                          ? 'Export Pembayaran'
+                          : activeTab === 'logs'
+                            ? 'Log Axiom'
+                            : activeTab === 'admins'
+                              ? 'Manajemen Admin'
+                              : 'Pengaturan Form'}
             </h2>
             <p className="text-[9px] font-bold text-brand-muted uppercase tracking-wider mt-0.5">
               {activeTab === 'summary'
                 ? 'Statistik utama admin dan tren registrasi peserta'
                 : activeTab === 'scanner'
-                ? 'Validasi QR & Pengambilan Racepack Peserta'
-                : activeTab === 'participants'
-                ? 'Kelola komunitas & anggota terdaftar'
-                : activeTab === 'payments'
-                ? 'Riwayat pembayaran kolektif komunitas'
-                : activeTab === 'export_participants'
-                ? 'Ekspor data peserta per komunitas'
-                : activeTab === 'export_payments'
-                ? 'Ekspor data pembayaran per komunitas'
-                : activeTab === 'logs'
-                ? 'Monitoring log aplikasi dari Axiom'
-                : activeTab === 'admins'
-                ? 'Kelola akun admin yang dapat mengakses panel'
-                : 'Konfigurasi form pendaftaran & environment'}
+                  ? 'Validasi QR & Pengambilan Racepack Peserta'
+                  : activeTab === 'participants'
+                    ? 'Kelola komunitas & anggota terdaftar'
+                    : activeTab === 'payments'
+                      ? 'Riwayat pembayaran kolektif komunitas'
+                      : activeTab === 'export_participants'
+                        ? 'Ekspor data peserta per komunitas'
+                        : activeTab === 'export_payments'
+                          ? 'Ekspor data pembayaran per komunitas'
+                          : activeTab === 'logs'
+                            ? 'Monitoring log aplikasi dari Axiom'
+                            : activeTab === 'admins'
+                              ? 'Kelola akun admin yang dapat mengakses panel'
+                              : 'Konfigurasi form pendaftaran & environment'}
             </p>
           </div>
 
@@ -2604,10 +2672,10 @@ export function AdminDashboardClient({
                     activeTab === 'payments'
                       ? 'Cari pembayaran...'
                       : activeTab === 'pacer'
-                      ? 'Cari pacer...'
-                      : activeTab === 'umkm'
-                      ? 'Cari UMKM...'
-                      : 'Cari peserta, komunitas...'
+                        ? 'Cari pacer...'
+                        : activeTab === 'umkm'
+                          ? 'Cari UMKM...'
+                          : 'Cari peserta, komunitas...'
                   }
                   className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
                 />
@@ -2628,10 +2696,10 @@ export function AdminDashboardClient({
                   activeTab === 'payments'
                     ? 'Cari pembayaran...'
                     : activeTab === 'pacer'
-                    ? 'Cari pacer...'
-                    : activeTab === 'umkm'
-                    ? 'Cari UMKM...'
-                    : 'Cari peserta, komunitas...'
+                      ? 'Cari pacer...'
+                      : activeTab === 'umkm'
+                        ? 'Cari UMKM...'
+                        : 'Cari peserta, komunitas...'
                 }
                 className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
               />
@@ -2757,7 +2825,7 @@ export function AdminDashboardClient({
                           legend: { display: false },
                           tooltip: {
                             callbacks: {
-                              label: function(context) {
+                              label: function (context) {
                                 return formatCurrency(context.parsed.y ?? 0)
                               }
                             }
@@ -2767,7 +2835,7 @@ export function AdminDashboardClient({
                           y: {
                             beginAtZero: true,
                             ticks: {
-                              callback: function(value) {
+                              callback: function (value) {
                                 return formatCurrency(value as number)
                               }
                             }
@@ -2872,31 +2940,28 @@ export function AdminDashboardClient({
               <div className="flex border-b border-card-border">
                 <button
                   onClick={() => setPackageType('community')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'community'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'community'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Community Package
                 </button>
                 <button
                   onClick={() => setPackageType('family')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'family'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'family'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Bro & Sist Package
                 </button>
                 <button
                   onClick={() => setPackageType('individual')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'individual'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'individual'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Individu
                 </button>
@@ -2925,11 +2990,10 @@ export function AdminDashboardClient({
                         key={preset.id}
                         type="button"
                         onClick={() => handleDatePresetChange(preset.id)}
-                        className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                          participantDatePreset === preset.id
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${participantDatePreset === preset.id
                             ? 'bg-sport-orange text-white shadow-xs'
                             : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                        }`}
+                          }`}
                       >
                         {preset.label}
                       </button>
@@ -3030,7 +3094,7 @@ export function AdminDashboardClient({
                 </div>
               ) : (
                 <div className="divide-y divide-card-border">
-                  {groupedParticipants.map((group) => {
+                  {pagedGroups.pageRows.map((group) => {
                     const isOpen = expandedCommunities.has(group.key)
                     const editableCommunity = communitiesByKey.get(group.key)
                     const paidCount = group.participants.filter((participant) => participant.payment_status === 'paid').length
@@ -3157,23 +3221,23 @@ export function AdminDashboardClient({
                                           participant.payment_status === 'testing'
                                             ? 'warning'
                                             : participant.payment_status === 'paid'
-                                            ? 'success'
-                                            : participant.payment_status === 'failed'
-                                            ? 'danger'
-                                            : participant.payment_status === 'expired'
-                                            ? 'neutral'
-                                            : 'warning'
+                                              ? 'success'
+                                              : participant.payment_status === 'failed'
+                                                ? 'danger'
+                                                : participant.payment_status === 'expired'
+                                                  ? 'neutral'
+                                                  : 'warning'
                                         }
                                       >
                                         {participant.payment_status === 'testing'
                                           ? 'TESTING'
                                           : participant.payment_status === 'paid'
-                                          ? 'Paid'
-                                          : participant.payment_status === 'failed'
-                                          ? 'Failed'
-                                          : participant.payment_status === 'expired'
-                                          ? 'Expired'
-                                          : 'Pending'}
+                                            ? 'Paid'
+                                            : participant.payment_status === 'failed'
+                                              ? 'Failed'
+                                              : participant.payment_status === 'expired'
+                                                ? 'Expired'
+                                                : 'Pending'}
                                       </Badge>
                                     </td>
                                     <td className="px-4 py-3">
@@ -3207,6 +3271,8 @@ export function AdminDashboardClient({
                   })}
                 </div>
               )}
+
+              <Pagination state={pagedGroups} label={groupWord} />
             </section>
           )}
 
@@ -3215,41 +3281,37 @@ export function AdminDashboardClient({
               <div className="flex border-b border-card-border">
                 <button
                   onClick={() => setPackageType('community')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'community'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'community'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Community Package
                 </button>
                 <button
                   onClick={() => setPackageType('family')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'family'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'family'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Bro & Sist Package
                 </button>
                 <button
                   onClick={() => setPackageType('individual')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'individual'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'individual'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Individu
                 </button>
                 <button
                   onClick={() => setPackageType('umkm')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'umkm'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'umkm'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Tenant UMKM
                 </button>
@@ -3279,21 +3341,19 @@ export function AdminDashboardClient({
                         key={tab.id}
                         type="button"
                         onClick={() => setPaymentStatusFilter(tab.id)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
-                          isActive
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${isActive
                             ? tab.activeColor
                             : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                        }`}
+                          }`}
                       >
                         <span>{tab.label}</span>
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-                            isActive
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${isActive
                               ? tab.id === 'all'
                                 ? 'bg-black/20 text-white'
                                 : tab.badgeColor
                               : 'bg-brand-dark/40 text-brand-muted'
-                          }`}
+                            }`}
                         >
                           {tab.count}
                         </span>
@@ -3325,11 +3385,10 @@ export function AdminDashboardClient({
                           key={preset.id}
                           type="button"
                           onClick={() => handlePaymentDatePresetChange(preset.id)}
-                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                            paymentDatePreset === preset.id
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${paymentDatePreset === preset.id
                               ? 'bg-sport-orange text-white shadow-xs'
                               : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                          }`}
+                            }`}
                         >
                           {preset.label}
                         </button>
@@ -3473,27 +3532,26 @@ export function AdminDashboardClient({
                           <td className="px-4 py-3 text-xs font-black text-foreground">{formatCurrency(payment.amount)}</td>
                           <td className="px-4 py-3 text-xs font-bold text-brand-muted">{payment.payment_method || '-'}</td>
                           <td className="px-4 py-3">
-                             <select
-                               value={newStatus}
-                               onChange={(e) => handlePaymentStatusChange(payment.id, e.target.value as 'pending' | 'paid' | 'failed' | 'expired' | 'testing')}
-                               className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${
-                                 newStatus === 'paid'
-                                   ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
-                                   : newStatus === 'failed'
-                                   ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
-                                   : newStatus === 'expired'
-                                   ? 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-                                   : newStatus === 'testing'
-                                   ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
-                                   : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
-                               }`}
-                             >
-                               <option value="pending">Pending</option>
-                               <option value="paid">Success</option>
-                               <option value="failed">Failed</option>
-                               <option value="expired">Expired</option>
-                               <option value="testing">Testing</option>
-                             </select>
+                            <select
+                              value={newStatus}
+                              onChange={(e) => handlePaymentStatusChange(payment.id, e.target.value as 'pending' | 'paid' | 'failed' | 'expired' | 'testing')}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${newStatus === 'paid'
+                                  ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                                  : newStatus === 'failed'
+                                    ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                                    : newStatus === 'expired'
+                                      ? 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                                      : newStatus === 'testing'
+                                        ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                                        : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                                }`}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="paid">Success</option>
+                              <option value="failed">Failed</option>
+                              <option value="expired">Expired</option>
+                              <option value="testing">Testing</option>
+                            </select>
                           </td>
                           <td className="px-4 py-3 text-xs text-brand-muted">{formatDateTime(payment.paid_at || payment.created_at)}</td>
                           <td className="px-4 py-3">
@@ -3822,21 +3880,19 @@ export function AdminDashboardClient({
                         key={tab.id}
                         type="button"
                         onClick={() => setPacerStatusFilter(tab.id)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
-                          isActive
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${isActive
                             ? tab.activeColor
                             : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                        }`}
+                          }`}
                       >
                         <span>{tab.label}</span>
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-                            isActive
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${isActive
                               ? tab.id === 'all'
                                 ? 'bg-black/20 text-white'
                                 : tab.badgeColor
                               : 'bg-brand-dark/40 text-brand-muted'
-                          }`}
+                            }`}
                         >
                           {tab.count}
                         </span>
@@ -3868,11 +3924,10 @@ export function AdminDashboardClient({
                           key={preset.id}
                           type="button"
                           onClick={() => handlePacerDatePresetChange(preset.id)}
-                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                            pacerDatePreset === preset.id
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${pacerDatePreset === preset.id
                               ? 'bg-sport-orange text-white shadow-xs'
                               : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                          }`}
+                            }`}
                         >
                           {preset.label}
                         </button>
@@ -4012,87 +4067,88 @@ export function AdminDashboardClient({
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredPacerRows.map((row) => {
+                        {pagedPacer.pageRows.map((row) => {
                           const hasPacerChange = pacerStatusChanges.has(row.pacer_id)
                           const pacerStatus = pacerStatusChanges.get(row.pacer_id) || row.status
                           return (
-                          <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasPacerChange ? 'bg-yellow-50' : ''}`}>
-                            <td className="px-4 py-3.5">
-                              <p className="text-sm font-bold text-foreground">{row.full_name}</p>
-                              <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {row.bib_name}</p>
-                              <p className="text-[10px] text-brand-muted">{row.pacer_code}</p>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <p className="text-xs text-foreground">{row.phone}</p>
-                              <p className="text-[10px] text-brand-muted">{row.email}</p>
-                            </td>
-                            <td className="px-4 py-3.5 text-xs font-bold text-foreground">{row.category}</td>
-                            <td className="px-4 py-3.5 text-center">
-                              <Badge variant={row.email_verified ? 'success' : 'warning'}>
-                                {row.email_verified ? 'VERIFIED' : 'PENDING'}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3.5 text-center">
-                              <select
-                                value={pacerStatus}
-                                onChange={(e) => handlePacerStatusChange(row.pacer_id, e.target.value as PacerStatus)}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${
-                                  pacerStatus === 'approved'
-                                    ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
-                                    : pacerStatus === 'rejected'
-                                    ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
-                                    : pacerStatus === 'testing'
-                                    ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
-                                    : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
-                                }`}
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="testing">Testing</option>
-                              </select>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                                <button
-                                  onClick={() => setPacerDetail(row)}
-                                  className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer"
+                            <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasPacerChange ? 'bg-yellow-50' : ''}`}>
+                              <td className="px-4 py-3.5">
+                                <p className="text-sm font-bold text-foreground">{row.full_name}</p>
+                                <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {row.bib_name}</p>
+                                <p className="text-[10px] text-brand-muted">{row.pacer_code}</p>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <p className="text-xs text-foreground">{row.phone}</p>
+                                <p className="text-[10px] text-brand-muted">{row.email}</p>
+                              </td>
+                              <td className="px-4 py-3.5 text-xs font-bold text-foreground">{row.category}</td>
+                              <td className="px-4 py-3.5 text-center">
+                                <Badge variant={row.email_verified ? 'success' : 'warning'}>
+                                  {row.email_verified ? 'VERIFIED' : 'PENDING'}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                <select
+                                  value={pacerStatus}
+                                  onChange={(e) => handlePacerStatusChange(row.pacer_id, e.target.value as PacerStatus)}
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${pacerStatus === 'approved'
+                                      ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                                      : pacerStatus === 'rejected'
+                                        ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                                        : pacerStatus === 'testing'
+                                          ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                                          : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                                    }`}
                                 >
-                                  Detail
-                                </button>
-                                <button
-                                  onClick={() => openPacerEdit(row)}
-                                  className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                                {hasPacerChange && (
-                                  <>
-                                    <button
-                                      onClick={() => handleSavePacerStatus(row)}
-                                      disabled={isPending}
-                                      className="px-2 py-1.5 bg-sport-orange text-white rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
-                                    >
-                                      {isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Save'}
-                                    </button>
-                                    <button
-                                      onClick={() => handleCancelPacerStatusChange(row.pacer_id)}
-                                      disabled={isPending}
-                                      className="px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
+                                  <option value="pending">Pending</option>
+                                  <option value="approved">Approved</option>
+                                  <option value="rejected">Rejected</option>
+                                  <option value="testing">Testing</option>
+                                </select>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                  <button
+                                    onClick={() => setPacerDetail(row)}
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer"
+                                  >
+                                    Detail
+                                  </button>
+                                  <button
+                                    onClick={() => openPacerEdit(row)}
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                  {hasPacerChange && (
+                                    <>
+                                      <button
+                                        onClick={() => handleSavePacerStatus(row)}
+                                        disabled={isPending}
+                                        className="px-2 py-1.5 bg-sport-orange text-white rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
+                                      >
+                                        {isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Save'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleCancelPacerStatusChange(row.pacer_id)}
+                                        disabled={isPending}
+                                        className="px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
                           )
                         })}
                       </tbody>
                     </table>
                   </div>
                 )}
+
+                <Pagination state={pagedPacer} label="pacer" />
               </div>
             </div>
           )}
@@ -4133,21 +4189,19 @@ export function AdminDashboardClient({
                         key={tab.id}
                         type="button"
                         onClick={() => setUmkmPaymentStatusFilter(tab.id)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
-                          isActive
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${isActive
                             ? tab.activeColor
                             : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                        }`}
+                          }`}
                       >
                         <span>{tab.label}</span>
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-                            isActive
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${isActive
                               ? tab.id === 'all'
                                 ? 'bg-black/20 text-white'
                                 : tab.badgeColor
                               : 'bg-brand-dark/40 text-brand-muted'
-                          }`}
+                            }`}
                         >
                           {tab.count}
                         </span>
@@ -4179,11 +4233,10 @@ export function AdminDashboardClient({
                           key={preset.id}
                           type="button"
                           onClick={() => handleUmkmDatePresetChange(preset.id)}
-                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                            umkmDatePreset === preset.id
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${umkmDatePreset === preset.id
                               ? 'bg-sport-orange text-white shadow-xs'
                               : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                          }`}
+                            }`}
                         >
                           {preset.label}
                         </button>
@@ -4326,7 +4379,7 @@ export function AdminDashboardClient({
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredUmkmRows.map((row) => {
+                        {pagedUmkm.pageRows.map((row) => {
                           const payment = umkmPayments.find((p) => p.umkm_id === row.id)
                           const isPaid = payment?.status === 'paid' || row.payment_status === 'paid'
                           const finalAmount = row.payment_amount ?? 500000
@@ -4435,6 +4488,8 @@ export function AdminDashboardClient({
                     </table>
                   </div>
                 )}
+
+                <Pagination state={pagedUmkm} label="tenant UMKM" />
               </div>
             </div>
           )}
@@ -4453,11 +4508,11 @@ export function AdminDashboardClient({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {([
-                      { key: 'community'  as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
-                      { key: 'family'     as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
-                      { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
-                      { key: 'pacer'      as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
-                      { key: 'umkm'       as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400'  },
+                      { key: 'community' as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
+                      { key: 'family' as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
+                      { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/30', badge: 'bg-blue-500/20 text-blue-400' },
+                      { key: 'pacer' as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400' },
+                      { key: 'umkm' as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400' },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       return (
@@ -4494,7 +4549,7 @@ export function AdminDashboardClient({
 
               {/* ── Full-page per-package settings ── */}
               {selectedPackagesPackage && (() => {
-                const pkg    = selectedPackagesPackage
+                const pkg = selectedPackagesPackage
                 const config = settingsForm.packages[pkg]
                 return (
                   <>
@@ -4667,11 +4722,11 @@ export function AdminDashboardClient({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {([
-                      { key: 'community'  as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
-                      { key: 'family'     as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
-                      { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5',   border: 'border-blue-500/30',   badge: 'bg-blue-500/20 text-blue-400'   },
-                      { key: 'pacer'      as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400'  },
-                      { key: 'umkm'       as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400'  },
+                      { key: 'community' as PackageKey, icon: <Users className="w-6 h-6 text-orange-400" />, iconBg: 'bg-orange-500/10 border-orange-500/20', accent: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
+                      { key: 'family' as PackageKey, icon: <HeartHandshake className="w-6 h-6 text-purple-400" />, iconBg: 'bg-purple-500/10 border-purple-500/20', accent: 'from-purple-500/20 to-purple-500/5', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400' },
+                      { key: 'individual' as PackageKey, icon: <User className="w-6 h-6 text-blue-400" />, iconBg: 'bg-blue-500/10 border-blue-500/20', accent: 'from-blue-500/20 to-blue-500/5', border: 'border-blue-500/30', badge: 'bg-blue-500/20 text-blue-400' },
+                      { key: 'pacer' as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400' },
+                      { key: 'umkm' as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400' },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       const periodCount = config.periods.length
@@ -4711,7 +4766,7 @@ export function AdminDashboardClient({
 
               {/* ── Full-page per-package settings ── */}
               {selectedPeriodPackage && (() => {
-                const pkg    = selectedPeriodPackage
+                const pkg = selectedPeriodPackage
                 const config = settingsForm.packages[pkg]
                 return (
                   <>
@@ -4911,9 +4966,8 @@ export function AdminDashboardClient({
                                           <div className="mt-0.5 flex flex-col gap-1.5">
                                             <div className="flex items-center justify-between">
                                               <span className="text-[9px] font-black uppercase text-brand-muted">Pemakaian Kuota</span>
-                                              <span className={`text-[9px] font-black ${
-                                                isFull ? 'text-red-400' : isNearFull ? 'text-amber-400' : 'text-green-400'
-                                              }`}>
+                                              <span className={`text-[9px] font-black ${isFull ? 'text-red-400' : isNearFull ? 'text-amber-400' : 'text-green-400'
+                                                }`}>
                                                 {used}{quota > 0 ? ` / ${quota}` : ' peserta'}
                                                 {pct !== null ? ` (${pct}%)` : ' (tak terbatas)'}
                                               </span>
@@ -4921,9 +4975,8 @@ export function AdminDashboardClient({
                                             {quota > 0 && (
                                               <div className="h-1.5 w-full rounded-full bg-brand-dark/60 overflow-hidden">
                                                 <div
-                                                  className={`h-full rounded-full transition-all ${
-                                                    isFull ? 'bg-red-500' : isNearFull ? 'bg-amber-400' : 'bg-green-500'
-                                                  }`}
+                                                  className={`h-full rounded-full transition-all ${isFull ? 'bg-red-500' : isNearFull ? 'bg-amber-400' : 'bg-green-500'
+                                                    }`}
                                                   style={{ width: `${pct ?? 0}%` }}
                                                 />
                                               </div>
@@ -5144,42 +5197,38 @@ export function AdminDashboardClient({
               <div className="flex border-b border-card-border">
                 <button
                   onClick={() => setPackageType('community')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'community'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'community'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Community Package
                 </button>
                 <button
                   onClick={() => setPackageType('family')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'family'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'family'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Bro & Sist Package
                 </button>
                 <button
                   onClick={() => setPackageType('individual')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                    packageType === 'individual'
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'individual'
                       ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                       : 'border-transparent text-brand-muted hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   Individu
                 </button>
                 {activeTab === 'export_payments' && (
                   <button
                     onClick={() => setPackageType('umkm')}
-                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                      packageType === 'umkm'
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'umkm'
                         ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
                         : 'border-transparent text-brand-muted hover:text-foreground'
-                    }`}
+                      }`}
                   >
                     Tenant UMKM
                   </button>
@@ -5210,11 +5259,10 @@ export function AdminDashboardClient({
                             setExportPaymentFilter(opt.id)
                             setSelectedExportCommunities(null)
                           }}
-                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                            exportPaymentFilter === opt.id
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${exportPaymentFilter === opt.id
                               ? 'bg-sport-orange text-white shadow-xs'
                               : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                          }`}
+                            }`}
                         >
                           {opt.label}
                         </button>
@@ -5267,11 +5315,10 @@ export function AdminDashboardClient({
                           key={preset.id}
                           type="button"
                           onClick={() => handleExportDatePresetChange(preset.id)}
-                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
-                            exportDatePreset === preset.id
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${exportDatePreset === preset.id
                               ? 'bg-sport-orange text-white shadow-xs'
                               : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
-                          }`}
+                            }`}
                         >
                           {preset.label}
                         </button>
@@ -6162,7 +6209,7 @@ export function AdminDashboardClient({
                 className="w-full px-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-sm text-foreground"
               />
             </label>
-             {adminEditForm.role === 'admin' ? (
+            {adminEditForm.role === 'admin' ? (
               <div className="flex flex-col gap-2 border border-card-border rounded-lg p-3 bg-brand-dark/20">
                 <span className="text-[10px] font-black uppercase text-sport-orange">Hak Akses Menu</span>
                 <p className="text-[9px] text-brand-muted">Pilih menu sidebar yang boleh diakses:</p>
