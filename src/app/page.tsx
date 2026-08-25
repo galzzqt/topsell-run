@@ -92,6 +92,21 @@ export default function LandingPage() {
               className="w-full max-w-[280px] sm:max-w-[456px] h-auto object-contain"
               priority
             />
+
+            {/* Supported By Samsung */}
+            <div className="flex items-center justify-center gap-3 mt-1 sm:mt-2">
+              <span className="text-xs sm:text-sm font-black uppercase tracking-widest text-slate-500">
+                Supported by :
+              </span>
+              <Image
+                src="/images/samsung.svg"
+                alt="Samsung"
+                width={160}
+                height={42}
+                className="h-7 sm:h-9 w-auto object-contain"
+                priority
+              />
+            </div>
           </div>
 
           {/* Meta info */}

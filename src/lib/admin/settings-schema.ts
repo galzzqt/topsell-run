@@ -34,6 +34,11 @@ export type WebhookPackageConfig = {
     url: string
     token: string
   }
+  /** Keputusan admin (approve/reject) — terpisah dari webhook pendaftaran. */
+  status: {
+    url: string
+    token: string
+  }
 }
 
 export type WebhookSettings = Record<PackageKey, WebhookPackageConfig>
@@ -400,6 +405,7 @@ export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
 const EMPTY_WEBHOOK_PACKAGE: WebhookPackageConfig = {
   registration: { url: '', token: '' },
   payment: { url: '', token: '' },
+  status: { url: '', token: '' },
 }
 
 export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {

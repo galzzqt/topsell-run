@@ -262,6 +262,10 @@ function normalizeWebhookPackage(base: WebhookPackageConfig, value: Partial<Webh
       url: typeof value?.payment?.url === 'string' ? value.payment.url : base.payment.url,
       token: typeof value?.payment?.token === 'string' ? value.payment.token : base.payment.token,
     },
+    status: {
+      url: typeof value?.status?.url === 'string' ? value.status.url : base.status.url,
+      token: typeof value?.status?.token === 'string' ? value.status.token : base.status.token,
+    },
   }
 }
 

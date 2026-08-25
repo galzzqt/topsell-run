@@ -7,6 +7,7 @@ import {
   Store, LogOut, Clock, CheckCircle, XCircle, CreditCard,
   User, Phone, Mail, MapPin, Briefcase, Tag, AlertCircle,
   Loader2, RefreshCw, ExternalLink, Settings, Activity, Globe, ImagePlus,
+  MessageCircle,
 } from 'lucide-react'
 import { getUmkmSessionAction, fetchUmkmDashboardDataAction } from '@/app/actions/umkm-dashboard'
 import { createUmkmPayment, pollUmkmPaymentStatus } from '@/app/actions/umkm-payments'
@@ -226,14 +227,26 @@ function UmkmDashboardContent() {
 
                 {/* Deskripsi status */}
                 {status === 'pending' && isFree && (
-                  <p className="text-xs text-brand-muted mt-1 leading-relaxed">
-                    Pendaftaran tenant UMKM Anda menggunakan voucher <strong>GRATIS (Rp 0)</strong> dan berstatus <strong>Lunas</strong>. Pendaftaran saat ini sedang menunggu proses approval dari Admin sebelum resmi aktif.
-                  </p>
+                  <>
+                    <p className="text-xs text-brand-muted mt-1 leading-relaxed">
+                      Pendaftaran tenant UMKM Anda menggunakan voucher <strong>GRATIS (Rp 0)</strong> dan berstatus <strong>Lunas</strong>. Saat ini sedang menunggu persetujuan (approve) dari Admin.
+                    </p>
+                    <div className="mt-3 flex items-start sm:items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+                      <MessageCircle className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5 sm:mt-0" />
+                      <span>Konfirmasi persetujuan akan dikirimkan melalui <strong>WhatsApp</strong> jika sudah di-approve untuk aktivasi tenant.</span>
+                    </div>
+                  </>
                 )}
                 {status === 'pending' && !isFree && (
-                  <p className="text-xs text-brand-muted mt-1 leading-relaxed">
-                    Pendaftaran Anda sedang direview oleh admin. Tombol pembayaran akan aktif setelah pendaftaran Anda disetujui.
-                  </p>
+                  <>
+                    <p className="text-xs text-brand-muted mt-1 leading-relaxed">
+                      Pendaftaran Anda saat ini sedang <strong>menunggu approve admin</strong>.
+                    </p>
+                    <div className="mt-3 flex items-start sm:items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+                      <MessageCircle className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5 sm:mt-0" />
+                      <span>Akan dikonfirmasi lewat <strong>WhatsApp</strong> jika sudah di-approve oleh admin dan Anda bisa melanjutkan pembayaran.</span>
+                    </div>
+                  </>
                 )}
                 {status === 'approved' && isFree && (
                   <p className="text-xs text-brand-muted mt-1 leading-relaxed">

@@ -5132,6 +5132,25 @@ export function AdminDashboardClient({
               />
             </div>
 
+            <div className="border border-card-border rounded-lg p-3 bg-brand-gray/20 flex flex-col gap-2">
+              <p className="text-[10px] font-black uppercase text-sport-orange">Webhook Status (Approve / Reject)</p>
+              <p className="text-[9px] text-brand-muted leading-relaxed">
+                Dipakai saat admin menyetujui pendaftaran. Kosongkan hanya jika paket ini memang tidak perlu memberi kabar keputusan — tidak ada fallback ke webhook pendaftaran.
+              </p>
+              <input
+                value={settingsForm.webhookSettings[webhookEditingPkg].status.url}
+                onChange={(e) => updateWebhookField(webhookEditingPkg, 'status', 'url', e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+              />
+              <input
+                value={settingsForm.webhookSettings[webhookEditingPkg].status.token}
+                onChange={(e) => updateWebhookField(webhookEditingPkg, 'status', 'token', e.target.value)}
+                placeholder="Token (opsional)"
+                className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+              />
+            </div>
+
             <div className="flex items-center gap-2">
               <Button type="button" onClick={savePackages} isLoading={isPending}>
                 Simpan

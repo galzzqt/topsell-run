@@ -40,7 +40,7 @@ import {
   findUmkmById,
   updateUmkm,
 } from '@/lib/db'
-import { sendPacerRegistrationWebhook, sendUmkmApprovalWebhook } from '@/lib/ghl/webhook'
+import { sendPacerApprovalWebhook, sendPacerRegistrationWebhook, sendUmkmApprovalWebhook } from '@/lib/ghl/webhook'
 import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
@@ -910,9 +910,11 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
     return { error: 'Status tidak valid.' }
   }
 
-  // pending & testing adalah status internal: pacer belum/tidak sedang diberi
-  // keputusan, jadi tidak ada webhook GHL maupun email yang dikirim.
-  const isDecision = status === 'approved' || status === 'rejected'
+  // Webhook pendaftaran hanya untuk penolakan. Approved punya webhook sendiri
+  // (sendPacerApprovalWebhook di bawah) karena workflow GHL pendaftaran
+  // mengirim pesan pendaftaran, bukan pengumuman kelulusan seleksi.
+  // pending & testing status internal: tidak mengirim apa pun.
+  const usesRegistrationWebhook = status === 'rejected'
 
   await updatePacer(pacerId, {
     status,
@@ -921,7 +923,7 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
   })
 
   try {
-    const pacer = isDecision ? await findPacerById(pacerId) : null
+    const pacer = usesRegistrationWebhook ? await findPacerById(pacerId) : null
     if (pacer) {
       const participant = await findPacerParticipantByPacerId(pacerId)
       await sendPacerRegistrationWebhook({
@@ -964,7 +966,7 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
     console.error('Failed to log admin pacer status update:', logError)
   }
 
-  // Kirim email notifikasi ke pacer jika status disetujui (approved)
+  // Kirim email + WhatsApp notifikasi ke pacer jika status disetujui (approved)
   if (status === 'approved') {
     try {
       const emailResult = await sendPacerApprovalEmail(pacerId)
@@ -973,6 +975,23 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
       }
     } catch (emailError) {
       console.error('Failed to send pacer approval email:', emailError)
+    }
+
+    // Webhook approval terpisah dari webhook pendaftaran, supaya pacer tidak
+    // menerima pesan pendaftaran lagi saat disetujui.
+    try {
+      const pacer = await findPacerById(pacerId)
+      if (pacer) {
+        await sendPacerApprovalWebhook({
+          phone: pacer.phone,
+          email: pacer.email || '',
+          fullName: pacer.name,
+          category: pacer.category,
+          pacerCode: pacer.pacer_code,
+        })
+      }
+    } catch (webhookError) {
+      console.error('Failed to send pacer approval webhook to GHL:', webhookError)
     }
   }
 

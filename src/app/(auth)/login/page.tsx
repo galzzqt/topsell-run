@@ -31,7 +31,7 @@ export default function LoginPage() {
     setAuthError(null)
     setNeedsVerification(false)
     setResendMessage(null)
-    
+
     // Coba akun Bro & Sist dulu, lalu peserta individu (kredensial disimpan terpisah).
     const familyResult = await signInFamily(values)
     if (familyResult.success) {
@@ -84,7 +84,7 @@ export default function LoginPage() {
 
     const result = await resendVerificationEmail(resendId)
     setIsResending(false)
-    
+
     if (result.error) {
       setResendMessage(result.error)
     } else {
@@ -113,19 +113,18 @@ export default function LoginPage() {
           </div>
           <p className="text-[10px] font-black uppercase tracking-widest text-sport-purple">TOPSELL RUN 2026</p>
           <h1 className="text-xl font-black uppercase tracking-wide text-slate-900">Masuk ke Akun Anda</h1>
-          <p className="text-xs text-brand-muted font-medium">Login peserta Individu atau Bro & Sist Package</p>
         </div>
 
         {/* Card */}
         <div className="bg-white border border-card-border rounded-xl p-6 flex flex-col gap-4 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
-          
+
           {authError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-500">
               {authError}
             </div>
           )}
-          
+
           {needsVerification && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col gap-3">
               <div className="flex items-start gap-3">
@@ -165,7 +164,7 @@ export default function LoginPage() {
               )}
             </div>
           )}
-          
+
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <Input label="Nomor WhatsApp / Email Perwakilan" placeholder="08xxxxxxxxxx atau email@example.com" error={errors.phone?.message} disabled={isSubmitting} {...register('phone')} />
             <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} disabled={isSubmitting} {...register('password')} />

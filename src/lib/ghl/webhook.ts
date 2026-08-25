@@ -3,11 +3,11 @@ import { readAdminSettings } from '@/lib/admin/settings'
 import { formatCurrency } from '@/lib/utils/format'
 import type { PackageKey } from '@/lib/admin/settings-schema'
 
-type WebhookKind = 'registration' | 'racepack'
+type WebhookKind = 'registration' | 'racepack' | 'status'
 
 /** Webhook URL/token per paket dari pengaturan admin; fallback ke env var global (GHL_*) kalau belum diatur. */
 async function getWebhookConfig(kind: WebhookKind, packageType: PackageKey) {
-  const settingKind = kind === 'registration' ? 'registration' : 'payment'
+  const settingKind = kind === 'registration' ? 'registration' : kind === 'status' ? 'status' : 'payment'
 
   try {
     const settings = await readAdminSettings()
@@ -17,7 +17,12 @@ async function getWebhookConfig(kind: WebhookKind, packageType: PackageKey) {
     // Fall through to env fallback.
   }
 
-  const prefix = packageType === 'pacer'
+  // Webhook status TIDAK boleh jatuh ke webhook pendaftaran/racepack: workflow di
+  // sana punya pesan yang berbeda, dan pernah menyebabkan pacer yang di-approve
+  // menerima pesan pendaftaran. Tanpa env khusus, biarkan kosong (skipped).
+  const prefix = kind === 'status'
+    ? (packageType === 'pacer' ? 'GHL_PACER_STATUS' : 'GHL_STATUS')
+    : packageType === 'pacer'
     ? (kind === 'registration' ? 'GHL_PACER_REGISTRATION' : 'GHL_PACER_QR')
     : (kind === 'registration' ? 'GHL_REGISTRATION' : 'GHL_QR')
   return {
@@ -218,6 +223,35 @@ export async function sendPacerRegistrationWebhook(payload: {
     pb_media_urls: payload.pbMediaUrls || [],
     pb_media_urls_string: payload.pbMediaUrls ? payload.pbMediaUrls.join(', ') : '',
     message: `Pendaftaran pacer ${payload.fullName} (Kategori: ${payload.category}) telah diterima dengan status ${payload.status.toUpperCase()}.`,
+  })
+}
+
+/**
+ * Kabari pacer lewat WhatsApp bahwa pendaftarannya disetujui.
+ *
+ * Terpisah dari sendPacerRegistrationWebhook: keduanya dulu memakai URL yang
+ * sama, sehingga pacer yang di-approve justru menerima pesan pendaftaran dari
+ * workflow GHL yang memang dibangun untuk pendaftaran.
+ *
+ * Hanya untuk approved. Penolakan masih lewat jalur lama.
+ */
+export async function sendPacerApprovalWebhook(payload: {
+  phone: string
+  email: string
+  fullName: string
+  category: string
+  pacerCode: string
+}) {
+  return postWebhook('status', 'pacer', {
+    event: 'pacer_approved',
+    phone: payload.phone,
+    whatsapp: phoneToWhatsAppId(payload.phone),
+    email: payload.email,
+    full_name: payload.fullName,
+    category: payload.category,
+    pacer_code: payload.pacerCode,
+    status: 'approved',
+    message: `Selamat ${payload.fullName}! Anda resmi terpilih sebagai Pacer TOPSELL RUN 2026 untuk kategori ${payload.category}. Kode pacer Anda: ${payload.pacerCode}. Silakan masuk ke Dashboard Pacer untuk melengkapi profil dan mengunduh QR Pass Anda.`,
   })
 }
 

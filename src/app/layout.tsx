@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Manrope } from 'next/font/google'
 import './globals.css'
 import Script from 'next/script'
+import { WhatsAppButton } from '@/components/ui/WhatsAppButton'
 
 const manrope = Manrope({
   subsets: ['latin'],
@@ -62,7 +63,10 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <body className="min-h-full flex flex-col antialiased">
+        {children}
+        <WhatsAppButton />
+      </body>
     </html>
   )
 }
