@@ -12,7 +12,7 @@ export function WhatsAppButton() {
   }
 
   const phoneNumber = '6282119227871'
-  const defaultMessage = 'Halo Admin Topsell Run, saya butuh informasi / bantuan mengenai event TOPSELL RUN 2026.'
+  const defaultMessage = 'Saya mau tanya seputar topsellrun 2026.'
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(defaultMessage)}`
 
   return (
