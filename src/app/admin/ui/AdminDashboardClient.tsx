@@ -445,6 +445,88 @@ export function AdminDashboardClient({
   const [paymentDatePreset, setPaymentDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
   const [paymentSort, setPaymentSort] = useState<'newest' | 'oldest' | 'amount_desc' | 'amount_asc'>('newest')
 
+  const [pacerStatusFilter, setPacerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'testing'>('all')
+  const [pacerStartDate, setPacerStartDate] = useState('')
+  const [pacerEndDate, setPacerEndDate] = useState('')
+  const [pacerDatePreset, setPacerDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+  const [pacerSort, setPacerSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
+
+  const handlePacerDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
+    setPacerDatePreset(preset)
+    const now = new Date()
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'all') {
+      setPacerStartDate('')
+      setPacerEndDate('')
+    } else if (preset === 'today') {
+      const todayStr = formatDateForInput(now)
+      setPacerStartDate(todayStr)
+      setPacerEndDate(todayStr)
+    } else if (preset === '7d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 6)
+      setPacerStartDate(formatDateForInput(start))
+      setPacerEndDate(formatDateForInput(now))
+    } else if (preset === '30d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 29)
+      setPacerStartDate(formatDateForInput(start))
+      setPacerEndDate(formatDateForInput(now))
+    } else if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setPacerStartDate(formatDateForInput(start))
+      setPacerEndDate(formatDateForInput(end))
+    }
+  }
+
+  const [umkmPaymentStatusFilter, setUmkmPaymentStatusFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+  const [umkmStartDate, setUmkmStartDate] = useState('')
+  const [umkmEndDate, setUmkmEndDate] = useState('')
+  const [umkmDatePreset, setUmkmDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+  const [umkmSort, setUmkmSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
+
+  const handleUmkmDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
+    setUmkmDatePreset(preset)
+    const now = new Date()
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'all') {
+      setUmkmStartDate('')
+      setUmkmEndDate('')
+    } else if (preset === 'today') {
+      const todayStr = formatDateForInput(now)
+      setUmkmStartDate(todayStr)
+      setUmkmEndDate(todayStr)
+    } else if (preset === '7d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 6)
+      setUmkmStartDate(formatDateForInput(start))
+      setUmkmEndDate(formatDateForInput(now))
+    } else if (preset === '30d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 29)
+      setUmkmStartDate(formatDateForInput(start))
+      setUmkmEndDate(formatDateForInput(now))
+    } else if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setUmkmStartDate(formatDateForInput(start))
+      setUmkmEndDate(formatDateForInput(end))
+    }
+  }
+
   const handlePaymentDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
     setPaymentDatePreset(preset)
     const now = new Date()
@@ -984,6 +1066,169 @@ export function AdminDashboardClient({
     return filteredPayments.reduce((sum, p) => sum + p.amount, 0)
   }, [filteredPayments])
 
+  const pacerStats = useMemo(() => {
+    let pending = 0
+    let approved = 0
+    let rejected = 0
+    let testing = 0
+
+    for (const p of pacerRows) {
+      const status = pacerStatusChanges.get(p.pacer_id) || p.status
+      if (status === 'approved') approved += 1
+      else if (status === 'rejected') rejected += 1
+      else if (status === 'testing') testing += 1
+      else pending += 1
+    }
+
+    return {
+      total: pacerRows.length,
+      pending,
+      approved,
+      rejected,
+      testing,
+    }
+  }, [pacerRows, pacerStatusChanges])
+
+  const filteredPacerRows = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    let list = pacerRows
+
+    if (keyword) {
+      list = list.filter((p) => {
+        return [
+          p.full_name || '',
+          p.bib_name || '',
+          p.pacer_code || '',
+          p.email || '',
+          p.phone || '',
+          p.category || '',
+          p.ktp_number || '',
+          p.strava_username || '',
+          p.status || '',
+        ].some((val) => val.toLowerCase().includes(keyword))
+      })
+    }
+
+    if (pacerStatusFilter !== 'all') {
+      list = list.filter((p) => {
+        const currentStatus = pacerStatusChanges.get(p.pacer_id) || p.status
+        return currentStatus === pacerStatusFilter
+      })
+    }
+
+    if (pacerStartDate || pacerEndDate) {
+      const start = pacerStartDate ? new Date(`${pacerStartDate}T00:00:00`).getTime() : -Infinity
+      const end = pacerEndDate ? new Date(`${pacerEndDate}T23:59:59.999`).getTime() : Infinity
+
+      list = list.filter((p) => {
+        if (!p.created_at) return false
+        const pTime = new Date(p.created_at).getTime()
+        if (Number.isNaN(pTime)) return false
+        return pTime >= start && pTime <= end
+      })
+    }
+
+    return [...list].sort((a, b) => {
+      if (pacerSort === 'name_asc') {
+        return (a.full_name || '').localeCompare(b.full_name || '', 'id', { sensitivity: 'base' })
+      }
+      if (pacerSort === 'name_desc') {
+        return (b.full_name || '').localeCompare(a.full_name || '', 'id', { sensitivity: 'base' })
+      }
+      if (pacerSort === 'oldest') {
+        const timeA = new Date(a.created_at || 0).getTime()
+        const timeB = new Date(b.created_at || 0).getTime()
+        return timeA - timeB
+      }
+      // 'newest'
+      const timeA = new Date(a.created_at || 0).getTime()
+      const timeB = new Date(b.created_at || 0).getTime()
+      return timeB - timeA
+    })
+  }, [pacerRows, query, pacerStatusFilter, pacerStartDate, pacerEndDate, pacerSort, pacerStatusChanges])
+
+  const umkmStats = useMemo(() => {
+    let paid = 0
+    let unpaid = 0
+
+    for (const row of umkmRows) {
+      const payment = umkmPayments.find((p) => p.umkm_id === row.id)
+      const isPaid = payment?.status === 'paid' || row.payment_status === 'paid'
+      if (isPaid) paid += 1
+      else unpaid += 1
+    }
+
+    return {
+      total: umkmRows.length,
+      paid,
+      unpaid,
+    }
+  }, [umkmRows, umkmPayments])
+
+  const filteredUmkmRows = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    let list = umkmRows
+
+    if (keyword) {
+      list = list.filter((u) => {
+        return [
+          u.name || '',
+          u.pic_name || '',
+          u.umkm_code || '',
+          u.email || '',
+          u.phone || '',
+          u.business_field || '',
+          u.voucher_code || '',
+          u.status || '',
+          resolveLocationName(u.provinsi) || '',
+          resolveLocationName(u.kota) || '',
+          resolveLocationName(u.kecamatan) || '',
+          u.address || '',
+        ].some((val) => val.toLowerCase().includes(keyword))
+      })
+    }
+
+    if (umkmPaymentStatusFilter !== 'all') {
+      list = list.filter((u) => {
+        const payment = umkmPayments.find((p) => p.umkm_id === u.id)
+        const isPaid = payment?.status === 'paid' || u.payment_status === 'paid'
+        if (umkmPaymentStatusFilter === 'paid') return isPaid
+        if (umkmPaymentStatusFilter === 'unpaid') return !isPaid
+        return true
+      })
+    }
+
+    if (umkmStartDate || umkmEndDate) {
+      const start = umkmStartDate ? new Date(`${umkmStartDate}T00:00:00`).getTime() : -Infinity
+      const end = umkmEndDate ? new Date(`${umkmEndDate}T23:59:59.999`).getTime() : Infinity
+
+      list = list.filter((u) => {
+        if (!u.created_at) return false
+        const pTime = new Date(u.created_at).getTime()
+        if (Number.isNaN(pTime)) return false
+        return pTime >= start && pTime <= end
+      })
+    }
+
+    return [...list].sort((a, b) => {
+      if (umkmSort === 'name_asc') {
+        return (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' })
+      }
+      if (umkmSort === 'name_desc') {
+        return (b.name || '').localeCompare(a.name || '', 'id', { sensitivity: 'base' })
+      }
+      if (umkmSort === 'oldest') {
+        const timeA = new Date(a.created_at || 0).getTime()
+        const timeB = new Date(b.created_at || 0).getTime()
+        return timeA - timeB
+      }
+      // 'newest'
+      const timeA = new Date(a.created_at || 0).getTime()
+      const timeB = new Date(b.created_at || 0).getTime()
+      return timeB - timeA
+    })
+  }, [umkmRows, query, umkmPaymentStatusFilter, umkmStartDate, umkmEndDate, umkmSort, umkmPayments])
+
   const groupedParticipants = useMemo(() => {
     const groups = new Map<
       string,
@@ -1335,7 +1580,7 @@ export function AdminDashboardClient({
     const XLSX = await import('xlsx')
     const today = new Date().toISOString().slice(0, 10)
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPacerExportRows(pacerRows)), 'Pacer')
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildPacerExportRows(filteredPacerRows)), 'Pacer')
     XLSX.writeFile(workbook, `topsell-run-pacer-${today}.xlsx`)
   }
 
@@ -1371,7 +1616,7 @@ export function AdminDashboardClient({
     const XLSX = await import('xlsx')
     const today = new Date().toISOString().slice(0, 10)
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildUmkmExportRows(umkmRows)), 'UMKM')
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildUmkmExportRows(filteredUmkmRows)), 'UMKM')
     XLSX.writeFile(workbook, `topsell-run-umkm-${today}.xlsx`)
   }
 
@@ -2348,7 +2593,7 @@ export function AdminDashboardClient({
             </p>
           </div>
 
-          {(activeTab === 'participants' || activeTab === 'payments') && (
+          {(activeTab === 'participants' || activeTab === 'payments' || activeTab === 'pacer' || activeTab === 'umkm') && (
             <div className="flex items-center gap-3">
               <label className="relative w-64">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -2358,6 +2603,10 @@ export function AdminDashboardClient({
                   placeholder={
                     activeTab === 'payments'
                       ? 'Cari pembayaran...'
+                      : activeTab === 'pacer'
+                      ? 'Cari pacer...'
+                      : activeTab === 'umkm'
+                      ? 'Cari UMKM...'
                       : 'Cari peserta, komunitas...'
                   }
                   className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
@@ -2367,8 +2616,8 @@ export function AdminDashboardClient({
           )}
         </header>
 
-        {/* Mobile-only Search Bar (Visible under mobile header when participants or payments tab) */}
-        {(activeTab === 'participants' || activeTab === 'payments') && (
+        {/* Mobile-only Search Bar (Visible under mobile header when participants, payments, pacer, or umkm tab) */}
+        {(activeTab === 'participants' || activeTab === 'payments' || activeTab === 'pacer' || activeTab === 'umkm') && (
           <div className="md:hidden px-4 py-3 border-b border-card-border/50 bg-brand-dark/20">
             <label className="relative w-full block">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -2378,6 +2627,10 @@ export function AdminDashboardClient({
                 placeholder={
                   activeTab === 'payments'
                     ? 'Cari pembayaran...'
+                    : activeTab === 'pacer'
+                    ? 'Cari pacer...'
+                    : activeTab === 'umkm'
+                    ? 'Cari UMKM...'
                     : 'Cari peserta, komunitas...'
                 }
                 className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
@@ -3536,17 +3789,215 @@ export function AdminDashboardClient({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Pacer</p>
-                  <h2 className="text-sm font-black uppercase text-foreground">Pendaftar Pacer ({pacerRows.length})</h2>
+                  <h2 className="text-sm font-black uppercase text-foreground">
+                    Pendaftar Pacer ({filteredPacerRows.length}{filteredPacerRows.length !== pacerRows.length ? ` / ${pacerRows.length}` : ''})
+                  </h2>
                   <p className="text-[11px] text-brand-muted mt-1">Tanpa pembayaran — review &amp; setujui/tolak pendaftar di bawah ini.</p>
                 </div>
-                <Button onClick={exportPacerRows} disabled={pacerRows.length === 0} className="shrink-0">
+                <Button onClick={exportPacerRows} disabled={filteredPacerRows.length === 0} className="shrink-0">
                   <Download className="w-4 h-4 mr-2" />Export ke Excel
                 </Button>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col gap-3 shadow-xs">
+                {/* Status Tabs */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                    <Filter className="w-3.5 h-3.5 text-sport-orange" />
+                    <span>Status:</span>
+                  </div>
+                  {(
+                    [
+                      { id: 'all', label: 'Semua Status', count: pacerStats.total, activeColor: 'bg-sport-orange text-white border-sport-orange shadow-xs', badgeColor: 'bg-white/20 text-white' },
+                      { id: 'pending', label: 'Pending', count: pacerStats.pending, activeColor: 'bg-amber-500/20 text-amber-500 border-amber-500/50 shadow-xs', badgeColor: 'bg-amber-500/20 text-amber-500' },
+                      { id: 'approved', label: 'Approved', count: pacerStats.approved, activeColor: 'bg-green-500/20 text-green-500 border-green-500/50 shadow-xs', badgeColor: 'bg-green-500/20 text-green-500' },
+                      { id: 'rejected', label: 'Rejected', count: pacerStats.rejected, activeColor: 'bg-red-500/20 text-red-500 border-red-500/50 shadow-xs', badgeColor: 'bg-red-500/20 text-red-500' },
+                      { id: 'testing', label: 'Testing', count: pacerStats.testing, activeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/50 shadow-xs', badgeColor: 'bg-blue-500/20 text-blue-400' },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = pacerStatusFilter === tab.id
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setPacerStatusFilter(tab.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
+                          isActive
+                            ? tab.activeColor
+                            : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                            isActive
+                              ? tab.id === 'all'
+                                ? 'bg-black/20 text-white'
+                                : tab.badgeColor
+                              : 'bg-brand-dark/40 text-brand-muted'
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Date & Sort Filter */}
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2 border-t border-card-border/50">
+                  {/* Date Filter & Presets */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <CalendarDays className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Waktu:</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+                      {(
+                        [
+                          { id: 'all', label: 'Semua' },
+                          { id: 'today', label: 'Hari Ini' },
+                          { id: '7d', label: '7 Hari' },
+                          { id: '30d', label: '30 Hari' },
+                          { id: 'this_month', label: 'Bulan Ini' },
+                        ] as const
+                      ).map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handlePacerDatePresetChange(preset.id)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                            pacerDatePreset === preset.id
+                              ? 'bg-sport-orange text-white shadow-xs'
+                              : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom date range inputs */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={pacerStartDate}
+                        onChange={(e) => {
+                          setPacerStartDate(e.target.value)
+                          setPacerDatePreset('custom')
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title="Dari Tanggal Pendaftaran"
+                      />
+                      <span className="text-[10px] text-brand-muted font-bold">-</span>
+                      <input
+                        type="date"
+                        value={pacerEndDate}
+                        onChange={(e) => {
+                          setPacerEndDate(e.target.value)
+                          setPacerDatePreset('custom')
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title="Sampai Tanggal Pendaftaran"
+                      />
+
+                      {(pacerStartDate || pacerEndDate) && (
+                        <button
+                          type="button"
+                          onClick={() => handlePacerDatePresetChange('all')}
+                          className="p-1 text-brand-muted hover:text-sport-red hover:bg-sport-red/10 rounded transition-colors cursor-pointer"
+                          title="Reset Filter Tanggal"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sorting Controls */}
+                  <div className="flex items-center gap-2 self-start xl:self-auto">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Urutkan:</span>
+                    </div>
+                    <select
+                      value={pacerSort}
+                      onChange={(e) => setPacerSort(e.target.value as 'newest' | 'oldest' | 'name_asc' | 'name_desc')}
+                      className="px-2.5 py-1.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                    >
+                      <option value="newest">Pendaftaran Terbaru (Waktu)</option>
+                      <option value="oldest">Pendaftaran Terlama (Waktu)</option>
+                      <option value="name_asc">Abjad (A → Z)</option>
+                      <option value="name_desc">Abjad (Z → A)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-header / Filter summary */}
+              <div className="bg-brand-dark/30 border border-card-border rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                      Total Data Ditemukan
+                    </p>
+                    <p className="text-xs font-bold text-foreground">
+                      {filteredPacerRows.length} pacer
+                    </p>
+                  </div>
+                  {(pacerStartDate || pacerEndDate) && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Filter Tanggal Aktif
+                    </span>
+                  )}
+                  {pacerStatusFilter !== 'all' && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Status: {pacerStatusFilter.toUpperCase()}
+                    </span>
+                  )}
+                  {query && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Cari: &ldquo;{query}&rdquo;
+                    </span>
+                  )}
+                </div>
+
+                {(pacerStartDate || pacerEndDate || pacerStatusFilter !== 'all' || query) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPacerStatusFilter('all')
+                      handlePacerDatePresetChange('all')
+                      setQuery('')
+                    }}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-sport-red hover:underline cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset Semua Filter
+                  </button>
+                )}
               </div>
 
               <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden shadow-lg">
                 {pacerRows.length === 0 ? (
                   <div className="p-8 text-center text-xs font-bold text-brand-muted">Belum ada pendaftar pacer.</div>
+                ) : filteredPacerRows.length === 0 ? (
+                  <div className="p-8 text-center text-xs font-bold text-brand-muted flex flex-col items-center gap-3">
+                    <p>Tidak ada data pacer yang sesuai dengan kriteria filter.</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setPacerStatusFilter('all')
+                        handlePacerDatePresetChange('all')
+                        setQuery('')
+                      }}
+                    >
+                      Reset Filter
+                    </Button>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -3561,7 +4012,7 @@ export function AdminDashboardClient({
                         </tr>
                       </thead>
                       <tbody>
-                        {pacerRows.map((row) => {
+                        {filteredPacerRows.map((row) => {
                           const hasPacerChange = pacerStatusChanges.has(row.pacer_id)
                           const pacerStatus = pacerStatusChanges.get(row.pacer_id) || row.status
                           return (
@@ -3651,17 +4102,213 @@ export function AdminDashboardClient({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Tenant UMKM</p>
-                  <h2 className="text-sm font-black uppercase text-foreground">Pendaftar Tenant UMKM ({umkmRows.length})</h2>
+                  <h2 className="text-sm font-black uppercase text-foreground">
+                    Pendaftar Tenant UMKM ({filteredUmkmRows.length}{filteredUmkmRows.length !== umkmRows.length ? ` / ${umkmRows.length}` : ''})
+                  </h2>
                   <p className="text-[11px] text-brand-muted mt-1">Biaya Rp 500.000 — review &amp; setujui pendaftar agar tombol pembayaran mereka aktif.</p>
                 </div>
-                <Button onClick={exportUmkmRows} disabled={umkmRows.length === 0} className="shrink-0">
+                <Button onClick={exportUmkmRows} disabled={filteredUmkmRows.length === 0} className="shrink-0">
                   <Download className="w-4 h-4 mr-2" />Export ke Excel
                 </Button>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col gap-3 shadow-xs">
+                {/* Status Bayar Tabs */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                    <Filter className="w-3.5 h-3.5 text-sport-orange" />
+                    <span>Status Bayar:</span>
+                  </div>
+                  {(
+                    [
+                      { id: 'all', label: 'Semua', count: umkmStats.total, activeColor: 'bg-sport-orange text-white border-sport-orange shadow-xs', badgeColor: 'bg-white/20 text-white' },
+                      { id: 'paid', label: 'Lunas', count: umkmStats.paid, activeColor: 'bg-green-500/20 text-green-500 border-green-500/50 shadow-xs', badgeColor: 'bg-green-500/20 text-green-500' },
+                      { id: 'unpaid', label: 'Belum Bayar', count: umkmStats.unpaid, activeColor: 'bg-amber-500/20 text-amber-500 border-amber-500/50 shadow-xs', badgeColor: 'bg-amber-500/20 text-amber-500' },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = umkmPaymentStatusFilter === tab.id
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setUmkmPaymentStatusFilter(tab.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
+                          isActive
+                            ? tab.activeColor
+                            : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                            isActive
+                              ? tab.id === 'all'
+                                ? 'bg-black/20 text-white'
+                                : tab.badgeColor
+                              : 'bg-brand-dark/40 text-brand-muted'
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Date & Sort Filter */}
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2 border-t border-card-border/50">
+                  {/* Date Filter & Presets */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <CalendarDays className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Waktu:</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
+                      {(
+                        [
+                          { id: 'all', label: 'Semua' },
+                          { id: 'today', label: 'Hari Ini' },
+                          { id: '7d', label: '7 Hari' },
+                          { id: '30d', label: '30 Hari' },
+                          { id: 'this_month', label: 'Bulan Ini' },
+                        ] as const
+                      ).map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleUmkmDatePresetChange(preset.id)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                            umkmDatePreset === preset.id
+                              ? 'bg-sport-orange text-white shadow-xs'
+                              : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom date range inputs */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={umkmStartDate}
+                        onChange={(e) => {
+                          setUmkmStartDate(e.target.value)
+                          setUmkmDatePreset('custom')
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title="Dari Tanggal Pendaftaran"
+                      />
+                      <span className="text-[10px] text-brand-muted font-bold">-</span>
+                      <input
+                        type="date"
+                        value={umkmEndDate}
+                        onChange={(e) => {
+                          setUmkmEndDate(e.target.value)
+                          setUmkmDatePreset('custom')
+                        }}
+                        className="px-2 py-1 bg-brand-gray/40 border border-card-border rounded text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                        title="Sampai Tanggal Pendaftaran"
+                      />
+
+                      {(umkmStartDate || umkmEndDate) && (
+                        <button
+                          type="button"
+                          onClick={() => handleUmkmDatePresetChange('all')}
+                          className="p-1 text-brand-muted hover:text-sport-red hover:bg-sport-red/10 rounded transition-colors cursor-pointer"
+                          title="Reset Filter Tanggal"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sorting Controls */}
+                  <div className="flex items-center gap-2 self-start xl:self-auto">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Urutkan:</span>
+                    </div>
+                    <select
+                      value={umkmSort}
+                      onChange={(e) => setUmkmSort(e.target.value as 'newest' | 'oldest' | 'name_asc' | 'name_desc')}
+                      className="px-2.5 py-1.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold text-foreground focus:outline-none focus:border-sport-orange cursor-pointer"
+                    >
+                      <option value="newest">Pendaftaran Terbaru (Waktu)</option>
+                      <option value="oldest">Pendaftaran Terlama (Waktu)</option>
+                      <option value="name_asc">Abjad Usaha (A → Z)</option>
+                      <option value="name_desc">Abjad Usaha (Z → A)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-header / Filter summary */}
+              <div className="bg-brand-dark/30 border border-card-border rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-brand-muted">
+                      Total Data Ditemukan
+                    </p>
+                    <p className="text-xs font-bold text-foreground">
+                      {filteredUmkmRows.length} tenant UMKM
+                    </p>
+                  </div>
+                  {(umkmStartDate || umkmEndDate) && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Filter Tanggal Aktif
+                    </span>
+                  )}
+                  {umkmPaymentStatusFilter !== 'all' && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Bayar: {umkmPaymentStatusFilter === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}
+                    </span>
+                  )}
+                  {query && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Cari: &ldquo;{query}&rdquo;
+                    </span>
+                  )}
+                </div>
+
+                {(umkmStartDate || umkmEndDate || umkmPaymentStatusFilter !== 'all' || query) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUmkmPaymentStatusFilter('all')
+                      handleUmkmDatePresetChange('all')
+                      setQuery('')
+                    }}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-sport-red hover:underline cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset Semua Filter
+                  </button>
+                )}
               </div>
 
               <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden shadow-lg">
                 {umkmRows.length === 0 ? (
                   <div className="p-8 text-center text-xs font-bold text-brand-muted">Belum ada pendaftar UMKM.</div>
+                ) : filteredUmkmRows.length === 0 ? (
+                  <div className="p-8 text-center text-xs font-bold text-brand-muted flex flex-col items-center gap-3">
+                    <p>Tidak ada data UMKM yang sesuai dengan kriteria filter.</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setUmkmPaymentStatusFilter('all')
+                        handleUmkmDatePresetChange('all')
+                        setQuery('')
+                      }}
+                    >
+                      Reset Filter
+                    </Button>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -3679,7 +4326,7 @@ export function AdminDashboardClient({
                         </tr>
                       </thead>
                       <tbody>
-                        {umkmRows.map((row) => {
+                        {filteredUmkmRows.map((row) => {
                           const payment = umkmPayments.find((p) => p.umkm_id === row.id)
                           const isPaid = payment?.status === 'paid' || row.payment_status === 'paid'
                           const finalAmount = row.payment_amount ?? 500000
