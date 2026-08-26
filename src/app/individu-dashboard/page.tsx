@@ -131,9 +131,16 @@ function DashboardContent() {
     setIsCheckoutLoading(true)
     try {
       const res = await createIndividualPayment()
-      if (!res.success) return alert(res.error)
       setPaymentSyncMessage('')
       setHasOpenedCheckout(false)
+      // Pendaftaran gratis sudah ditandai lunas di server — tidak ada checkout yang perlu dibuka.
+      if ('freePaid' in res) {
+        confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 }, colors: ['#ff2a44', '#ff6a00', '#ffffff'] })
+        if (user?.id) await fetchIndividualData()
+        setCheckoutPayload(null)
+        return
+      }
+      if (!res.success) return alert(res.error)
       setCheckoutPayload(res)
     } finally {
       setIsCheckoutLoading(false)

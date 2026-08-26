@@ -85,6 +85,52 @@ async function resolveXenditPaymentMethod(sessionData: unknown, authHeader: stri
   return extractXenditPaymentMethod(paymentRequest.data)
 }
 
+/**
+ * Pendaftaran Rp 0 (voucher diskon penuh) tidak lewat Xendit: tandai lunas di
+ * sini, lalu kirim notifikasi yang sama persis dengan pembayaran biasa —
+ * termasuk webhook pembayaran ke GHL lewat sendIndividualRacepackWhatsapps.
+ */
+async function settleFreeIndividualPayment(params: {
+  individualId: string
+  individualName: string
+  paymentId: string
+  registrationId: string
+  reference: string
+  participantCount: number
+}) {
+  await markIndividualPaymentPaid(params.paymentId, { payment_method: 'free' })
+
+  await Promise.all([
+    sendIndividualReceiptEmail(params.registrationId),
+    sendIndividualRacepackEmailsForRegistration(params.registrationId),
+    sendIndividualRacepackWhatsappsForRegistration(params.registrationId),
+  ])
+
+  try {
+    await ingestAdminLog({
+      level: 'info',
+      source: 'payment',
+      event: 'individual_payment_free_paid',
+      message: `Pendaftaran individu gratis langsung lunas: ${params.individualName} (Ref: ${params.reference}).`,
+      data: { individualId: params.individualId, paymentId: params.paymentId, reference: params.reference, amount: 0 },
+    })
+  } catch (logError) {
+    console.error('Failed to log free individual payment:', logError)
+  }
+
+  revalidatePath('/individu-dashboard')
+
+  return {
+    success: true,
+    freePaid: true as const,
+    paymentId: params.paymentId,
+    registrationId: params.registrationId,
+    amount: 0,
+    reference: params.reference,
+    participantCount: params.participantCount,
+  }
+}
+
 export async function createIndividualPayment() {
   const session = await getIndividualSession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
@@ -96,6 +142,17 @@ export async function createIndividualPayment() {
     const existingPayment = await findPendingIndividualPaymentByRegistrationIds(pendingRegistrations.map((r) => r.id))
     if (existingPayment) {
       const existingRegistration = pendingRegistrations.find((r) => r.id === existingPayment.registration_id)
+
+      if (existingPayment.amount === 0) {
+        return settleFreeIndividualPayment({
+          individualId: session.id,
+          individualName: session.name,
+          paymentId: existingPayment.id,
+          registrationId: existingPayment.registration_id,
+          reference: existingPayment.payment_reference,
+          participantCount: existingRegistration?.total_participants || 0,
+        })
+      }
 
       // Invoice pending dibuat saat signup TANPA checkout Xendit — generate sekarang jika belum ada.
       if (!existingPayment.checkout_url && !existingPayment.xendit_session_id?.startsWith('demo-xendit-session-')) {
@@ -257,6 +314,17 @@ export async function createIndividualPayment() {
   } catch {
     await deleteIndividualRegistration(registration.id)
     return { error: 'Gagal membuat invoice pembayaran.' }
+  }
+
+  if (finalAmount === 0) {
+    return settleFreeIndividualPayment({
+      individualId: session.id,
+      individualName: session.name,
+      paymentId: payment.id,
+      registrationId: registration.id,
+      reference: paymentRef,
+      participantCount: participants.length,
+    })
   }
 
   const xenditSecretKey = process.env.XENDIT_SECRET_KEY || ''

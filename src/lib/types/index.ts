@@ -531,7 +531,7 @@ export interface UmkmRegistration {
   kecamatan: string | null
   address?: string | null
   // Admin approval status
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'testing'
   status_note: string | null
   reviewed_at: string | null
   // Payment

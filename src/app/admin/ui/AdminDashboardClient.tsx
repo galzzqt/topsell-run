@@ -209,6 +209,7 @@ export type AdminPayment = {
 }
 
 export type PacerStatus = 'pending' | 'approved' | 'rejected' | 'testing'
+export type UmkmStatus = 'pending' | 'approved' | 'rejected' | 'testing'
 
 export type AdminPacerRow = {
   id: string
@@ -720,6 +721,7 @@ export function AdminDashboardClient({
   const [pacerEditing, setPacerEditing] = useState<AdminPacerRow | null>(null)
   const [pacerForm, setPacerForm] = useState<AdminPacerParticipantUpdateValues | null>(null)
   const [pacerStatusChanges, setPacerStatusChanges] = useState<Map<string, PacerStatus>>(new Map())
+  const [umkmStatusChanges, setUmkmStatusChanges] = useState<Map<string, UmkmStatus>>(new Map())
   const [umkmDetail, setUmkmDetail] = useState<UmkmRegistration | null>(null)
   const [processingUmkmId, setProcessingUmkmId] = useState<string | null>(null)
   const [settingsForm, setSettingsForm] = useState<AdminSettings>(adminSettings)
@@ -2017,9 +2019,13 @@ export function AdminDashboardClient({
 
     let note: string | undefined
     if (newStatus === 'rejected') {
-      const input = window.prompt('Catatan penolakan (opsional):')
+      const input = window.prompt('Alasan penolakan (wajib diisi):')
       if (input === null) return // Batal di prompt = batalkan aksi
       note = input.trim() || undefined
+      if (!note) {
+        alert('Alasan penolakan wajib diisi.')
+        return
+      }
     }
 
     const effect =
@@ -2044,6 +2050,64 @@ export function AdminDashboardClient({
     })
   }
 
+  const handleUmkmStatusChange = (umkmId: string, newStatus: UmkmStatus) => {
+    setUmkmStatusChanges((prev) => {
+      const next = new Map(prev)
+      next.set(umkmId, newStatus)
+      return next
+    })
+  }
+
+  const handleCancelUmkmStatusChange = (umkmId: string) => {
+    setUmkmStatusChanges((prev) => {
+      const next = new Map(prev)
+      next.delete(umkmId)
+      return next
+    })
+  }
+
+  const handleSaveUmkmStatus = (row: UmkmRegistration) => {
+    const newStatus = umkmStatusChanges.get(row.id)
+    if (!newStatus || newStatus === row.status) return
+
+    let note: string | undefined
+    if (newStatus === 'rejected') {
+      const input = window.prompt('Alasan penolakan (wajib diisi):')
+      if (input === null) return // Batal di prompt = batalkan aksi
+      note = input.trim() || undefined
+      if (!note) {
+        alert('Alasan penolakan wajib diisi.')
+        return
+      }
+    }
+
+    const effect =
+      newStatus === 'approved'
+        ? '\n\nTombol pembayaran di dashboard tenant akan aktif, dan tenant menerima email + WhatsApp persetujuan.'
+        : newStatus === 'rejected'
+          ? '\n\nAlasan penolakan dikirim ke tenant lewat email & WhatsApp.'
+          : '\n\nStatus internal — tidak ada email keputusan yang dikirim.'
+
+    if (!window.confirm(`Ubah status UMKM "${row.name}" dari ${row.status.toUpperCase()} menjadi ${newStatus.toUpperCase()}?${effect}`)) {
+      return
+    }
+
+    setProcessingUmkmId(row.id)
+    startTransition(async () => {
+      try {
+        const result = await updateAdminUmkmStatus(row.id, newStatus, note)
+        if (result.error) {
+          alert(result.error)
+          return
+        }
+        handleCancelUmkmStatusChange(row.id)
+        router.refresh()
+      } finally {
+        setProcessingUmkmId(null)
+      }
+    })
+  }
+
   const handleUmkmApprove = (row: UmkmRegistration) => {
     if (!window.confirm(`Apakah Anda yakin ingin menyetujui (APPROVE) UMKM "${row.name}" (PIC: ${row.pic_name})?\n\nSetelah disetujui, tombol pembayaran di dashboard UMKM akan aktif.`)) {
       return
@@ -2064,21 +2128,25 @@ export function AdminDashboardClient({
   }
 
   const handleUmkmReject = (row: UmkmRegistration) => {
-    const note = window.prompt('Catatan penolakan (opsional):')
-    if (note === null) return
+    const input = window.prompt('Alasan penolakan (wajib diisi):')
+    if (input === null) return
 
-    const confirmMessage = note.trim()
-      ? `Apakah Anda yakin ingin menolak (REJECT) UMKM "${row.name}" dengan catatan: "${note}"?`
-      : `Apakah Anda yakin ingin menolak (REJECT) UMKM "${row.name}"?`
+    const note = input.trim()
+    if (!note) {
+      alert('Alasan penolakan wajib diisi.')
+      return
+    }
 
-    if (!window.confirm(confirmMessage)) {
+    if (!window.confirm(`Apakah Anda yakin ingin menolak (REJECT) UMKM "${row.name}" dengan alasan: "${note}"?
+
+Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
       return
     }
 
     setProcessingUmkmId(row.id)
     startTransition(async () => {
       try {
-        const result = await updateAdminUmkmStatus(row.id, 'rejected', note || undefined)
+        const result = await updateAdminUmkmStatus(row.id, 'rejected', note)
         if (result.error) {
           alert(result.error)
           return
@@ -4470,9 +4538,11 @@ export function AdminDashboardClient({
                           const payment = umkmPayments.find((p) => p.umkm_id === row.id)
                           const isPaid = payment?.status === 'paid' || row.payment_status === 'paid'
                           const finalAmount = row.payment_amount ?? 500000
+                          const hasUmkmChange = umkmStatusChanges.has(row.id)
+                          const umkmStatus = umkmStatusChanges.get(row.id) || row.status
 
                           return (
-                            <tr key={row.id} className="border-b border-card-border hover:bg-brand-gray/20 transition-colors">
+                            <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasUmkmChange ? 'bg-yellow-50' : ''}`}>
                               <td className="px-4 py-3.5">
                                 <p className="text-sm font-bold text-foreground">{row.name}</p>
                                 <p className="text-[10px] font-bold text-sport-orange uppercase">PIC: {row.pic_name}</p>
@@ -4514,9 +4584,23 @@ export function AdminDashboardClient({
                                 </Badge>
                               </td>
                               <td className="px-4 py-3.5 text-center">
-                                <Badge variant={row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
-                                  {row.status.toUpperCase()}
-                                </Badge>
+                                <select
+                                  value={umkmStatus}
+                                  onChange={(e) => handleUmkmStatusChange(row.id, e.target.value as UmkmStatus)}
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all cursor-pointer ${umkmStatus === 'approved'
+                                      ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                                      : umkmStatus === 'rejected'
+                                        ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                                        : umkmStatus === 'testing'
+                                          ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                                          : 'bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100'
+                                    }`}
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="approved">Approved</option>
+                                  <option value="rejected">Rejected</option>
+                                  <option value="testing">Testing</option>
+                                </select>
                               </td>
                               <td className="px-4 py-3.5 text-center">
                                 <Badge variant={isPaid ? 'success' : payment?.status === 'failed' ? 'danger' : 'warning'}>
@@ -4531,33 +4615,23 @@ export function AdminDashboardClient({
                                   >
                                     Detail
                                   </button>
-                                  {row.status !== 'approved' && (
-                                    <button
-                                      onClick={() => handleUmkmApprove(row)}
-                                      disabled={isPending || processingUmkmId !== null}
-                                      className="inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50 min-w-[28px] min-h-[28px]"
-                                      title="Setujui UMKM"
-                                    >
-                                      {processingUmkmId === row.id ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <ThumbsUp className="w-3 h-3" />
-                                      )}
-                                    </button>
-                                  )}
-                                  {row.status !== 'rejected' && (
-                                    <button
-                                      onClick={() => handleUmkmReject(row)}
-                                      disabled={isPending || processingUmkmId !== null}
-                                      className="inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-sport-red/10 hover:bg-sport-red/20 border border-sport-red/25 text-sport-red rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50 min-w-[28px] min-h-[28px]"
-                                      title="Tolak UMKM"
-                                    >
-                                      {processingUmkmId === row.id ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <ThumbsDown className="w-3 h-3" />
-                                      )}
-                                    </button>
+                                  {hasUmkmChange && (
+                                    <>
+                                      <button
+                                        onClick={() => handleSaveUmkmStatus(row)}
+                                        disabled={isPending || processingUmkmId !== null}
+                                        className="px-2 py-1.5 bg-sport-orange text-white rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
+                                      >
+                                        {processingUmkmId === row.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Save'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleCancelUmkmStatusChange(row.id)}
+                                        disabled={isPending || processingUmkmId !== null}
+                                        className="px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer disabled:opacity-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </td>

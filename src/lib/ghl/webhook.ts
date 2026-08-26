@@ -304,52 +304,75 @@ export async function sendPacerRegistrationWebhook(payload: {
 }
 
 /**
- * Kabari pacer lewat WhatsApp bahwa pendaftarannya disetujui.
+ * Kabari pacer lewat WhatsApp setiap kali admin mengubah status seleksinya.
  *
  * Terpisah dari sendPacerRegistrationWebhook: keduanya dulu memakai URL yang
  * sama, sehingga pacer yang di-approve justru menerima pesan pendaftaran dari
  * workflow GHL yang memang dibangun untuk pendaftaran.
  *
- * Hanya untuk approved. Penolakan masih lewat jalur lama.
+ * Semua status dikirim ke slot webhook "status"; percabangan pesan
+ * approve/reject/dll ditangani if-else di workflow GHL.
  */
-export async function sendPacerApprovalWebhook(payload: {
+const PACER_STATUS_MESSAGE: Record<string, (p: { fullName: string; category: string; pacerCode: string; statusNote?: string }) => string> = {
+  approved: (p) =>
+    `Selamat ${p.fullName}! Anda resmi terpilih sebagai Pacer TOPSELL RUN 2026 untuk kategori ${p.category}. Kode pacer Anda: ${p.pacerCode}. Silakan masuk ke Dashboard Pacer untuk melengkapi profil dan mengunduh QR Pass Anda.`,
+  rejected: (p) =>
+    `Halo ${p.fullName}, terima kasih sudah mendaftar sebagai Pacer TOPSELL RUN 2026 (Kategori: ${p.category}). Mohon maaf, kali ini pendaftaran Anda belum dapat kami setujui.${p.statusNote ? ` Alasan: ${p.statusNote}` : ''}`,
+}
+
+export async function sendPacerStatusWebhook(payload: {
   phone: string
   email: string
   fullName: string
   category: string
   pacerCode: string
+  status: string
+  /** Alasan penolakan; wajib diisi admin saat status rejected. */
+  statusNote?: string
 }) {
+  const message =
+    PACER_STATUS_MESSAGE[payload.status]?.({
+      fullName: payload.fullName,
+      category: payload.category,
+      pacerCode: payload.pacerCode,
+      statusNote: payload.statusNote,
+    }) ??
+    `Status pendaftaran pacer ${payload.fullName} (Kategori: ${payload.category}) diperbarui menjadi ${payload.status.toUpperCase()}.`
+
   return postWebhook('status', 'pacer', {
-    event: 'pacer_approved',
+    event: `pacer_${payload.status}`,
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
     email: payload.email,
     full_name: payload.fullName,
     category: payload.category,
     pacer_code: payload.pacerCode,
-    status: 'approved',
-    message: `Selamat ${payload.fullName}! Anda resmi terpilih sebagai Pacer TOPSELL RUN 2026 untuk kategori ${payload.category}. Kode pacer Anda: ${payload.pacerCode}. Silakan masuk ke Dashboard Pacer untuk melengkapi profil dan mengunduh QR Pass Anda.`,
+    status: payload.status,
+    status_note: payload.statusNote || '',
+    message,
   })
 }
 
 /**
- * Kabari tenant UMKM lewat WhatsApp bahwa pendaftarannya disetujui.
- *
- * Hanya untuk status approved — penolakan cukup lewat email
- * (src/lib/email/umkm.ts), sesuai permintaan.
+ * Kabari tenant UMKM lewat WhatsApp setiap kali admin mengubah status
+ * pendaftarannya (approved/rejected). Percabangan pesan ditangani if-else di
+ * workflow GHL lewat field `status`.
  *
  * URL diambil dari slot webhookSettings.umkm.status ("Webhook Status") sesuai
  * fungsinya. Selama slot itu masih kosong, nilainya jatuh ke slot registration
  * agar setelan lama tetap jalan — hapus fallback ini setelah URL dipindah.
  * ponytail: fallback slot lama, hapus setelah migrasi setelan UMKM selesai.
  */
-export async function sendUmkmApprovalWebhook(payload: {
+export async function sendUmkmStatusWebhook(payload: {
   phone: string
   email: string
   name: string
   picName: string
   umkmCode: string
   businessField: string
+  status: 'pending' | 'approved' | 'rejected' | 'testing'
+  /** Alasan penolakan; wajib diisi admin saat status rejected. */
+  statusNote?: string
   /** Sisa tagihan; 0 untuk tenant gratis atau yang sudah lunas. */
   amountDue: number
 }) {
@@ -358,8 +381,15 @@ export async function sendUmkmApprovalWebhook(payload: {
       ? `Silakan masuk ke dashboard tenant untuk menyelesaikan pembayaran sebesar ${formatCurrency(payload.amountDue)}. Slot tenant terkunci setelah pembayaran diterima.`
       : `Tidak ada biaya yang perlu dibayar dan slot tenant Anda sudah terkunci.`
 
+  const message =
+    payload.status === 'approved'
+      ? `Selamat! Pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 telah DISETUJUI. ${paymentLine}`
+      : payload.status === 'rejected'
+        ? `Mohon maaf, pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 belum dapat kami setujui.${payload.statusNote ? ` Alasan: ${payload.statusNote}` : ''}`
+        : `Status pendaftaran tenant UMKM ${payload.name} diperbarui menjadi ${payload.status.toUpperCase()}.`
+
   return postWebhook('status', 'umkm', {
-    event: 'umkm_approved',
+    event: `umkm_${payload.status}`,
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
     email: payload.email,
@@ -367,9 +397,10 @@ export async function sendUmkmApprovalWebhook(payload: {
     pic_name: payload.picName,
     umkm_code: payload.umkmCode,
     business_field: payload.businessField,
-    status: 'approved',
+    status: payload.status,
+    status_note: payload.statusNote || '',
     amount_due: payload.amountDue,
-    message: `Selamat! Pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 telah DISETUJUI. ${paymentLine}`,
+    message,
   }, 'registration')
 }
 
@@ -399,6 +430,9 @@ export async function sendUmkmPaymentConfirmationWebhook(payload: {
     business_field: payload.businessField,
     status: 'paid',
     amount: payload.amount,
-    message: `Pembayaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 sebesar ${formatCurrency(payload.amount)} sudah kami terima. Slot tenant Anda resmi terkunci.`,
+    message:
+      payload.amount > 0
+        ? `Pembayaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 sebesar ${formatCurrency(payload.amount)} sudah kami terima. Slot tenant Anda resmi terkunci.`
+        : `Pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 sudah LUNAS tanpa biaya (voucher). Slot tenant Anda resmi terkunci.`,
   })
 }

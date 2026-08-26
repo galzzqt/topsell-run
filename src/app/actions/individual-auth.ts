@@ -220,6 +220,22 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
         payment_method: 'voucher_free',
         paid_at: new Date().toISOString(),
       })
+
+      // Lunas tanpa lewat Xendit tetap dapat notifikasi pembayaran yang sama:
+      // receipt + racepack email + webhook racepack ke GHL.
+      try {
+        const [{ sendIndividualRacepackEmailsForRegistration, sendIndividualReceiptEmail }, { sendIndividualRacepackWhatsappsForRegistration }] = await Promise.all([
+          import('@/lib/email/individual'),
+          import('@/lib/whatsapp/individual'),
+        ])
+        await Promise.all([
+          sendIndividualReceiptEmail(registration.id),
+          sendIndividualRacepackEmailsForRegistration(registration.id),
+          sendIndividualRacepackWhatsappsForRegistration(registration.id),
+        ])
+      } catch (notifyError) {
+        console.error('Failed to notify free individual payment:', notifyError)
+      }
     }
 
     if (voucherId) {

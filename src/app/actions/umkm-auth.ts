@@ -123,6 +123,14 @@ export async function signUpUmkm(values: RegisterUmkmFormValues, voucherCode?: s
         status: 'paid',
         paid_at: new Date().toISOString(),
       })
+
+      // Lunas tanpa lewat Xendit tetap mengirim webhook konfirmasi pembayaran.
+      try {
+        const { sendUmkmPaymentConfirmation } = await import('@/lib/whatsapp/umkm')
+        await sendUmkmPaymentConfirmation(umkm.id, 0)
+      } catch (webhookError) {
+        console.error('Failed to send free UMKM payment confirmation webhook:', webhookError)
+      }
     } else {
       await updateUmkm(umkm.id, { payment_amount: finalAmount })
     }

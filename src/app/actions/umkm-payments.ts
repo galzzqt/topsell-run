@@ -8,6 +8,7 @@ import {
   findUmkmPaymentByUmkmId,
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
+import { sendUmkmPaymentConfirmation } from '@/lib/whatsapp/umkm'
 import { revalidatePath } from 'next/cache'
 
 const XENDIT_SESSION_URL = 'https://api.xendit.co/sessions'
@@ -87,6 +88,26 @@ export async function createUmkmPayment() {
       }
       const { updateUmkm } = await import('@/lib/db')
       await updateUmkm(umkm.id, { payment_status: 'paid' })
+
+      // Tenant gratis tetap dapat konfirmasi pembayaran, sama seperti yang bayar
+      // lewat Xendit. Gagal kirim tidak boleh membatalkan status lunasnya.
+      try {
+        await sendUmkmPaymentConfirmation(umkm.id, 0)
+      } catch (webhookError) {
+        console.error('Failed to send free UMKM payment confirmation webhook:', webhookError)
+      }
+
+      try {
+        await ingestAdminLog({
+          level: 'info',
+          source: 'payment',
+          event: 'umkm_payment_free_paid',
+          message: `Pendaftaran tenant UMKM gratis langsung lunas: ${umkm.name} (Ref: ${freeRef}).`,
+          data: { umkmId: umkm.id, reference: freeRef, amount: 0 },
+        })
+      } catch (logError) {
+        console.error('Failed to log free UMKM payment:', logError)
+      }
 
       revalidatePath('/umkm-dashboard')
       return { success: true, free: true }

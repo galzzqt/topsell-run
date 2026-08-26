@@ -45,12 +45,11 @@ import {
   updatePacer,
   findPacerByPhoneExcept,
   findPacerById,
-  findPacerParticipantByPacerId,
   // umkm database imports
   findUmkmById,
   updateUmkm,
 } from '@/lib/db'
-import { sendPacerApprovalWebhook, sendPacerRegistrationWebhook, sendUmkmApprovalWebhook } from '@/lib/ghl/webhook'
+import { sendPacerStatusWebhook, sendUmkmStatusWebhook } from '@/lib/ghl/webhook'
 import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
 import { createPasswordRecord, getAdminPublicAccounts, readManagedAdminAccounts, resolveAdminLogin, writeManagedAdminAccounts } from '@/lib/admin/accounts'
 import { createPasswordRecord as createCommunityPasswordRecord } from '@/lib/auth/password'
@@ -1027,11 +1026,9 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
     return { error: 'Status tidak valid.' }
   }
 
-  // Webhook pendaftaran hanya untuk penolakan. Approved punya webhook sendiri
-  // (sendPacerApprovalWebhook di bawah) karena workflow GHL pendaftaran
-  // mengirim pesan pendaftaran, bukan pengumuman kelulusan seleksi.
-  // pending & testing status internal: tidak mengirim apa pun.
-  const usesRegistrationWebhook = status === 'rejected'
+  if (status === 'rejected' && !note?.trim()) {
+    return { error: 'Alasan penolakan wajib diisi.' }
+  }
 
   await updatePacer(pacerId, {
     status,
@@ -1039,31 +1036,19 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
     reviewed_at: new Date().toISOString(),
   })
 
+  // Semua perubahan status dikirim ke webhook status; workflow GHL yang
+  // memilih pesan approve/reject/dll lewat field `status`.
   try {
-    const pacer = usesRegistrationWebhook ? await findPacerById(pacerId) : null
+    const pacer = await findPacerById(pacerId)
     if (pacer) {
-      const participant = await findPacerParticipantByPacerId(pacerId)
-      await sendPacerRegistrationWebhook({
+      await sendPacerStatusWebhook({
         phone: pacer.phone,
-        email: pacer.email,
+        email: pacer.email || '',
         fullName: pacer.name,
         category: pacer.category,
         pacerCode: pacer.pacer_code,
-        status: status,
-        instagram: participant?.sosmed_instagram || undefined,
-        tiktok: participant?.sosmed_tiktok || undefined,
-        stravaLink: participant?.strava_link || undefined,
-        stravaUsername: participant?.strava_username || undefined,
-        bankName: participant?.bank_name || undefined,
-        bankAccountNumber: participant?.bank_account_number || undefined,
-        bankAccountHolder: participant?.bank_account_holder || undefined,
-        hasSmartwatch: participant?.has_smartwatch || undefined,
-        age: participant?.age || undefined,
-        provinsi: pacer.provinsi || undefined,
-        kota: pacer.kota || undefined,
-        kecamatan: pacer.kecamatan || undefined,
-        mediaUrls: participant?.media_urls,
-        pbMediaUrls: participant?.pb_media_urls,
+        status,
+        statusNote: note?.trim() || undefined,
       })
     }
   } catch (webhookError) {
@@ -1092,23 +1077,6 @@ export async function updateAdminPacerStatus(pacerId: string, status: AdminPacer
       }
     } catch (emailError) {
       console.error('Failed to send pacer approval email:', emailError)
-    }
-
-    // Webhook approval terpisah dari webhook pendaftaran, supaya pacer tidak
-    // menerima pesan pendaftaran lagi saat disetujui.
-    try {
-      const pacer = await findPacerById(pacerId)
-      if (pacer) {
-        await sendPacerApprovalWebhook({
-          phone: pacer.phone,
-          email: pacer.email || '',
-          fullName: pacer.name,
-          category: pacer.category,
-          pacerCode: pacer.pacer_code,
-        })
-      }
-    } catch (webhookError) {
-      console.error('Failed to send pacer approval webhook to GHL:', webhookError)
     }
   }
 
@@ -1201,14 +1169,25 @@ export async function updateAdminPacerParticipant(participantId: string, values:
   return { success: true }
 }
 
+export type AdminUmkmStatus = 'pending' | 'approved' | 'rejected' | 'testing'
+
 export async function updateAdminUmkmStatus(
   umkmId: string,
-  status: 'approved' | 'rejected',
+  status: AdminUmkmStatus,
   statusNote?: string
 ) {
   const session = await getAdminSession()
   if (!session) {
     return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  if (!['pending', 'approved', 'rejected', 'testing'].includes(status)) {
+    return { error: 'Status tidak valid.' }
+  }
+
+  const note = statusNote?.trim() || undefined
+  if (status === 'rejected' && !note) {
+    return { error: 'Alasan penolakan wajib diisi.' }
   }
 
   const umkm = await findUmkmById(umkmId)
@@ -1219,7 +1198,7 @@ export async function updateAdminUmkmStatus(
   const now = new Date().toISOString()
   await updateUmkm(umkmId, {
     status,
-    status_note: statusNote || null,
+    status_note: note || null,
     reviewed_at: now,
   })
 
@@ -1228,9 +1207,9 @@ export async function updateAdminUmkmStatus(
       level: 'info',
       source: 'admin',
       event: `admin_umkm_${status}`,
-      message: `Admin ${session.name} ${status === 'approved' ? 'menyetujui' : 'menolak'} pendaftaran UMKM: ${umkm.name} (${umkm.phone}).`,
+      message: `Admin ${session.name} mengubah status UMKM ${umkm.name} (${umkm.phone}) menjadi ${status.toUpperCase()}.`,
       actor: session,
-      data: { umkmId, name: umkm.name, phone: umkm.phone, status, statusNote },
+      data: { umkmId, name: umkm.name, phone: umkm.phone, status, statusNote: note || null },
     })
   } catch (logError) {
     console.error('Failed to log admin UMKM status update:', logError)
@@ -1239,33 +1218,37 @@ export async function updateAdminUmkmStatus(
   // Kabari tenant. Approval-lah yang mengaktifkan tombol bayar di dashboard
   // mereka, jadi tanpa email ini tenant tidak tahu sudah boleh membayar.
   // Gagal kirim tidak boleh membatalkan keputusan yang sudah tersimpan.
-  try {
-    const emailResult = await sendUmkmStatusEmail(umkmId, status, statusNote)
-    if (!emailResult.success) {
-      console.warn('UMKM status email not sent:', emailResult.error)
+  // pending & testing status internal: tidak ada email keputusan untuk dikirim.
+  if (status === 'approved' || status === 'rejected') {
+    try {
+      const emailResult = await sendUmkmStatusEmail(umkmId, status, note)
+      if (!emailResult.success) {
+        console.warn('UMKM status email not sent:', emailResult.error)
+      }
+    } catch (emailError) {
+      console.error('Failed to send UMKM status email:', emailError)
     }
-  } catch (emailError) {
-    console.error('Failed to send UMKM status email:', emailError)
   }
 
-  // WhatsApp lewat GHL, khusus approved. Sama seperti email: gagal kirim tidak
-  // boleh membatalkan approval yang sudah tersimpan.
-  if (status === 'approved') {
-    try {
-      // Tenant gratis atau yang sudah lunas tidak punya sisa tagihan.
-      const amountDue = umkm.payment_status === 'paid' ? 0 : Math.max(0, umkm.payment_amount ?? 0)
-      await sendUmkmApprovalWebhook({
-        phone: umkm.phone,
-        email: umkm.email || '',
-        name: umkm.name,
-        picName: umkm.pic_name || umkm.name,
-        umkmCode: umkm.umkm_code,
-        businessField: umkm.business_field,
-        amountDue,
-      })
-    } catch (webhookError) {
-      console.error('Failed to send UMKM approval webhook to GHL:', webhookError)
-    }
+  // WhatsApp lewat GHL untuk approved maupun rejected; workflow GHL yang
+  // memilih pesannya lewat field `status`. Sama seperti email: gagal kirim
+  // tidak boleh membatalkan keputusan yang sudah tersimpan.
+  try {
+    // Tenant gratis atau yang sudah lunas tidak punya sisa tagihan.
+    const amountDue = umkm.payment_status === 'paid' ? 0 : Math.max(0, umkm.payment_amount ?? 0)
+    await sendUmkmStatusWebhook({
+      phone: umkm.phone,
+      email: umkm.email || '',
+      name: umkm.name,
+      picName: umkm.pic_name || umkm.name,
+      umkmCode: umkm.umkm_code,
+      businessField: umkm.business_field,
+      status,
+      statusNote: note,
+      amountDue,
+    })
+  } catch (webhookError) {
+    console.error('Failed to send UMKM status webhook to GHL:', webhookError)
   }
 
   revalidatePath('/admin')
