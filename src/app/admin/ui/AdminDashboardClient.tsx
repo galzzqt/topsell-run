@@ -721,7 +721,11 @@ export function AdminDashboardClient({
   const [pacerEditing, setPacerEditing] = useState<AdminPacerRow | null>(null)
   const [pacerForm, setPacerForm] = useState<AdminPacerParticipantUpdateValues | null>(null)
   const [pacerStatusChanges, setPacerStatusChanges] = useState<Map<string, PacerStatus>>(new Map())
+  const [pacerSelected, setPacerSelected] = useState<Set<string>>(new Set())
+  const [pacerBulkStatus, setPacerBulkStatus] = useState<PacerStatus>('approved')
   const [umkmStatusChanges, setUmkmStatusChanges] = useState<Map<string, UmkmStatus>>(new Map())
+  const [umkmSelected, setUmkmSelected] = useState<Set<string>>(new Set())
+  const [umkmBulkStatus, setUmkmBulkStatus] = useState<UmkmStatus>('approved')
   const [umkmDetail, setUmkmDetail] = useState<UmkmRegistration | null>(null)
   const [processingUmkmId, setProcessingUmkmId] = useState<string | null>(null)
   const [settingsForm, setSettingsForm] = useState<AdminSettings>(adminSettings)
@@ -1997,6 +2001,65 @@ export function AdminDashboardClient({
     })
   }
 
+  const togglePacerSelected = (pacerId: string) => {
+    setPacerSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(pacerId)) next.delete(pacerId)
+      else next.add(pacerId)
+      return next
+    })
+  }
+
+  /** Centang header: pilih/lepas semua baris di halaman yang sedang tampil. */
+  const togglePacerSelectAll = (checked: boolean) => {
+    setPacerSelected((prev) => {
+      const next = new Set(prev)
+      for (const row of pagedPacer.pageRows) {
+        if (checked) next.add(row.pacer_id)
+        else next.delete(row.pacer_id)
+      }
+      return next
+    })
+  }
+
+  const handleBulkPacerStatus = () => {
+    const targets = filteredPacerRows.filter((row) => pacerSelected.has(row.pacer_id) && row.status !== pacerBulkStatus)
+    if (targets.length === 0) {
+      alert('Tidak ada pacer terpilih yang statusnya berubah.')
+      return
+    }
+
+    let note: string | undefined
+    if (pacerBulkStatus === 'rejected') {
+      const input = window.prompt(`Alasan penolakan untuk ${targets.length} pacer (wajib diisi):`)
+      if (input === null) return
+      note = input.trim() || undefined
+      if (!note) {
+        alert('Alasan penolakan wajib diisi.')
+        return
+      }
+    }
+
+    if (!window.confirm(`Ubah status ${targets.length} pacer menjadi ${pacerBulkStatus.toUpperCase()}?\n\n${targets.map((t) => `• ${t.full_name}`).join('\n')}`)) {
+      return
+    }
+
+    startTransition(async () => {
+      const failed: string[] = []
+      // ponytail: berurutan biar tidak menghajar webhook GHL sekaligus; parallel kalau daftarnya jadi panjang.
+      for (const row of targets) {
+        const result = await updateAdminPacerStatus(row.pacer_id, pacerBulkStatus, note)
+        if (result.error) failed.push(`${row.full_name}: ${result.error}`)
+      }
+      setPacerSelected(new Set())
+      setPacerStatusChanges(new Map())
+      if (failed.length > 0) {
+        alert(`${targets.length - failed.length} berhasil, ${failed.length} gagal:\n${failed.join('\n')}`)
+      }
+      router.refresh()
+    })
+  }
+
   const handlePacerStatusChange = (pacerId: string, newStatus: PacerStatus) => {
     setPacerStatusChanges((prev) => {
       const next = new Map(prev)
@@ -2046,6 +2109,64 @@ export function AdminDashboardClient({
         return
       }
       handleCancelPacerStatusChange(row.pacer_id)
+      router.refresh()
+    })
+  }
+
+  const toggleUmkmSelected = (umkmId: string) => {
+    setUmkmSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(umkmId)) next.delete(umkmId)
+      else next.add(umkmId)
+      return next
+    })
+  }
+
+  /** Centang header: pilih/lepas semua baris di halaman yang sedang tampil. */
+  const toggleUmkmSelectAll = (checked: boolean) => {
+    setUmkmSelected((prev) => {
+      const next = new Set(prev)
+      for (const row of pagedUmkm.pageRows) {
+        if (checked) next.add(row.id)
+        else next.delete(row.id)
+      }
+      return next
+    })
+  }
+
+  const handleBulkUmkmStatus = () => {
+    const targets = filteredUmkmRows.filter((row) => umkmSelected.has(row.id) && row.status !== umkmBulkStatus)
+    if (targets.length === 0) {
+      alert('Tidak ada tenant terpilih yang statusnya berubah.')
+      return
+    }
+
+    let note: string | undefined
+    if (umkmBulkStatus === 'rejected') {
+      const input = window.prompt(`Alasan penolakan untuk ${targets.length} tenant (wajib diisi):`)
+      if (input === null) return
+      note = input.trim() || undefined
+      if (!note) {
+        alert('Alasan penolakan wajib diisi.')
+        return
+      }
+    }
+
+    if (!window.confirm(`Ubah status ${targets.length} tenant UMKM menjadi ${umkmBulkStatus.toUpperCase()}?\n\n${targets.map((t) => `• ${t.name}`).join('\n')}`)) {
+      return
+    }
+
+    startTransition(async () => {
+      const failed: string[] = []
+      // ponytail: berurutan biar tidak menghajar webhook GHL sekaligus; parallel kalau daftarnya jadi panjang.
+      for (const row of targets) {
+        const result = await updateAdminUmkmStatus(row.id, umkmBulkStatus, note)
+        if (result.error) failed.push(`${row.name}: ${result.error}`)
+      }
+      setUmkmSelected(new Set())
+      if (failed.length > 0) {
+        alert(`${targets.length - failed.length} berhasil, ${failed.length} gagal:\n${failed.join('\n')}`)
+      }
       router.refresh()
     })
   }
@@ -4211,9 +4332,47 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {pacerSelected.size > 0 && (
+                      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-card-border bg-sport-orange/5">
+                        <span className="text-[11px] font-black uppercase text-sport-orange">{pacerSelected.size} pacer dipilih</span>
+                        <select
+                          value={pacerBulkStatus}
+                          onChange={(e) => setPacerBulkStatus(e.target.value as PacerStatus)}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-card-border bg-card-bg text-foreground cursor-pointer"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="testing">Testing</option>
+                        </select>
+                        <button
+                          onClick={handleBulkPacerStatus}
+                          disabled={isPending}
+                          className="px-3 py-1.5 bg-sport-orange text-white rounded text-[10px] font-black uppercase cursor-pointer disabled:opacity-50"
+                        >
+                          {isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Terapkan'}
+                        </button>
+                        <button
+                          onClick={() => setPacerSelected(new Set())}
+                          disabled={isPending}
+                          className="px-3 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[10px] font-black uppercase cursor-pointer disabled:opacity-50"
+                        >
+                          Bersihkan
+                        </button>
+                      </div>
+                    )}
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-card-border bg-brand-dark/20">
+                          <th className="px-4 py-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={pagedPacer.pageRows.length > 0 && pagedPacer.pageRows.every((row) => pacerSelected.has(row.pacer_id))}
+                              onChange={(e) => togglePacerSelectAll(e.target.checked)}
+                              className="accent-sport-orange cursor-pointer"
+                              title="Pilih semua di halaman ini"
+                            />
+                          </th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Nama / BIB</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kontak</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kategori</th>
@@ -4227,7 +4386,15 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           const hasPacerChange = pacerStatusChanges.has(row.pacer_id)
                           const pacerStatus = pacerStatusChanges.get(row.pacer_id) || row.status
                           return (
-                            <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasPacerChange ? 'bg-yellow-50' : ''}`}>
+                            <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasPacerChange ? 'bg-yellow-50' : pacerSelected.has(row.pacer_id) ? 'bg-sport-orange/5' : ''}`}>
+                              <td className="px-4 py-3.5">
+                                <input
+                                  type="checkbox"
+                                  checked={pacerSelected.has(row.pacer_id)}
+                                  onChange={() => togglePacerSelected(row.pacer_id)}
+                                  className="accent-sport-orange cursor-pointer"
+                                />
+                              </td>
                               <td className="px-4 py-3.5">
                                 <p className="text-sm font-bold text-foreground">{row.full_name}</p>
                                 <p className="text-[10px] font-bold text-sport-orange uppercase">BIB: {row.bib_name}</p>
@@ -4520,9 +4687,47 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {umkmSelected.size > 0 && (
+                      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-card-border bg-sport-orange/5">
+                        <span className="text-[11px] font-black uppercase text-sport-orange">{umkmSelected.size} tenant dipilih</span>
+                        <select
+                          value={umkmBulkStatus}
+                          onChange={(e) => setUmkmBulkStatus(e.target.value as UmkmStatus)}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-card-border bg-card-bg text-foreground cursor-pointer"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="testing">Testing</option>
+                        </select>
+                        <button
+                          onClick={handleBulkUmkmStatus}
+                          disabled={isPending}
+                          className="px-3 py-1.5 bg-sport-orange text-white rounded text-[10px] font-black uppercase cursor-pointer disabled:opacity-50"
+                        >
+                          {isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Terapkan'}
+                        </button>
+                        <button
+                          onClick={() => setUmkmSelected(new Set())}
+                          disabled={isPending}
+                          className="px-3 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[10px] font-black uppercase cursor-pointer disabled:opacity-50"
+                        >
+                          Bersihkan
+                        </button>
+                      </div>
+                    )}
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-card-border bg-brand-dark/20">
+                          <th className="px-4 py-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={pagedUmkm.pageRows.length > 0 && pagedUmkm.pageRows.every((row) => umkmSelected.has(row.id))}
+                              onChange={(e) => toggleUmkmSelectAll(e.target.checked)}
+                              className="accent-sport-orange cursor-pointer"
+                              title="Pilih semua di halaman ini"
+                            />
+                          </th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Usaha / PIC</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Kontak</th>
                           <th className="px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-brand-muted">Bidang &amp; Lokasi</th>
@@ -4542,7 +4747,15 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           const umkmStatus = umkmStatusChanges.get(row.id) || row.status
 
                           return (
-                            <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasUmkmChange ? 'bg-yellow-50' : ''}`}>
+                            <tr key={row.id} className={`border-b border-card-border hover:bg-brand-gray/20 transition-colors ${hasUmkmChange ? 'bg-yellow-50' : umkmSelected.has(row.id) ? 'bg-sport-orange/5' : ''}`}>
+                              <td className="px-4 py-3.5">
+                                <input
+                                  type="checkbox"
+                                  checked={umkmSelected.has(row.id)}
+                                  onChange={() => toggleUmkmSelected(row.id)}
+                                  className="accent-sport-orange cursor-pointer"
+                                />
+                              </td>
                               <td className="px-4 py-3.5">
                                 <p className="text-sm font-bold text-foreground">{row.name}</p>
                                 <p className="text-[10px] font-bold text-sport-orange uppercase">PIC: {row.pic_name}</p>
