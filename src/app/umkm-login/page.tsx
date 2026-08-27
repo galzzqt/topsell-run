@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -85,6 +86,14 @@ export default function UmkmLoginPage() {
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
+              </div>
+              <div className="flex justify-end mt-1">
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] font-bold text-sport-orange hover:underline"
+                >
+                  Lupa Password?
+                </Link>
               </div>
               {errors.password && <p className="text-red-400 text-[11px] mt-1">{errors.password.message}</p>}
             </div>

@@ -17,6 +17,9 @@ export interface Community {
   verification_token: string | null
   verification_token_expires: string | null
   verification_sent_at: string | null
+  reset_password_token?: string | null
+  reset_password_token_expires?: string | null
+  reset_password_sent_at?: string | null
   voucher_code?: string | null
   voucher_discount?: number
   created_at: string
@@ -171,6 +174,9 @@ export interface Family {
   verification_token: string | null
   verification_token_expires: string | null
   verification_sent_at: string | null
+  reset_password_token?: string | null
+  reset_password_token_expires?: string | null
+  reset_password_sent_at?: string | null
   voucher_code?: string | null
   voucher_discount?: number
   created_at: string
@@ -271,6 +277,9 @@ export interface Individual {
   verification_token: string | null
   verification_token_expires: string | null
   verification_sent_at: string | null
+  reset_password_token?: string | null
+  reset_password_token_expires?: string | null
+  reset_password_sent_at?: string | null
   voucher_code?: string | null
   voucher_discount?: number
   created_at: string
@@ -371,6 +380,9 @@ export interface Invitation {
   verification_token: string | null
   verification_token_expires: string | null
   verification_sent_at: string | null
+  reset_password_token?: string | null
+  reset_password_token_expires?: string | null
+  reset_password_sent_at?: string | null
   voucher_code?: string | null
   voucher_discount?: number
   created_at: string
@@ -472,6 +484,9 @@ export interface PacerRegistration {
   verification_token: string | null
   verification_token_expires: string | null
   verification_sent_at: string | null
+  reset_password_token?: string | null
+  reset_password_token_expires?: string | null
+  reset_password_sent_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -544,6 +559,9 @@ export interface UmkmRegistration {
   verification_token: string | null
   verification_token_expires: string | null
   verification_sent_at: string | null
+  reset_password_token?: string | null
+  reset_password_token_expires?: string | null
+  reset_password_sent_at?: string | null
   created_at: string
   updated_at: string
 }

@@ -176,3 +176,47 @@ export async function verifyInvitationEmail(invitationId: string) {
     }
   )
 }
+
+export async function setInvitationResetPasswordToken(invitationId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('invitations').updateOne(
+    { id: invitationId },
+    {
+      $set: {
+        reset_password_token: token,
+        reset_password_token_expires: expiresAt.toISOString(),
+        reset_password_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findInvitationByResetPasswordToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<InvitationDoc>('invitations').findOne({ reset_password_token: token })
+  return stripMongoId(doc) as Invitation | null
+}
+
+export async function findInvitationByEmailOrPhone(identifier: string) {
+  const db = await getDb()
+  const trimmed = identifier.trim()
+  const doc = await db.collection<InvitationDoc>('invitations').findOne({
+    $or: [{ email: trimmed }, { email: trimmed.toLowerCase() }, { phone: trimmed }],
+  })
+  return stripMongoId(doc) as Invitation | null
+}
+
+export async function clearInvitationResetPasswordToken(invitationId: string) {
+  const db = await getDb()
+  await db.collection('invitations').updateOne(
+    { id: invitationId },
+    {
+      $set: {
+        reset_password_token: null,
+        reset_password_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}

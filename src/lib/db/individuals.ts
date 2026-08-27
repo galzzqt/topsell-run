@@ -176,3 +176,47 @@ export async function verifyIndividualEmail(individualId: string) {
     }
   )
 }
+
+export async function setIndividualResetPasswordToken(individualId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('individuals').updateOne(
+    { id: individualId },
+    {
+      $set: {
+        reset_password_token: token,
+        reset_password_token_expires: expiresAt.toISOString(),
+        reset_password_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findIndividualByResetPasswordToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<IndividualDoc>('individuals').findOne({ reset_password_token: token })
+  return stripMongoId(doc) as Individual | null
+}
+
+export async function findIndividualByEmailOrPhone(identifier: string) {
+  const db = await getDb()
+  const trimmed = identifier.trim()
+  const doc = await db.collection<IndividualDoc>('individuals').findOne({
+    $or: [{ email: trimmed }, { email: trimmed.toLowerCase() }, { phone: trimmed }],
+  })
+  return stripMongoId(doc) as Individual | null
+}
+
+export async function clearIndividualResetPasswordToken(individualId: string) {
+  const db = await getDb()
+  await db.collection('individuals').updateOne(
+    { id: individualId },
+    {
+      $set: {
+        reset_password_token: null,
+        reset_password_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}

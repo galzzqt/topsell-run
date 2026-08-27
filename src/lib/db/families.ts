@@ -207,3 +207,47 @@ export async function clearFamilyVerificationToken(familyId: string) {
     }
   )
 }
+
+export async function setFamilyResetPasswordToken(familyId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('families').updateOne(
+    { id: familyId },
+    {
+      $set: {
+        reset_password_token: token,
+        reset_password_token_expires: expiresAt.toISOString(),
+        reset_password_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findFamilyByResetPasswordToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<FamilyDoc>('families').findOne({ reset_password_token: token })
+  return stripMongoId(doc) as Family | null
+}
+
+export async function findFamilyByEmailOrPhone(identifier: string) {
+  const db = await getDb()
+  const trimmed = identifier.trim()
+  const doc = await db.collection<FamilyDoc>('families').findOne({
+    $or: [{ email: trimmed }, { email: trimmed.toLowerCase() }, { phone: trimmed }],
+  })
+  return stripMongoId(doc) as Family | null
+}
+
+export async function clearFamilyResetPasswordToken(familyId: string) {
+  const db = await getDb()
+  await db.collection('families').updateOne(
+    { id: familyId },
+    {
+      $set: {
+        reset_password_token: null,
+        reset_password_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}

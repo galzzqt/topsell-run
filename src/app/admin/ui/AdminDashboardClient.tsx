@@ -48,7 +48,11 @@ import {
   Store,
   ExternalLink,
   MapPin,
+  KeyRound,
+  Copy,
+  Check,
 } from 'lucide-react'
+import { adminTriggerPasswordReset } from '@/app/actions/password-reset'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -998,6 +1002,55 @@ export function AdminDashboardClient({
   const [exportStartDate, setExportStartDate] = useState('')
   const [exportEndDate, setExportEndDate] = useState('')
   const [exportDatePreset, setExportDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+
+  // State untuk Reset Password via Admin
+  const [adminResetTarget, setAdminResetTarget] = useState<{
+    packageType: string
+    id: string
+    name: string
+    email?: string | null
+    phone?: string | null
+  } | null>(null)
+  const [adminResetLoading, setAdminResetLoading] = useState(false)
+  const [adminResetResult, setAdminResetResult] = useState<{
+    success?: boolean
+    resetUrl?: string
+    email?: string
+    copied?: boolean
+    error?: string
+  } | null>(null)
+
+  const handleAdminResetPassword = async () => {
+    if (!adminResetTarget) return
+    setAdminResetLoading(true)
+    setAdminResetResult(null)
+
+    const res = await adminTriggerPasswordReset(adminResetTarget.packageType, adminResetTarget.id)
+    setAdminResetLoading(false)
+
+    if (res.error) {
+      setAdminResetResult({ error: res.error })
+    } else {
+      setAdminResetResult({
+        success: true,
+        resetUrl: res.resetUrl,
+        email: res.email,
+      })
+    }
+  }
+
+  const copyResetUrl = async () => {
+    if (!adminResetResult?.resetUrl) return
+    try {
+      await navigator.clipboard.writeText(adminResetResult.resetUrl)
+      setAdminResetResult((prev) => (prev ? { ...prev, copied: true } : null))
+      setTimeout(() => {
+        setAdminResetResult((prev) => (prev ? { ...prev, copied: false } : null))
+      }, 3000)
+    } catch (err) {
+      console.error('Failed to copy text:', err)
+    }
+  }
 
   const handleExportDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
     setExportDatePreset(preset)
@@ -3917,13 +3970,31 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
 
                           <div className="flex items-center gap-2 lg:justify-end">
                             {editableCommunity && (
-                              <button
-                                type="button"
-                                onClick={() => openCommunityEditor(editableCommunity)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground cursor-pointer"
-                              >
-                                <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : isSoloPackage ? 'Peserta' : 'Grup'}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => openCommunityEditor(editableCommunity)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-foreground cursor-pointer"
+                                >
+                                  <Pencil className="w-3 h-3" />Edit {packageType === 'community' ? 'Komunitas' : isSoloPackage ? 'Peserta' : 'Grup'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAdminResetTarget({
+                                      packageType,
+                                      id: editableCommunity.id,
+                                      name: editableCommunity.leader_name || editableCommunity.name,
+                                      email: editableCommunity.email,
+                                      phone: editableCommunity.phone,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-card-border rounded text-[9px] font-black uppercase text-brand-muted hover:text-sport-orange cursor-pointer"
+                                  title="Reset Password Akun"
+                                >
+                                  <KeyRound className="w-3 h-3" />Reset Sandi
+                                </button>
+                              </>
                             )}
                             <button
                               type="button"
@@ -4977,6 +5048,21 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                                   >
                                     <Pencil className="w-3 h-3" />
                                   </button>
+                                  <button
+                                    onClick={() =>
+                                      setAdminResetTarget({
+                                        packageType: 'pacer',
+                                        id: row.pacer_id,
+                                        name: row.full_name,
+                                        email: row.email,
+                                        phone: row.phone,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-sport-orange rounded text-[9px] font-black uppercase cursor-pointer"
+                                    title="Reset Password Akun Pacer"
+                                  >
+                                    <KeyRound className="w-3 h-3" />
+                                  </button>
                                   {hasPacerChange && (
                                     <>
                                       <button
@@ -5381,6 +5467,21 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                                     className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-foreground rounded text-[9px] font-black uppercase cursor-pointer"
                                   >
                                     Detail
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setAdminResetTarget({
+                                        packageType: 'umkm',
+                                        id: row.id,
+                                        name: row.pic_name || row.name,
+                                        email: row.email,
+                                        phone: row.phone,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 bg-brand-gray border border-card-border text-brand-muted hover:text-sport-orange rounded text-[9px] font-black uppercase cursor-pointer"
+                                    title="Reset Password Akun UMKM"
+                                  >
+                                    <KeyRound className="w-3 h-3" />
                                   </button>
                                   {hasUmkmChange && (
                                     <>
@@ -7404,6 +7505,132 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
             </div>
           )
         })()}
+      </Dialog>
+
+      {/* Modal Admin Reset Password */}
+      <Dialog
+        isOpen={Boolean(adminResetTarget)}
+        onClose={() => {
+          setAdminResetTarget(null)
+          setAdminResetResult(null)
+        }}
+        title="Reset Password Akun Peserta"
+      >
+        {adminResetTarget && (
+          <div className="flex flex-col gap-4">
+            <div className="p-3.5 rounded-xl border border-card-border bg-brand-dark/40 flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-sport-purple/10 text-sport-purple">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-black uppercase text-foreground">{adminResetTarget.name}</p>
+                <div className="text-[11px] text-brand-muted mt-1 flex flex-col gap-0.5">
+                  <p>Paket: <strong className="text-foreground uppercase">{adminResetTarget.packageType}</strong></p>
+                  {adminResetTarget.email && <p>Email: <strong className="text-foreground">{adminResetTarget.email}</strong></p>}
+                  {adminResetTarget.phone && <p>WhatsApp: <strong className="text-foreground">{adminResetTarget.phone}</strong></p>}
+                </div>
+              </div>
+            </div>
+
+            {adminResetResult?.error && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                {adminResetResult.error}
+              </div>
+            )}
+
+            {adminResetResult?.success ? (
+              <div className="flex flex-col gap-3">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-emerald-300">
+                    <p className="font-bold">Tautan reset password berhasil dibuat!</p>
+                    {adminResetResult.email && (
+                      <p className="text-[10px] text-emerald-400/90 mt-0.5">
+                        Email instruksi reset password juga telah otomatis dikirim ke <strong>{adminResetResult.email}</strong>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-brand-muted">
+                    Tautan Reset Password (Berlaku 24 Jam):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={adminResetResult.resetUrl || ''}
+                      className="flex-1 px-3 py-2 text-xs bg-brand-gray/50 border border-card-border rounded-lg text-foreground font-mono select-all"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={copyResetUrl}
+                      className="shrink-0"
+                    >
+                      {adminResetResult.copied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> Tersalin
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 mr-1" /> Salin
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {adminResetTarget.phone && (
+                  <div className="pt-2 border-t border-card-border/60 flex items-center justify-between gap-3">
+                    <p className="text-[11px] text-brand-muted">Kirimkan link ke user via WhatsApp:</p>
+                    <a
+                      href={`https://wa.me/${adminResetTarget.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                        `Halo ${adminResetTarget.name}, berikut adalah link untuk mengatur ulang kata sandi (reset password) akun TOPSELL RUN 2026 Anda:\n\n${adminResetResult.resetUrl}\n\nLink ini berlaku selama 24 jam. Terima kasih!`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] text-white text-[10px] font-bold uppercase hover:bg-[#20bd5a] transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Buka WhatsApp
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-brand-muted leading-relaxed">
+                  Admin dapat membuat tautan reset password khusus yang berlaku selama <strong>24 jam</strong>. 
+                  Jika peserta memiliki email terdaftar, sistem juga akan otomatis mengirimkan email konfirmasi.
+                </p>
+
+                <Button
+                  type="button"
+                  onClick={handleAdminResetPassword}
+                  isLoading={adminResetLoading}
+                  className="w-full py-3 bg-gradient-to-r from-sport-purple via-sport-red to-sport-orange text-white text-xs font-black uppercase shadow-md"
+                >
+                  <KeyRound className="w-4 h-4 mr-2" /> Buat &amp; Kirim Tautan Reset
+                </Button>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-card-border">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setAdminResetTarget(null)
+                  setAdminResetResult(null)
+                }}
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
+        )}
       </Dialog>
     </div>
   )

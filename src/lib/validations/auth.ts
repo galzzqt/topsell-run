@@ -289,3 +289,33 @@ export const registerUmkmSchema = z
 export type RegisterUmkmFormValues = z.infer<typeof registerUmkmSchema>
 export type RegisterUmkmFormInput = z.input<typeof registerUmkmSchema>
 
+// ─── Forgot & Reset Password Schemas ─────────────────────────────────────────
+
+export const forgotPasswordSchema = z.object({
+  identifier: z
+    .string()
+    .min(1, 'Nomor WhatsApp atau Email wajib diisi')
+    .refine((val) => {
+      const trimmed = val.trim()
+      if (trimmed.includes('@')) {
+        return z.string().email().safeParse(trimmed).success
+      }
+      return phoneRegex.test(trimmed)
+    }, {
+      message: 'Harap masukkan nomor WhatsApp yang valid (berawalan 08) atau email yang valid',
+    }),
+})
+
+export type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>
+
+export const resetPasswordSchema = z
+  .object({
+    password: z.string().min(6, 'Password baru minimal 6 karakter'),
+    confirmPassword: z.string().min(1, 'Konfirmasi password baru wajib diisi'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Konfirmasi password tidak cocok',
+    path: ['confirmPassword'],
+  })
+
+export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>

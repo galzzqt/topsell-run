@@ -196,6 +196,50 @@ export async function verifyUmkmEmail(umkmId: string) {
   )
 }
 
+export async function setUmkmResetPasswordToken(umkmId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('umkm_registrations').updateOne(
+    { id: umkmId },
+    {
+      $set: {
+        reset_password_token: token,
+        reset_password_token_expires: expiresAt.toISOString(),
+        reset_password_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findUmkmByResetPasswordToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<UmkmDoc>('umkm_registrations').findOne({ reset_password_token: token })
+  return stripMongoId(doc) as UmkmRegistration | null
+}
+
+export async function findUmkmByEmailOrPhone(identifier: string) {
+  const db = await getDb()
+  const trimmed = identifier.trim()
+  const doc = await db.collection<UmkmDoc>('umkm_registrations').findOne({
+    $or: [{ email: trimmed }, { email: trimmed.toLowerCase() }, { phone: trimmed }],
+  })
+  return stripMongoId(doc) as UmkmRegistration | null
+}
+
+export async function clearUmkmResetPasswordToken(umkmId: string) {
+  const db = await getDb()
+  await db.collection('umkm_registrations').updateOne(
+    { id: umkmId },
+    {
+      $set: {
+        reset_password_token: null,
+        reset_password_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
 export async function createUmkmPayment(input: {

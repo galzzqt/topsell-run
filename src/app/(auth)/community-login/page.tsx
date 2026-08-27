@@ -135,7 +135,17 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <Input label="Nomor WhatsApp / Email Komunitas" placeholder="08xxxxxxxxxx atau email@komunitas.com" error={errors.phone?.message} disabled={isSubmitting} {...register('phone')} />
-            <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} disabled={isSubmitting} {...register('password')} />
+            <div className="flex flex-col gap-1">
+              <Input label="Password" type="password" placeholder="••••••••" error={errors.password?.message} disabled={isSubmitting} {...register('password')} />
+              <div className="flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] font-bold text-sport-purple hover:underline"
+                >
+                  Lupa Password?
+                </Link>
+              </div>
+            </div>
             <Button type="submit" variant="primary" className="w-full py-4 mt-1 text-xs font-black" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }} isLoading={isSubmitting}>
               <Lock className="w-4 h-4 mr-2" />Masuk ke Dashboard
             </Button>

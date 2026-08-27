@@ -170,3 +170,47 @@ export async function verifyPacerEmail(pacerId: string) {
     }
   )
 }
+
+export async function setPacerResetPasswordToken(pacerId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('pacer_registrations').updateOne(
+    { id: pacerId },
+    {
+      $set: {
+        reset_password_token: token,
+        reset_password_token_expires: expiresAt.toISOString(),
+        reset_password_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findPacerByResetPasswordToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<PacerDoc>('pacer_registrations').findOne({ reset_password_token: token })
+  return stripMongoId(doc) as PacerRegistration | null
+}
+
+export async function findPacerByEmailOrPhone(identifier: string) {
+  const db = await getDb()
+  const trimmed = identifier.trim()
+  const doc = await db.collection<PacerDoc>('pacer_registrations').findOne({
+    $or: [{ email: trimmed }, { email: trimmed.toLowerCase() }, { phone: trimmed }],
+  })
+  return stripMongoId(doc) as PacerRegistration | null
+}
+
+export async function clearPacerResetPasswordToken(pacerId: string) {
+  const db = await getDb()
+  await db.collection('pacer_registrations').updateOne(
+    { id: pacerId },
+    {
+      $set: {
+        reset_password_token: null,
+        reset_password_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}

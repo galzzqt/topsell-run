@@ -17,6 +17,10 @@ export {
   findCommunityByVerificationToken,
   verifyCommunityEmail,
   clearCommunityVerificationToken,
+  setCommunityResetPasswordToken,
+  findCommunityByResetPasswordToken,
+  findCommunityByEmailOrPhone,
+  clearCommunityResetPasswordToken,
 } from './communities'
 
 export {
@@ -93,6 +97,10 @@ export {
   findFamilyByVerificationToken,
   verifyFamilyEmail,
   clearFamilyVerificationToken,
+  setFamilyResetPasswordToken,
+  findFamilyByResetPasswordToken,
+  findFamilyByEmailOrPhone,
+  clearFamilyResetPasswordToken,
 } from './families'
 
 export {
@@ -163,6 +171,10 @@ export {
   setIndividualVerificationToken,
   findIndividualByVerificationToken,
   verifyIndividualEmail,
+  setIndividualResetPasswordToken,
+  findIndividualByResetPasswordToken,
+  findIndividualByEmailOrPhone,
+  clearIndividualResetPasswordToken,
 } from './individuals'
 
 export {
@@ -232,6 +244,10 @@ export {
   setInvitationVerificationToken,
   findInvitationByVerificationToken,
   verifyInvitationEmail,
+  setInvitationResetPasswordToken,
+  findInvitationByResetPasswordToken,
+  findInvitationByEmailOrPhone,
+  clearInvitationResetPasswordToken,
 } from './invitations'
 
 export {
@@ -301,6 +317,10 @@ export {
   setPacerVerificationToken,
   findPacerByVerificationToken,
   verifyPacerEmail,
+  setPacerResetPasswordToken,
+  findPacerByResetPasswordToken,
+  findPacerByEmailOrPhone,
+  clearPacerResetPasswordToken,
 } from './pacers'
 
 export {
@@ -339,6 +359,10 @@ export {
   setUmkmVerificationToken,
   findUmkmByVerificationToken,
   verifyUmkmEmail,
+  setUmkmResetPasswordToken,
+  findUmkmByResetPasswordToken,
+  findUmkmByEmailOrPhone,
+  clearUmkmResetPasswordToken,
   createUmkmPayment,
   findUmkmPaymentByUmkmId,
   findUmkmPaymentById,

@@ -205,3 +205,47 @@ export async function deleteCommunityAuth(id: string) {
   const db = await getDb()
   await db.collection('community_auth').deleteOne({ id })
 }
+
+export async function setCommunityResetPasswordToken(communityId: string, token: string, expiresAt: Date) {
+  const db = await getDb()
+  await db.collection('communities').updateOne(
+    { id: communityId },
+    {
+      $set: {
+        reset_password_token: token,
+        reset_password_token_expires: expiresAt.toISOString(),
+        reset_password_sent_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
+
+export async function findCommunityByResetPasswordToken(token: string) {
+  const db = await getDb()
+  const doc = await db.collection<CommunityDoc>('communities').findOne({ reset_password_token: token })
+  return stripMongoId(doc) as Community | null
+}
+
+export async function findCommunityByEmailOrPhone(identifier: string) {
+  const db = await getDb()
+  const trimmed = identifier.trim()
+  const doc = await db.collection<CommunityDoc>('communities').findOne({
+    $or: [{ email: trimmed }, { email: trimmed.toLowerCase() }, { phone: trimmed }],
+  })
+  return stripMongoId(doc) as Community | null
+}
+
+export async function clearCommunityResetPasswordToken(communityId: string) {
+  const db = await getDb()
+  await db.collection('communities').updateOne(
+    { id: communityId },
+    {
+      $set: {
+        reset_password_token: null,
+        reset_password_token_expires: null,
+        updated_at: nowIso(),
+      },
+    }
+  )
+}
