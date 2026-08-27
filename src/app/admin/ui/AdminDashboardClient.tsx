@@ -3302,11 +3302,11 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
 
       {/* SIDEBAR */}
       <aside
-        className={`w-64 bg-linear-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`w-64 bg-linear-to-b from-[#1E0800] via-[#3D1100] to-[#661C00] border-r border-white/10 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 h-screen max-h-screen ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         {/* Brand Header */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3">
+        <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3 shrink-0">
           <Image
             src="/images/header.png"
             alt="TOPSELL RUN 2026"
@@ -3324,7 +3324,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
         </div>
 
         {/* Sidebar Nav */}
-        <nav className="flex-1 px-3 py-4 flex flex-col gap-1.5">
+        <nav className="flex-1 px-3 py-4 flex flex-col gap-1.5 overflow-y-auto min-h-0 sidebar-scrollbar overscroll-contain">
           {adminTabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -3335,7 +3335,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   setActiveTab(tab.id)
                   setSidebarOpen(false)
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${isActive
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 ${isActive
                     ? 'bg-white/15 text-white border border-white/20 font-black shadow-md'
                     : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
@@ -3348,12 +3348,12 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-white/10 flex flex-col gap-3">
+        <div className="p-4 border-t border-white/10 flex flex-col gap-3 shrink-0 bg-black/20">
           <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-            <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-black text-white text-xs">
+            <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-black text-white text-xs shrink-0">
               {currentAdmin.name.slice(0, 2).toUpperCase()}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-black text-white truncate uppercase">{currentAdmin.name}</p>
               <p className="text-[8px] font-bold text-white/60 truncate">@{currentAdmin.username} • {currentAdmin.role}</p>
             </div>

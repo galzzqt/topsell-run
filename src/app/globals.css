@@ -66,6 +66,21 @@ body {
   background: #7c3aed;
 }
 
+/* Dark sidebar custom scrollbar */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
 /* Keyframes for smooth dashboard updates */
 @keyframes pulse-glow {
   0%, 100% {
