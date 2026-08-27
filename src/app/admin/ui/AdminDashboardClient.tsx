@@ -398,7 +398,9 @@ export type CategoryQuotaStat = {
   label: string
   price: number
   quota: number
-  used: number
+  used: number // Total aktif: paid + pending
+  paidCount: number // Sudah lunas
+  pendingCount: number // Menunggu pembayaran
   remaining: number | null // null jika kuota 0 (tak terbatas)
   pct: number | null // null jika kuota 0
   isFull: boolean
@@ -411,6 +413,8 @@ export type PackageQuotaSummary = {
   packageLabel: string
   totalQuota: number
   totalUsed: number
+  totalPaid: number
+  totalPending: number
   totalRemaining: number | null
   totalPct: number | null
   hasUnlimited: boolean
@@ -427,7 +431,7 @@ function PackageQuotaBanner({
   onSelectCategory?: (category: string) => void
 }) {
   if (!quotaSummary) return null
-  const { packageLabel, totalQuota, totalUsed, totalRemaining, totalPct, hasUnlimited, categories } = quotaSummary
+  const { packageLabel, totalQuota, totalUsed, totalPaid, totalPending, totalRemaining, totalPct, hasUnlimited, categories } = quotaSummary
 
   return (
     <div className="bg-card-bg border border-card-border rounded-xl p-4 md:p-5 flex flex-col gap-4 shadow-sm">
@@ -444,17 +448,20 @@ function PackageQuotaBanner({
               </h3>
             </div>
             <p className="text-[10px] text-brand-muted mt-0.5">
-              Pantau pemakaian slot pendaftaran dan sisa kuota kategori secara realtime.
+              Pemakaian kuota menghitung pendaftar <strong className="text-emerald-400">Lunas</strong> dan <strong className="text-amber-400">Pending</strong> (slot tertahan).
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {totalQuota > 0 && !hasUnlimited ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/60 border border-card-border">
+            <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/60 border border-card-border">
               <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Total Kuota:</span>
               <span className="text-xs font-black text-foreground">
                 {totalUsed} / {totalQuota}
+              </span>
+              <span className="text-[9px] font-bold text-brand-muted">
+                (<span className="text-emerald-400 font-black">{totalPaid} Lunas</span>, <span className="text-amber-400 font-black">{totalPending} Pending</span>)
               </span>
               <span
                 className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
@@ -472,6 +479,9 @@ function PackageQuotaBanner({
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/60 border border-card-border">
               <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Total Terdaftar:</span>
               <span className="text-xs font-black text-foreground">{totalUsed} Peserta</span>
+              <span className="text-[9px] font-bold text-brand-muted">
+                (<span className="text-emerald-400 font-black">{totalPaid} Lunas</span>, <span className="text-amber-400 font-black">{totalPending} Pending</span>)
+              </span>
               <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 border border-blue-500/30">
                 Slot Bebas (Tak Terbatas)
               </span>
@@ -553,6 +563,20 @@ function PackageQuotaBanner({
                       <div className="h-full bg-blue-500/40 w-full" />
                     </div>
                   )}
+
+                  {/* Status Breakdown (Lunas vs Pending) */}
+                  <div className="flex items-center justify-between text-[9px] pt-1 border-t border-card-border/40 text-brand-muted">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-emerald-400 font-bold">{cat.paidCount} Lunas</span>
+                      <span>•</span>
+                      <span className="text-amber-400 font-bold">{cat.pendingCount} Pending</span>
+                    </div>
+                    {cat.quota > 0 && (
+                      <span className="font-bold text-foreground/80">
+                        {cat.remaining === 0 ? 'Habis' : `Sisa ${cat.remaining}`}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {cat.isFull && (
@@ -1731,7 +1755,10 @@ export function AdminDashboardClient({
     const keys: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm']
     const result = {} as Record<PackageKey, PackageQuotaSummary>
 
-    const countUsage = (pkg: PackageKey, cat: { value: string; label?: string }): number => {
+    const countUsage = (
+      pkg: PackageKey,
+      cat: { value: string; label?: string }
+    ): { used: number; paidCount: number; pendingCount: number } => {
       const catVal = (cat.value || '').trim().toLowerCase()
       const catLabel = extractCategoryLabel(cat.value) || extractCategoryLabel(cat.label)
 
@@ -1744,47 +1771,64 @@ export function AdminDashboardClient({
         return false
       }
 
+      let paidCount = 0
+      let pendingCount = 0
+
       if (pkg === 'community') {
-        return participants.filter((p) => {
-          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+        for (const p of participants) {
           const comm = firstRelation(p.community)
-          return isMatch(comm?.category)
-        }).length
-      }
-      if (pkg === 'family') {
-        return familyParticipants.filter((p) => {
-          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          if (isMatch(comm?.category)) {
+            if (p.payment_status === 'paid') paidCount++
+            else if (p.payment_status === 'pending') pendingCount++
+          }
+        }
+      } else if (pkg === 'family') {
+        for (const p of familyParticipants) {
           const comm = firstRelation(p.community)
-          return isMatch(comm?.category)
-        }).length
-      }
-      if (pkg === 'individual') {
-        return individualParticipants.filter((p) => {
-          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          if (isMatch(comm?.category)) {
+            if (p.payment_status === 'paid') paidCount++
+            else if (p.payment_status === 'pending') pendingCount++
+          }
+        }
+      } else if (pkg === 'individual') {
+        for (const p of individualParticipants) {
           const comm = firstRelation(p.community)
-          return isMatch(comm?.category || p.category)
-        }).length
-      }
-      if (pkg === 'invitation') {
-        return invitationParticipants.filter((p) => {
-          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          if (isMatch(comm?.category || p.category)) {
+            if (p.payment_status === 'paid') paidCount++
+            else if (p.payment_status === 'pending') pendingCount++
+          }
+        }
+      } else if (pkg === 'invitation') {
+        for (const p of invitationParticipants) {
           const comm = firstRelation(p.community)
-          return isMatch(comm?.category || p.category)
-        }).length
+          if (isMatch(comm?.category || p.category)) {
+            if (p.payment_status === 'paid') paidCount++
+            else if (p.payment_status === 'pending') pendingCount++
+          }
+        }
+      } else if (pkg === 'pacer') {
+        for (const p of pacerRows) {
+          if (isMatch(p.category)) {
+            if (p.status === 'approved') paidCount++
+            else if (p.status === 'pending' || p.status === 'testing') pendingCount++
+          }
+        }
+      } else if (pkg === 'umkm') {
+        for (const u of umkmRows) {
+          if (u.status === 'rejected') continue
+          if (u.status === 'approved' || u.payment_status === 'paid') {
+            paidCount++
+          } else {
+            pendingCount++
+          }
+        }
       }
-      if (pkg === 'pacer') {
-        return pacerRows.filter((p) => {
-          if (p.status === 'rejected') return false
-          return isMatch(p.category)
-        }).length
+
+      return {
+        used: paidCount + pendingCount,
+        paidCount,
+        pendingCount,
       }
-      if (pkg === 'umkm') {
-        return umkmRows.filter((u) => {
-          if (u.status === 'rejected') return false
-          return true
-        }).length
-      }
-      return 0
     }
 
     for (const key of keys) {
@@ -1793,11 +1837,11 @@ export function AdminDashboardClient({
       const categoriesConfig = period?.categories || []
 
       const categoryStats: CategoryQuotaStat[] = categoriesConfig.map((cat) => {
-        const used = countUsage(key, cat)
+        const usage = countUsage(key, cat)
         const quota = cat.quota ?? 0
-        const remaining = quota > 0 ? Math.max(0, quota - used) : null
-        const pct = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : null
-        const isFull = quota > 0 && used >= quota
+        const remaining = quota > 0 ? Math.max(0, quota - usage.used) : null
+        const pct = quota > 0 ? Math.min(100, Math.round((usage.used / quota) * 100)) : null
+        const isFull = quota > 0 && usage.used >= quota
         const isNearFull = quota > 0 && pct !== null && pct >= 80 && !isFull
         const normalizedLabel = extractCategoryLabel(cat.value) || extractCategoryLabel(cat.label) || cat.label || cat.value
 
@@ -1806,7 +1850,9 @@ export function AdminDashboardClient({
           label: cat.label || cat.value,
           price: cat.price ?? 0,
           quota,
-          used,
+          used: usage.used,
+          paidCount: usage.paidCount,
+          pendingCount: usage.pendingCount,
           remaining,
           pct,
           isFull,
@@ -1818,6 +1864,8 @@ export function AdminDashboardClient({
       const hasUnlimited = categoryStats.some((c) => c.quota === 0)
       const totalQuota = categoryStats.reduce((sum, c) => sum + (c.quota > 0 ? c.quota : 0), 0)
       const totalUsed = categoryStats.reduce((sum, c) => sum + c.used, 0)
+      const totalPaid = categoryStats.reduce((sum, c) => sum + c.paidCount, 0)
+      const totalPending = categoryStats.reduce((sum, c) => sum + c.pendingCount, 0)
       const totalRemaining = !hasUnlimited && totalQuota > 0 ? Math.max(0, totalQuota - totalUsed) : null
       const totalPct = totalQuota > 0 ? Math.min(100, Math.round((totalUsed / totalQuota) * 100)) : null
 
@@ -1826,6 +1874,8 @@ export function AdminDashboardClient({
         packageLabel: config.label,
         totalQuota,
         totalUsed,
+        totalPaid,
+        totalPending,
         totalRemaining,
         totalPct,
         hasUnlimited,
