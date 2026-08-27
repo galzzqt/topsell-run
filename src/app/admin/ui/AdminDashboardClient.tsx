@@ -103,6 +103,7 @@ import { DateInput } from '@/components/ui/date-input'
 import { formatCurrency } from '@/lib/utils/format'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, EmailTemplateConfig, FormInputConfig, FormSelectConfig, PackageKey, PackageConfig, PackageCategory, PackagePeriod, RegistrationFormGroupSettings, RegistrationFormParticipantSettings, WebhookPackageConfig } from '@/lib/admin/settings-schema'
+import { DEFAULT_PACKAGES_SETTINGS } from '@/lib/admin/settings-schema'
 import type { AdminLogEntry } from '@/lib/axiom/logs'
 import type { VoucherDoc } from '@/lib/types/voucher'
 import type { UmkmRegistration, UmkmPayment } from '@/lib/types'
@@ -392,7 +393,212 @@ const PAGE_SIZES = [5, 10, 25, 50]
 const RACE_CATEGORIES = ['3K', '6K'] as const
 type RaceCategoryFilter = 'all' | (typeof RACE_CATEGORIES)[number]
 
-function CategoryFilter({ value, onChange }: { value: RaceCategoryFilter; onChange: (next: RaceCategoryFilter) => void }) {
+export type CategoryQuotaStat = {
+  value: string
+  label: string
+  price: number
+  quota: number
+  used: number
+  remaining: number | null // null jika kuota 0 (tak terbatas)
+  pct: number | null // null jika kuota 0
+  isFull: boolean
+  isNearFull: boolean
+  normalizedLabel: string // misal '3K', '6K'
+}
+
+export type PackageQuotaSummary = {
+  packageKey: PackageKey
+  packageLabel: string
+  totalQuota: number
+  totalUsed: number
+  totalRemaining: number | null
+  totalPct: number | null
+  hasUnlimited: boolean
+  categories: CategoryQuotaStat[]
+}
+
+function PackageQuotaBanner({
+  quotaSummary,
+  selectedCategory,
+  onSelectCategory,
+}: {
+  quotaSummary?: PackageQuotaSummary
+  selectedCategory?: string
+  onSelectCategory?: (category: string) => void
+}) {
+  if (!quotaSummary) return null
+  const { packageLabel, totalQuota, totalUsed, totalRemaining, totalPct, hasUnlimited, categories } = quotaSummary
+
+  return (
+    <div className="bg-card-bg border border-card-border rounded-xl p-4 md:p-5 flex flex-col gap-4 shadow-sm">
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-card-border/60">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-sport-orange/10 border border-sport-orange/20 text-sport-orange">
+            <TicketCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-black uppercase text-foreground tracking-wider">
+                Status &amp; Sisa Kuota — {packageLabel}
+              </h3>
+            </div>
+            <p className="text-[10px] text-brand-muted mt-0.5">
+              Pantau pemakaian slot pendaftaran dan sisa kuota kategori secara realtime.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {totalQuota > 0 && !hasUnlimited ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/60 border border-card-border">
+              <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Total Kuota:</span>
+              <span className="text-xs font-black text-foreground">
+                {totalUsed} / {totalQuota}
+              </span>
+              <span
+                className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                  totalRemaining === 0
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    : (totalPct ?? 0) >= 80
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                }`}
+              >
+                {totalRemaining === 0 ? 'Penuh' : `Sisa ${totalRemaining} Slot (${totalPct}%)`}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/60 border border-card-border">
+              <span className="text-[9px] font-black uppercase tracking-wider text-brand-muted">Total Terdaftar:</span>
+              <span className="text-xs font-black text-foreground">{totalUsed} Peserta</span>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                Slot Bebas (Tak Terbatas)
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Category Grid */}
+      {categories.length === 0 ? (
+        <p className="text-xs text-brand-muted">Belum ada kategori yang dikonfigurasi pada paket ini.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat.normalizedLabel || selectedCategory === cat.value
+            return (
+              <div
+                key={cat.value || cat.label}
+                onClick={() => onSelectCategory?.(cat.normalizedLabel)}
+                className={`flex flex-col gap-2.5 p-3.5 rounded-xl border transition-all ${
+                  onSelectCategory ? 'cursor-pointer hover:border-sport-orange/50 hover:shadow-sm' : ''
+                } ${
+                  isSelected
+                    ? 'bg-sport-orange/10 border-sport-orange shadow-xs ring-1 ring-sport-orange/30'
+                    : 'bg-brand-gray/20 border-card-border'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black uppercase text-foreground tracking-wide truncate" title={cat.label}>
+                    {cat.label || cat.value}
+                  </span>
+                  {cat.quota > 0 ? (
+                    <span
+                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 ${
+                        cat.isFull
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : cat.isNearFull
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}
+                    >
+                      {cat.isFull ? 'Penuh' : `Sisa ${cat.remaining} slot`}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                      Tak Terbatas
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-brand-muted font-bold">Pemakaian Kuota:</span>
+                    <span
+                      className={`font-black ${
+                        cat.isFull ? 'text-red-400' : cat.isNearFull ? 'text-amber-400' : 'text-emerald-400'
+                      }`}
+                    >
+                      {cat.used}{cat.quota > 0 ? ` / ${cat.quota}` : ' peserta'}
+                      {cat.pct !== null ? ` (${cat.pct}%)` : ''}
+                    </span>
+                  </div>
+
+                  {cat.quota > 0 ? (
+                    <div className="h-2 w-full rounded-full bg-brand-dark/80 overflow-hidden border border-white/5">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          cat.isFull
+                            ? 'bg-gradient-to-r from-red-600 to-red-500'
+                            : cat.isNearFull
+                              ? 'bg-gradient-to-r from-amber-500 to-amber-400'
+                              : 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+                        }`}
+                        style={{ width: `${Math.min(100, cat.pct ?? 0)}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-1.5 w-full rounded-full bg-brand-dark/60 overflow-hidden">
+                      <div className="h-full bg-blue-500/40 w-full" />
+                    </div>
+                  )}
+                </div>
+
+                {cat.isFull && (
+                  <p className="text-[9px] font-bold text-red-400 flex items-center gap-1 mt-0.5">
+                    <span>⚠</span> Kuota penuh — pendaftaran ditutup.
+                  </p>
+                )}
+                {cat.isNearFull && (
+                  <p className="text-[9px] font-bold text-amber-400 flex items-center gap-1 mt-0.5">
+                    <span>⚡</span> Kuota hampir habis ({cat.remaining} slot tersisa).
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export type CategoryFilterOption = {
+  id: string
+  label: string
+  count?: number
+  remaining?: number | null
+  quota?: number
+  isFull?: boolean
+}
+
+function CategoryFilter({
+  value,
+  onChange,
+  options,
+}: {
+  value: string
+  onChange: (next: string) => void
+  options?: CategoryFilterOption[]
+}) {
+  const defaultOptions: CategoryFilterOption[] = (['all', ...RACE_CATEGORIES] as const).map((opt) => ({
+    id: opt,
+    label: opt === 'all' ? 'Semua' : opt,
+  }))
+
+  const finalOptions: CategoryFilterOption[] = options && options.length > 0 ? options : defaultOptions
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
@@ -400,19 +606,47 @@ function CategoryFilter({ value, onChange }: { value: RaceCategoryFilter; onChan
         <span>Kategori:</span>
       </div>
       <div className="flex flex-wrap items-center gap-1 bg-brand-gray/30 p-1 rounded-lg border border-card-border">
-        {(['all', ...RACE_CATEGORIES] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors cursor-pointer ${value === option
-                ? 'bg-sport-orange text-white shadow-xs'
-                : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+        {finalOptions.map((option) => {
+          const isActive = value === option.id
+          let badgeText = ''
+          if (option.id === 'all') {
+            badgeText = option.count !== undefined ? `${option.count}` : ''
+          } else if (option.quota && option.quota > 0) {
+            badgeText = option.isFull ? 'Penuh' : `Sisa ${option.remaining}`
+          } else if (option.count !== undefined) {
+            badgeText = `${option.count}`
+          }
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onChange(option.id)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-sport-orange text-white shadow-xs'
+                  : 'text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
               }`}
-          >
-            {option === 'all' ? 'Semua' : option}
-          </button>
-        ))}
+            >
+              <span>{option.label}</span>
+              {badgeText && (
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[8px] font-black ${
+                    isActive
+                      ? 'bg-black/20 text-white'
+                      : option.isFull
+                        ? 'bg-red-500/20 text-red-400'
+                        : option.remaining !== undefined && option.remaining !== null && option.remaining <= 10
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-brand-dark/60 text-brand-muted'
+                  }`}
+                >
+                  {badgeText}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -540,7 +774,7 @@ export function AdminDashboardClient({
   const [participantEndDate, setParticipantEndDate] = useState('')
   const [participantDatePreset, setParticipantDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
   const [participantSort, setParticipantSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
-  const [participantCategoryFilter, setParticipantCategoryFilter] = useState<RaceCategoryFilter>('all')
+  const [participantCategoryFilter, setParticipantCategoryFilter] = useState<string>('all')
 
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'pending' | 'paid' | 'failed' | 'expired' | 'testing'>('all')
   const [paymentStartDate, setPaymentStartDate] = useState('')
@@ -549,7 +783,7 @@ export function AdminDashboardClient({
   const [paymentSort, setPaymentSort] = useState<'newest' | 'oldest' | 'amount_desc' | 'amount_asc'>('newest')
 
   const [pacerStatusFilter, setPacerStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'testing'>('all')
-  const [pacerCategoryFilter, setPacerCategoryFilter] = useState<RaceCategoryFilter>('all')
+  const [pacerCategoryFilter, setPacerCategoryFilter] = useState<string>('all')
   const [pacerStartDate, setPacerStartDate] = useState('')
   const [pacerEndDate, setPacerEndDate] = useState('')
   const [pacerDatePreset, setPacerDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
@@ -1089,10 +1323,12 @@ export function AdminDashboardClient({
       })
     }
 
-    if (isSoloPackage && participantCategoryFilter !== 'all') {
+    if (participantCategoryFilter !== 'all') {
       list = list.filter((participant) => {
         const community = getParticipantCommunity(participant)
-        return extractCategoryLabel(community?.category || participant.category) === participantCategoryFilter
+        const cat = community?.category || participant.category
+        const catLabel = extractCategoryLabel(cat)
+        return catLabel === participantCategoryFilter || cat === participantCategoryFilter
       })
     }
 
@@ -1238,7 +1474,10 @@ export function AdminDashboardClient({
     }
 
     if (pacerCategoryFilter !== 'all') {
-      list = list.filter((p) => extractCategoryLabel(p.category) === pacerCategoryFilter)
+      list = list.filter((p) => {
+        const catLabel = extractCategoryLabel(p.category)
+        return catLabel === pacerCategoryFilter || p.category === pacerCategoryFilter
+      })
     }
 
     if (pacerStartDate || pacerEndDate) {
@@ -1486,33 +1725,197 @@ export function AdminDashboardClient({
 
   const dailyParticipantChartMax = useMemo(() => Math.max(...dailyParticipants.map((item) => item.count), 1), [dailyParticipants])
 
+  // Hitung ringkasan kuota per paket dan per kategori
+  const packageQuotaSummaries = useMemo<Record<PackageKey, PackageQuotaSummary>>(() => {
+    const packagesConfig = settingsForm.packages || DEFAULT_PACKAGES_SETTINGS
+    const keys: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm']
+    const result = {} as Record<PackageKey, PackageQuotaSummary>
+
+    const countUsage = (pkg: PackageKey, cat: { value: string; label?: string }): number => {
+      const catVal = (cat.value || '').trim().toLowerCase()
+      const catLabel = extractCategoryLabel(cat.value) || extractCategoryLabel(cat.label)
+
+      const isMatch = (itemCat: string | null | undefined) => {
+        if (!itemCat) return false
+        const itemVal = itemCat.trim().toLowerCase()
+        if (itemVal === catVal) return true
+        const itemLabel = extractCategoryLabel(itemCat)
+        if (catLabel && itemLabel && itemLabel.toLowerCase() === catLabel.toLowerCase()) return true
+        return false
+      }
+
+      if (pkg === 'community') {
+        return participants.filter((p) => {
+          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          const comm = firstRelation(p.community)
+          return isMatch(comm?.category)
+        }).length
+      }
+      if (pkg === 'family') {
+        return familyParticipants.filter((p) => {
+          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          const comm = firstRelation(p.community)
+          return isMatch(comm?.category)
+        }).length
+      }
+      if (pkg === 'individual') {
+        return individualParticipants.filter((p) => {
+          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          const comm = firstRelation(p.community)
+          return isMatch(comm?.category || p.category)
+        }).length
+      }
+      if (pkg === 'invitation') {
+        return invitationParticipants.filter((p) => {
+          if (p.payment_status === 'expired' || p.payment_status === 'failed') return false
+          const comm = firstRelation(p.community)
+          return isMatch(comm?.category || p.category)
+        }).length
+      }
+      if (pkg === 'pacer') {
+        return pacerRows.filter((p) => {
+          if (p.status === 'rejected') return false
+          return isMatch(p.category)
+        }).length
+      }
+      if (pkg === 'umkm') {
+        return umkmRows.filter((u) => {
+          if (u.status === 'rejected') return false
+          return true
+        }).length
+      }
+      return 0
+    }
+
+    for (const key of keys) {
+      const config = packagesConfig[key] || DEFAULT_PACKAGES_SETTINGS[key]
+      const period = config.periods?.[0]
+      const categoriesConfig = period?.categories || []
+
+      const categoryStats: CategoryQuotaStat[] = categoriesConfig.map((cat) => {
+        const used = countUsage(key, cat)
+        const quota = cat.quota ?? 0
+        const remaining = quota > 0 ? Math.max(0, quota - used) : null
+        const pct = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : null
+        const isFull = quota > 0 && used >= quota
+        const isNearFull = quota > 0 && pct !== null && pct >= 80 && !isFull
+        const normalizedLabel = extractCategoryLabel(cat.value) || extractCategoryLabel(cat.label) || cat.label || cat.value
+
+        return {
+          value: cat.value,
+          label: cat.label || cat.value,
+          price: cat.price ?? 0,
+          quota,
+          used,
+          remaining,
+          pct,
+          isFull,
+          isNearFull,
+          normalizedLabel,
+        }
+      })
+
+      const hasUnlimited = categoryStats.some((c) => c.quota === 0)
+      const totalQuota = categoryStats.reduce((sum, c) => sum + (c.quota > 0 ? c.quota : 0), 0)
+      const totalUsed = categoryStats.reduce((sum, c) => sum + c.used, 0)
+      const totalRemaining = !hasUnlimited && totalQuota > 0 ? Math.max(0, totalQuota - totalUsed) : null
+      const totalPct = totalQuota > 0 ? Math.min(100, Math.round((totalUsed / totalQuota) * 100)) : null
+
+      result[key] = {
+        packageKey: key,
+        packageLabel: config.label,
+        totalQuota,
+        totalUsed,
+        totalRemaining,
+        totalPct,
+        hasUnlimited,
+        categories: categoryStats,
+      }
+    }
+
+    return result
+  }, [settingsForm.packages, participants, familyParticipants, individualParticipants, invitationParticipants, pacerRows, umkmRows])
+
+  // Opsi filter kategori untuk tab peserta
+  const participantCategoryOptions = useMemo(() => {
+    const summary = packageQuotaSummaries[packageType]
+    const list: Array<{
+      id: string
+      label: string
+      count?: number
+      remaining?: number | null
+      quota?: number
+      isFull?: boolean
+    }> = [
+      {
+        id: 'all',
+        label: 'Semua',
+        count: activeParticipants.length,
+      },
+    ]
+
+    if (summary && summary.categories.length > 0) {
+      for (const cat of summary.categories) {
+        list.push({
+          id: cat.normalizedLabel,
+          label: cat.normalizedLabel,
+          count: cat.used,
+          remaining: cat.remaining,
+          quota: cat.quota,
+          isFull: cat.isFull,
+        })
+      }
+    }
+    return list
+  }, [packageQuotaSummaries, packageType, activeParticipants.length])
+
+  // Opsi filter kategori untuk tab pacer
+  const pacerCategoryOptions = useMemo(() => {
+    const summary = packageQuotaSummaries['pacer']
+    const list: Array<{
+      id: string
+      label: string
+      count?: number
+      remaining?: number | null
+      quota?: number
+      isFull?: boolean
+    }> = [
+      {
+        id: 'all',
+        label: 'Semua',
+        count: pacerRows.length,
+      },
+    ]
+
+    if (summary && summary.categories.length > 0) {
+      for (const cat of summary.categories) {
+        list.push({
+          id: cat.normalizedLabel,
+          label: cat.normalizedLabel,
+          count: cat.used,
+          remaining: cat.remaining,
+          quota: cat.quota,
+          isFull: cat.isFull,
+        })
+      }
+    }
+    return list
+  }, [packageQuotaSummaries, pacerRows.length])
+
   // Hitung pemakaian kuota: jumlah peserta per paket+kategori (paid atau pending)
   // key: '{packageKey}::{categoryValue}'
   const categoryUsageMap = useMemo(() => {
     const map = new Map<string, number>()
-    const increment = (packageKey: string, categoryValue: string | null | undefined) => {
-      if (!categoryValue) return
-      const key = `${packageKey}::${categoryValue}`
-      map.set(key, (map.get(key) ?? 0) + 1)
-    }
-    for (const p of participants) {
-      const comm = firstRelation(p.community)
-      increment('community', comm?.category)
-    }
-    for (const p of familyParticipants) {
-      const comm = firstRelation(p.community)
-      increment('family', comm?.category)
-    }
-    for (const p of individualParticipants) {
-      const comm = firstRelation(p.community)
-      increment('individual', comm?.category || p.category)
-    }
-    for (const p of invitationParticipants) {
-      const comm = firstRelation(p.community)
-      increment('invitation', comm?.category || p.category)
+    for (const [pkgKey, summary] of Object.entries(packageQuotaSummaries)) {
+      for (const cat of summary.categories) {
+        map.set(`${pkgKey}::${cat.value}`, cat.used)
+        if (cat.normalizedLabel && cat.normalizedLabel !== cat.value) {
+          map.set(`${pkgKey}::${cat.normalizedLabel}`, cat.used)
+        }
+      }
     }
     return map
-  }, [participants, familyParticipants, individualParticipants, invitationParticipants])
+  }, [packageQuotaSummaries])
 
   const communitiesByKey = useMemo(() => {
     const map = new Map<string, AdminCommunity>()
@@ -3185,51 +3588,77 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
           )}
 
           {activeTab === 'participants' && (
-            <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
-              <div className="flex border-b border-card-border">
-                <button
-                  onClick={() => setPackageType('community')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'community'
-                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
-                      : 'border-transparent text-brand-muted hover:text-foreground'
-                    }`}
-                >
-                  Community Package
-                </button>
-                <button
-                  onClick={() => setPackageType('family')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'family'
-                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
-                      : 'border-transparent text-brand-muted hover:text-foreground'
-                    }`}
-                >
-                  Bro & Sist Package
-                </button>
-                <button
-                  onClick={() => setPackageType('individual')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'individual'
-                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
-                      : 'border-transparent text-brand-muted hover:text-foreground'
-                    }`}
-                >
-                  Individu
-                </button>
-                <button
-                  onClick={() => setPackageType('invitation')}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'invitation'
-                      ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
-                      : 'border-transparent text-brand-muted hover:text-foreground'
-                    }`}
-                >
-                  Invitation
-                </button>
-              </div>
+            <div className="flex flex-col gap-4">
+              {/* Quota Banner */}
+              <PackageQuotaBanner
+                quotaSummary={packageQuotaSummaries[packageType]}
+                selectedCategory={participantCategoryFilter}
+                onSelectCategory={(catId) => {
+                  setParticipantCategoryFilter((prev) => (prev === catId ? 'all' : catId))
+                }}
+              />
 
-              {packageType === 'individual' && (
-                <div className="p-3.5 bg-brand-dark/40 border-b border-card-border text-xs">
-                  <CategoryFilter value={participantCategoryFilter} onChange={setParticipantCategoryFilter} />
+              <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
+                <div className="flex border-b border-card-border">
+                  <button
+                    onClick={() => {
+                      setPackageType('community')
+                      setParticipantCategoryFilter('all')
+                    }}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'community'
+                        ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                        : 'border-transparent text-brand-muted hover:text-foreground'
+                      }`}
+                  >
+                    Community Package
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPackageType('family')
+                      setParticipantCategoryFilter('all')
+                    }}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'family'
+                        ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                        : 'border-transparent text-brand-muted hover:text-foreground'
+                      }`}
+                  >
+                    Bro &amp; Sist Package
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPackageType('individual')
+                      setParticipantCategoryFilter('all')
+                    }}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'individual'
+                        ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                        : 'border-transparent text-brand-muted hover:text-foreground'
+                      }`}
+                  >
+                    Individu
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPackageType('invitation')
+                      setParticipantCategoryFilter('all')
+                    }}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${packageType === 'invitation'
+                        ? 'border-sport-orange text-sport-orange bg-sport-orange/5'
+                        : 'border-transparent text-brand-muted hover:text-foreground'
+                      }`}
+                  >
+                    Invitation
+                  </button>
                 </div>
-              )}
+
+                {participantCategoryOptions.length > 1 && (
+                  <div className="p-3.5 bg-brand-dark/40 border-b border-card-border text-xs">
+                    <CategoryFilter
+                      value={participantCategoryFilter}
+                      onChange={setParticipantCategoryFilter}
+                      options={participantCategoryOptions}
+                    />
+                  </div>
+                )}
 
               {/* Filter Tanggal & Pengurutan Toolbar */}
               <div className="p-3.5 bg-brand-dark/40 border-b border-card-border flex flex-col xl:flex-row xl:items-center justify-between gap-3 text-xs">
@@ -3329,10 +3758,30 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                     {groupedParticipants.length} {groupWord} ditemukan
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   {(participantStartDate || participantEndDate) && (
                     <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
                       Filter Tanggal Aktif
+                    </span>
+                  )}
+                  {participantCategoryFilter !== 'all' && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Kategori: {participantCategoryFilter}
+                    </span>
+                  )}
+                  {packageQuotaSummaries[packageType]?.totalQuota > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded text-[9px] font-black ${
+                        packageQuotaSummaries[packageType]?.totalRemaining === 0
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : (packageQuotaSummaries[packageType]?.totalPct ?? 0) >= 80
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}
+                    >
+                      {packageQuotaSummaries[packageType]?.totalRemaining === 0
+                        ? 'Kuota Penuh'
+                        : `Sisa Kuota: ${packageQuotaSummaries[packageType]?.totalRemaining} Slot`}
                     </span>
                   )}
                   <p className="text-[10px] font-bold text-brand-muted">{filteredParticipants.length} peserta</p>
@@ -3343,12 +3792,13 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                 <div className="p-8 text-center">
                   <p className="text-sm font-bold text-foreground">Data peserta tidak ditemukan</p>
                   <p className="text-xs text-brand-muted mt-1">Coba gunakan kata pencarian lain atau ubah filter tanggal.</p>
-                  {(participantStartDate || participantEndDate || query) && (
+                  {(participantStartDate || participantEndDate || query || participantCategoryFilter !== 'all') && (
                     <button
                       type="button"
                       onClick={() => {
                         setQuery('')
                         handleDatePresetChange('all')
+                        setParticipantCategoryFilter('all')
                       }}
                       className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sport-orange text-white text-[10px] font-bold uppercase cursor-pointer hover:bg-sport-orange/90 transition-colors"
                     >
@@ -3538,7 +3988,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
 
               <Pagination state={pagedGroups} label={groupWord} />
             </section>
-          )}
+          </div>
+        )}
 
           {activeTab === 'payments' && (
             <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
@@ -4130,9 +4581,22 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                 </Button>
               </div>
 
+              {/* Quota Banner for Pacer */}
+              <PackageQuotaBanner
+                quotaSummary={packageQuotaSummaries['pacer']}
+                selectedCategory={pacerCategoryFilter}
+                onSelectCategory={(catId) => {
+                  setPacerCategoryFilter((prev) => (prev === catId ? 'all' : catId))
+                }}
+              />
+
               {/* Filter Controls */}
               <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col gap-3 shadow-xs">
-                <CategoryFilter value={pacerCategoryFilter} onChange={setPacerCategoryFilter} />
+                <CategoryFilter
+                  value={pacerCategoryFilter}
+                  onChange={setPacerCategoryFilter}
+                  options={pacerCategoryOptions}
+                />
 
                 {/* Status Tabs */}
                 <div className="flex flex-wrap items-center gap-2">
@@ -4282,9 +4746,29 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                       Filter Tanggal Aktif
                     </span>
                   )}
+                  {pacerCategoryFilter !== 'all' && (
+                    <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                      Kategori: {pacerCategoryFilter}
+                    </span>
+                  )}
                   {pacerStatusFilter !== 'all' && (
                     <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
                       Status: {pacerStatusFilter.toUpperCase()}
+                    </span>
+                  )}
+                  {packageQuotaSummaries['pacer']?.totalQuota > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded text-[9px] font-black ${
+                        packageQuotaSummaries['pacer']?.totalRemaining === 0
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : (packageQuotaSummaries['pacer']?.totalPct ?? 0) >= 80
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}
+                    >
+                      {packageQuotaSummaries['pacer']?.totalRemaining === 0
+                        ? 'Kuota Penuh'
+                        : `Sisa Kuota: ${packageQuotaSummaries['pacer']?.totalRemaining} Slot`}
                     </span>
                   )}
                   {query && (
@@ -4294,7 +4778,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   )}
                 </div>
 
-                {(pacerStartDate || pacerEndDate || pacerStatusFilter !== 'all' || query) && (
+                {(pacerStartDate || pacerEndDate || pacerStatusFilter !== 'all' || pacerCategoryFilter !== 'all' || query) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -4491,6 +4975,11 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                 </Button>
               </div>
 
+              {/* Quota Banner for UMKM */}
+              <PackageQuotaBanner
+                quotaSummary={packageQuotaSummaries['umkm']}
+              />
+
               {/* Filter Controls */}
               <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col gap-3 shadow-xs">
                 {/* Status Bayar Tabs */}
@@ -4642,6 +5131,21 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   {umkmPaymentStatusFilter !== 'all' && (
                     <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
                       Bayar: {umkmPaymentStatusFilter === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}
+                    </span>
+                  )}
+                  {packageQuotaSummaries['umkm']?.totalQuota > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded text-[9px] font-black ${
+                        packageQuotaSummaries['umkm']?.totalRemaining === 0
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : (packageQuotaSummaries['umkm']?.totalPct ?? 0) >= 80
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}
+                    >
+                      {packageQuotaSummaries['umkm']?.totalRemaining === 0
+                        ? 'Kuota Penuh'
+                        : `Sisa Kuota: ${packageQuotaSummaries['umkm']?.totalRemaining} Slot`}
                     </span>
                   )}
                   {query && (
