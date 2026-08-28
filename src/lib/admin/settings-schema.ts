@@ -1,3 +1,6 @@
+/** Ukuran jersey yang tersedia. Satu-satunya sumber daftar ukuran. */
+export const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'] as const
+
 export type FormInputConfig = {
   label: string
   placeholder: string
@@ -202,7 +205,7 @@ const DEFAULT_PARTICIPANT_GROUP: RegistrationFormParticipantSettings = {
     placeholder: 'Pilih ukuran',
     visible: true,
     required: true,
-    options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
+    options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
   },
   blood_type: {
     label: 'Golongan Darah',
@@ -281,7 +284,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
-        options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
+        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
       },
     },
   },
@@ -310,7 +313,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
-        options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
+        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
       },
     },
   },
@@ -339,7 +342,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
-        options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((size) => ({ value: size, label: size })),
+        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
       },
       age: { label: 'Usia', placeholder: 'Usia (tahun)', visible: true, required: true },
       sosmed_instagram: { label: 'Link Instagram', placeholder: 'https://instagram.com/username', visible: true, required: true },

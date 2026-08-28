@@ -22,6 +22,7 @@ import {
   type PackagesSettings,
   type RegistrationFormPackageSettings,
   type RegistrationFormSettings,
+  type FormSelectOptionConfig,
   type SiteAssets,
   type WebhookPackageConfig,
   type WebhookSettings,
@@ -33,6 +34,18 @@ const ENV_PATH = path.join(process.cwd(), '.env.local')
 const FORM_SETTINGS_KEY = 'registration_form'
 
 const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'pacer', 'umkm']
+
+/**
+ * Ukuran jersey tersimpan tetap dipakai (termasuk label yang mungkin sudah
+ * diubah admin), lalu ukuran baru dari TSHIRT_SIZES ditambahkan di belakang —
+ * tanpa ini, penambahan ukuran seperti 3XL-5XL tidak akan pernah muncul di
+ * database yang setelannya sudah pernah disimpan.
+ */
+function mergeSizeOptions(base: FormSelectOptionConfig[], stored: FormSelectOptionConfig[] | undefined): FormSelectOptionConfig[] {
+  if (!Array.isArray(stored) || stored.length === 0) return base
+  const seen = new Set(stored.map((option) => option.value))
+  return [...stored, ...base.filter((option) => !seen.has(option.value))]
+}
 
 function mergeInput<T extends { label: string; placeholder: string; visible: boolean; required: boolean }>(base: T, value: Partial<T> | undefined): T {
   return {
@@ -105,9 +118,7 @@ function normalizeRegistrationFormPackage(
       },
       tshirt_size: {
         ...mergeInput(base.participants.tshirt_size, value?.participants?.tshirt_size),
-        options: Array.isArray(value?.participants?.tshirt_size?.options) && value.participants!.tshirt_size!.options.length > 0
-          ? value!.participants!.tshirt_size!.options
-          : base.participants.tshirt_size.options,
+        options: mergeSizeOptions(base.participants.tshirt_size.options, value?.participants?.tshirt_size?.options),
       },
       blood_type: {
         ...mergeInput(base.participants.blood_type, value?.participants?.blood_type),

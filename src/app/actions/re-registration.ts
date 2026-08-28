@@ -44,6 +44,7 @@ import {
   resolvePeriodForCategory,
 } from '@/lib/admin/settings'
 import { generateRandomReference, getWibNowString } from '@/lib/utils/format'
+import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
 
 function toXenditReference(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
@@ -68,7 +69,7 @@ const participantInputSchema = z.object({
   phone: z.string().min(9, 'Nomor HP tidak valid'),
   date_of_birth: z.string().min(1, 'Tanggal lahir wajib diisi'),
   gender: z.enum(['male', 'female']),
-  tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL']),
+  tshirt_size: z.enum(TSHIRT_SIZES),
   blood_type: z.enum(['A', 'B', 'AB', 'O']),
   medical_condition: z.string().optional(),
   emergency_contact_name: z.string().min(2, 'Nama kontak darurat wajib diisi'),

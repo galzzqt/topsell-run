@@ -15,6 +15,7 @@ import {
 } from '@/lib/db'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
+import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
 
 const participantInput = z.object({
   full_name: z.string().min(2, 'Nama lengkap minimal 2 karakter'),
@@ -24,7 +25,7 @@ const participantInput = z.object({
   phone: z.string().min(9, 'Nomor HP tidak valid'),
   date_of_birth: z.string().min(1, 'Tanggal lahir wajib diisi'),
   gender: z.enum(['male', 'female']),
-  tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL']),
+  tshirt_size: z.enum(TSHIRT_SIZES),
   blood_type: z.enum(['A', 'B', 'AB', 'O']),
   medical_condition: z.string().optional(),
   emergency_contact_name: z.string().min(2, 'Nama kontak darurat wajib diisi'),

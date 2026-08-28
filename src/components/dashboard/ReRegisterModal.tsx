@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { VoucherInput } from '@/components/ui/voucher-input'
 import { Select } from '@/components/ui/select'
+import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
 import { usePackagesSettings, resolveCategoryLabel } from '@/lib/hooks/usePackagesSettings'
 import type { AppliedVoucher, VoucherPackageKey } from '@/lib/types/voucher'
 import {
@@ -23,7 +24,7 @@ type ParticipantFormState = {
   phone: string
   date_of_birth: string
   gender: 'male' | 'female'
-  tshirt_size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL'
+  tshirt_size: (typeof TSHIRT_SIZES)[number]
   blood_type: 'A' | 'B' | 'AB' | 'O'
   medical_condition: string
   emergency_contact_name: string
@@ -392,7 +393,7 @@ export function ReRegisterModal({
                       required
                       value={p.tshirt_size}
                       onChange={(e) => handleUpdateParticipant(idx, 'tshirt_size', e.target.value as any)}
-                      options={['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((s) => ({ value: s, label: s }))}
+                      options={TSHIRT_SIZES.map((s) => ({ value: s, label: s }))}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
