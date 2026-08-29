@@ -80,7 +80,7 @@ function renderPacerApprovalEmail(name: string, pacerCode: string, category: str
         </div>
         
         <p style="margin:0 0 16px;color:#374151">
-          Silakan masuk ke Dashboard Pacer Anda untuk melengkapi profil, mengunduh QR Pass, dan memantau koordinasi tim Pacer:
+          Silakan masuk ke Dashboard Pacer Anda untuk melengkapi profil, dan memantau koordinasi tim Pacer:
         </p>
         
         <div style="text-align:center;margin:32px 0">

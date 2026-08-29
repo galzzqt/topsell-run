@@ -1422,7 +1422,7 @@ export function AdminDashboardClient({
     let totalNominalPaid = 0
 
     for (const payment of activePayments) {
-      const status = paymentStatusChanges.get(payment.id) || payment.status
+      const status = payment.status
       if (status === 'pending') pending++
       else if (status === 'paid') {
         paid++
@@ -1433,7 +1433,7 @@ export function AdminDashboardClient({
     }
 
     return { total, pending, paid, failed, expired, testing, totalNominalPaid }
-  }, [activePayments, paymentStatusChanges])
+  }, [activePayments])
 
   const filteredPayments = useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -1460,8 +1460,7 @@ export function AdminDashboardClient({
 
     if (paymentStatusFilter !== 'all') {
       list = list.filter((payment) => {
-        const status = paymentStatusChanges.get(payment.id) || payment.status
-        return status === paymentStatusFilter
+        return payment.status === paymentStatusFilter
       })
     }
 
@@ -1494,7 +1493,7 @@ export function AdminDashboardClient({
       // 'newest'
       return timeB - timeA
     })
-  }, [activePayments, query, paymentStatusFilter, paymentStartDate, paymentEndDate, paymentSort, paymentStatusChanges])
+  }, [activePayments, query, paymentStatusFilter, paymentStartDate, paymentEndDate, paymentSort])
 
   const filteredPaymentsTotalNominal = useMemo(() => {
     return filteredPayments.reduce((sum, p) => sum + p.amount, 0)
@@ -1507,7 +1506,7 @@ export function AdminDashboardClient({
     let testing = 0
 
     for (const p of pacerRows) {
-      const status = pacerStatusChanges.get(p.pacer_id) || p.status
+      const status = p.status
       if (status === 'approved') approved += 1
       else if (status === 'rejected') rejected += 1
       else if (status === 'testing') testing += 1
@@ -1521,7 +1520,7 @@ export function AdminDashboardClient({
       rejected,
       testing,
     }
-  }, [pacerRows, pacerStatusChanges])
+  }, [pacerRows])
 
   const filteredPacerRows = useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -1545,8 +1544,7 @@ export function AdminDashboardClient({
 
     if (pacerStatusFilter !== 'all') {
       list = list.filter((p) => {
-        const currentStatus = pacerStatusChanges.get(p.pacer_id) || p.status
-        return currentStatus === pacerStatusFilter
+        return p.status === pacerStatusFilter
       })
     }
 
@@ -1586,7 +1584,7 @@ export function AdminDashboardClient({
       const timeB = new Date(b.created_at || 0).getTime()
       return timeB - timeA
     })
-  }, [pacerRows, query, pacerStatusFilter, pacerCategoryFilter, pacerStartDate, pacerEndDate, pacerSort, pacerStatusChanges])
+  }, [pacerRows, query, pacerStatusFilter, pacerCategoryFilter, pacerStartDate, pacerEndDate, pacerSort])
 
   const umkmStats = useMemo(() => {
     let paid = 0

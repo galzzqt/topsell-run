@@ -27,8 +27,8 @@ async function getWebhookConfig(kind: WebhookKind, packageType: PackageKey) {
   const prefix = kind === 'status'
     ? (packageType === 'pacer' ? 'GHL_PACER_STATUS' : 'GHL_STATUS')
     : packageType === 'pacer'
-    ? (kind === 'registration' ? 'GHL_PACER_REGISTRATION' : 'GHL_PACER_QR')
-    : (kind === 'registration' ? 'GHL_REGISTRATION' : 'GHL_QR')
+      ? (kind === 'registration' ? 'GHL_PACER_REGISTRATION' : 'GHL_PACER_QR')
+      : (kind === 'registration' ? 'GHL_REGISTRATION' : 'GHL_QR')
   return {
     url: process.env[`${prefix}_WEBHOOK_URL`] || '',
     token: process.env[`${prefix}_WEBHOOK_TOKEN`] || '',
@@ -315,7 +315,7 @@ export async function sendPacerRegistrationWebhook(payload: {
  */
 const PACER_STATUS_MESSAGE: Record<string, (p: { fullName: string; category: string; pacerCode: string; statusNote?: string }) => string> = {
   approved: (p) =>
-    `Selamat ${p.fullName}! Anda resmi terpilih sebagai Pacer TOPSELL RUN 2026 untuk kategori ${p.category}. Kode pacer Anda: ${p.pacerCode}. Silakan masuk ke Dashboard Pacer untuk melengkapi profil dan mengunduh QR Pass Anda.`,
+    `Selamat ${p.fullName}! Anda resmi terpilih sebagai Pacer TOPSELL RUN 2026 untuk kategori ${p.category}. Kode pacer Anda: ${p.pacerCode}. Silakan masuk ke Dashboard Pacer untuk melengkapi profil Anda.`,
   rejected: (p) =>
     `Halo ${p.fullName}, terima kasih sudah mendaftar sebagai Pacer TOPSELL RUN 2026 (Kategori: ${p.category}). Mohon maaf, kali ini pendaftaran Anda belum dapat kami setujui.${p.statusNote ? ` Alasan: ${p.statusNote}` : ''}`,
 }
