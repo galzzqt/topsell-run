@@ -39,12 +39,70 @@ import {
   markPaymentPaid,
 } from '@/lib/db'
 import {
+  sendRegistrationConfirmationWebhook,
+  sendFamilyRegistrationConfirmationWebhook,
+  sendIndividualRegistrationConfirmationWebhook,
+  sendInvitationRegistrationConfirmationWebhook,
+} from '@/lib/ghl/webhook'
+import {
   checkPackageQuota,
   resolvePackagePrice,
   resolvePeriodForCategory,
 } from '@/lib/admin/settings'
 import { generateRandomReference, getWibNowString } from '@/lib/utils/format'
 import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
+
+// Pendaftaran gratis via voucher tidak lewat Xendit, jadi webhook pembayaran tidak
+// pernah jalan. Kirim notifikasi lunas yang sama seperti flow form pendaftaran.
+async function notifyFreeRegistration(
+  pkg: 'community' | 'family' | 'individual' | 'invitation',
+  registrationId: string
+) {
+  try {
+    if (pkg === 'individual') {
+      const [email, wa] = await Promise.all([
+        import('@/lib/email/individual'),
+        import('@/lib/whatsapp/individual'),
+      ])
+      await Promise.all([
+        email.sendIndividualReceiptEmail(registrationId),
+        email.sendIndividualRacepackEmailsForRegistration(registrationId),
+        wa.sendIndividualRacepackWhatsappsForRegistration(registrationId),
+      ])
+    } else if (pkg === 'invitation') {
+      const [email, wa] = await Promise.all([
+        import('@/lib/email/invitation'),
+        import('@/lib/whatsapp/invitation'),
+      ])
+      await Promise.all([
+        email.sendInvitationReceiptEmail(registrationId),
+        email.sendInvitationRacepackEmailsForRegistration(registrationId),
+        wa.sendInvitationRacepackWhatsappsForRegistration(registrationId),
+      ])
+    } else {
+      const [receipt, racepack, wa] = await Promise.all([
+        import('@/lib/email/receipt'),
+        import('@/lib/email/racepack'),
+        import('@/lib/whatsapp/racepack'),
+      ])
+      await Promise.all(
+        pkg === 'family'
+          ? [
+              receipt.sendFamilyReceiptEmail(registrationId),
+              racepack.sendFamilyRacepackEmailsForRegistration(registrationId),
+              wa.sendFamilyRacepackWhatsappsForRegistration(registrationId),
+            ]
+          : [
+              receipt.sendCommunityReceiptEmail(registrationId),
+              racepack.sendRacepackEmailsForRegistration(registrationId),
+              wa.sendRacepackWhatsappsForRegistration(registrationId),
+            ]
+      )
+    }
+  } catch (error) {
+    console.error(`Failed to notify free re-registration (${pkg}):`, error)
+  }
+}
 
 function toXenditReference(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
@@ -216,10 +274,26 @@ export async function reRegisterIndividualAction(input: {
         payment_method: 'voucher_free',
         paid_at: new Date().toISOString(),
       })
+      await notifyFreeRegistration('individual', registration.id)
     }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  try {
+    await sendIndividualRegistrationConfirmationWebhook({
+      phone: individual.phone,
+      familyName: individual.name,
+      representativeName: individual.leader_name,
+      participantCount: 1,
+      email: individual.email,
+      category,
+      registrationCode: individual.individual_code,
+      amount: finalAmount,
+    })
+  } catch (sendError) {
+    console.error('Failed to send individual re-registration confirmation webhook:', sendError)
   }
 
   return { success: true, registrationId: registration.id }
@@ -364,10 +438,26 @@ export async function reRegisterInvitationAction(input: {
         payment_method: 'voucher_free',
         paid_at: new Date().toISOString(),
       })
+      await notifyFreeRegistration('invitation', registration.id)
     }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  try {
+    await sendInvitationRegistrationConfirmationWebhook({
+      phone: invitation.phone,
+      familyName: invitation.name,
+      representativeName: invitation.leader_name,
+      participantCount: 1,
+      email: invitation.email,
+      category,
+      registrationCode: invitation.invitation_code,
+      amount: finalAmount,
+    })
+  } catch (sendError) {
+    console.error('Failed to send invitation re-registration confirmation webhook:', sendError)
   }
 
   return { success: true, registrationId: registration.id }
@@ -515,10 +605,22 @@ export async function reRegisterFamilyAction(input: {
         payment_method: 'voucher_free',
         paid_at: new Date().toISOString(),
       })
+      await notifyFreeRegistration('family', registration.id)
     }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  try {
+    await sendFamilyRegistrationConfirmationWebhook({
+      phone: family.phone,
+      familyName: family.name,
+      representativeName: family.leader_name,
+      participantCount: input.participants.length,
+    })
+  } catch (sendError) {
+    console.error('Failed to send family re-registration confirmation webhook:', sendError)
   }
 
   return { success: true, registrationId: registration.id }
@@ -666,10 +768,22 @@ export async function reRegisterCommunityAction(input: {
         payment_method: 'voucher_free',
         paid_at: new Date().toISOString(),
       })
+      await notifyFreeRegistration('community', registration.id)
     }
     if (voucherId) await incrementVoucherUsage(voucherId)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
+  }
+
+  try {
+    await sendRegistrationConfirmationWebhook({
+      phone: community.phone,
+      communityName: community.name,
+      leaderName: community.leader_name,
+      participantCount: input.participants.length,
+    })
+  } catch (sendError) {
+    console.error('Failed to send community re-registration confirmation webhook:', sendError)
   }
 
   return { success: true, registrationId: registration.id }

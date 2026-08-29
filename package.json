@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:migrate-to-mongo": "node scripts/migrate-supabase-to-mongodb.mjs",
     "db:init-mongo": "node scripts/init-mongodb-indexes.mjs",
-    "db:clean-duplicates": "node scripts/clean-duplicate-participants.mjs"
+    "db:clean-duplicates": "node scripts/clean-duplicate-participants.mjs",
+    "reminder:preview": "node scripts/preview-payment-reminders.mjs"
   },
   "dependencies": {
     "@axiomhq/js": "^1.6.1",
