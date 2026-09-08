@@ -448,8 +448,7 @@ export async function reRegisterInvitationAction(input: {
   try {
     await sendInvitationRegistrationConfirmationWebhook({
       phone: invitation.phone,
-      familyName: invitation.name,
-      representativeName: invitation.leader_name,
+      participantName: invitation.name,
       participantCount: 1,
       email: invitation.email,
       category,

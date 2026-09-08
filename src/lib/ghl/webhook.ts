@@ -137,28 +137,33 @@ export async function sendIndividualRegistrationConfirmationWebhook(payload: {
 
 export async function sendInvitationRegistrationConfirmationWebhook(payload: {
   phone: string
-  familyName: string
-  representativeName: string
+  participantName: string
   participantCount: number
+  participantType?: string | null
+  participantTypeName?: string | null
   email?: string | null
   category?: string | null
   registrationCode?: string | null
   amount?: number | null
+  /** Seluruh isi form pendaftaran (tanpa password) — dikirim apa adanya supaya bisa dipetakan di GHL. */
+  formFields?: Record<string, unknown>
 }) {
   return postWebhook('registration', 'invitation', {
+    ...(payload.formFields || {}),
     event: 'registration_confirmation',
     package: 'invitation',
     phone: payload.phone,
     whatsapp: phoneToWhatsAppId(payload.phone),
-    community_name: payload.familyName,
-    leader_name: payload.representativeName,
-    participant_name: payload.representativeName,
+    participant_name: payload.participantName,
     participant_count: payload.participantCount,
+    // Jenis peserta invitation (brand/instansi/perseorangan) + namanya.
+    participant_type: payload.participantType || '',
+    participant_type_name: payload.participantTypeName || '',
     email: payload.email || '',
     category: payload.category || '',
     registration_code: payload.registrationCode || '',
     amount: payload.amount ?? null,
-    message: `Pendaftaran invitation ${payload.familyName} untuk TOPSELL RUN 2026 sudah diterima. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
+    message: `Pendaftaran invitation ${payload.participantName} untuk TOPSELL RUN 2026 sudah diterima. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
   })
 }
 

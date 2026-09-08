@@ -246,12 +246,20 @@ export async function signUpInvitation(values: RegisterSoloFormValues, voucherCo
     console.error('Failed to create invitation auto-payment record:', error)
   }
 
+  // Semua isi form dikirim ke GHL kecuali password. `name`/`leader_name` dibuang:
+  // invitation cuma 1 peserta, keduanya duplikat dari full_name.
+  const { password: _pw, confirmPassword: _cpw, name: _name, leader_name: _leader, participants: _participants, ...groupFields } = values
+  void _pw; void _cpw; void _name; void _leader; void _participants
+  const formFields = { ...groupFields, ...values.participants[0] }
+
   try {
     await sendInvitationRegistrationConfirmationWebhook({
+      formFields,
       phone: values.phone,
-      familyName: values.name,
-      representativeName: values.leader_name,
+      participantName: values.participants[0]?.full_name || values.name,
       participantCount: values.participants.length,
+      participantType: values.participants[0]?.participant_type || null,
+      participantTypeName: values.participants[0]?.community_name || null,
       email: values.email,
       category: values.category,
       registrationCode: invitation.invitation_code,

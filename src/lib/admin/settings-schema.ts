@@ -446,9 +446,13 @@ const EMPTY_WEBHOOK_PACKAGE: WebhookPackageConfig = {
   status: { url: '', token: '' },
 }
 
-/** Webhook GHL pendaftaran untuk paket Individu & Invitation. */
+/** Webhook GHL pendaftaran untuk paket Individu. */
 const SOLO_REGISTRATION_WEBHOOK_URL =
   'https://services.leadconnectorhq.com/hooks/FCXCaXzwNxN3BXWaoDM6/webhook-trigger/b8943b3f-9920-4380-b24b-c59631a31edb'
+
+/** Webhook GHL pendaftaran khusus paket Invitation. */
+const INVITATION_REGISTRATION_WEBHOOK_URL =
+  'https://services.leadconnectorhq.com/hooks/FCXCaXzwNxN3BXWaoDM6/webhook-trigger/b6958f3f-9ba8-4504-bcff-75a51d26cf0f'
 
 /** Webhook GHL konfirmasi setelah pembayaran (racepack) untuk Individu & Invitation. */
 const SOLO_PAYMENT_WEBHOOK_URL =
@@ -462,7 +466,7 @@ export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
   community: { ...EMPTY_WEBHOOK_PACKAGE },
   family: { ...EMPTY_WEBHOOK_PACKAGE },
   individual: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: SOLO_REGISTRATION_WEBHOOK_URL, token: '' }, payment: { url: SOLO_PAYMENT_WEBHOOK_URL, token: '' } },
-  invitation: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: SOLO_REGISTRATION_WEBHOOK_URL, token: '' }, payment: { url: SOLO_PAYMENT_WEBHOOK_URL, token: '' } },
+  invitation: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: INVITATION_REGISTRATION_WEBHOOK_URL, token: '' }, payment: { url: SOLO_PAYMENT_WEBHOOK_URL, token: '' } },
   pacer: { ...EMPTY_WEBHOOK_PACKAGE },
   umkm: { ...EMPTY_WEBHOOK_PACKAGE, payment: { url: UMKM_PAYMENT_WEBHOOK_URL, token: '' } },
 }
