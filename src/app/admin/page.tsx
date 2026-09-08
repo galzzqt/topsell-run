@@ -298,6 +298,7 @@ export default async function AdminPage() {
     emergency_contact_name: fp.emergency_contact_name,
     emergency_contact_phone: fp.emergency_contact_phone,
     community_name: fp.community_name ?? null,
+    participant_type: fp.participant_type ?? null,
     participant_code: fp.participant_code,
     qr_code_data: fp.qr_code_data,
     payment_status: fp.payment_status as 'pending' | 'paid' | 'failed' | 'expired',

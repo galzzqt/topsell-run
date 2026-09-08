@@ -46,6 +46,9 @@ export const loginSchema = z.object({
   password: z.string().min(6, 'Password minimal 6 karakter'),
 })
 
+export const PARTICIPANT_TYPES = ['brand', 'instansi', 'perseorangan'] as const
+export type ParticipantType = (typeof PARTICIPANT_TYPES)[number]
+
 export const participantItemSchema = z.object({
   full_name: z.string().min(3, 'Nama lengkap minimal 3 karakter').max(50, 'Nama lengkap maksimal 50 karakter'),
   bib_name: z.string().min(2, 'Nama BIB minimal 2 karakter').max(20, 'Nama BIB maksimal 20 karakter'),
@@ -66,6 +69,9 @@ export const participantItemSchema = z.object({
     .min(1, 'Nomor kontak darurat wajib diisi')
     .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
   community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
+  // Khusus invitation: jenis peserta (brand/instansi/perseorangan). Opsional di skema bersama,
+  // diwajibkan di registerInvitationSchema.
+  participant_type: z.enum(PARTICIPANT_TYPES).optional().or(z.literal('')),
 })
 
 export const registerSchema = z
@@ -199,6 +205,7 @@ export const registerIndividualSchema = participantItemSchema
 // Form pendaftaran invitation: data grup & data peserta digabung jadi satu level.
 export const registerInvitationSchema = participantItemSchema
   .extend({
+    participant_type: z.enum(PARTICIPANT_TYPES, { message: 'Jenis peserta wajib dipilih' }),
     category: invitationCategorySchema,
     provinsi: z.string().min(1, 'Provinsi wajib dipilih'),
     kota: z.string().min(1, 'Kota/Kabupaten wajib dipilih'),

@@ -176,6 +176,7 @@ export type AdminParticipant = {
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
   community_name?: string | null
+  participant_type?: string | null
   participant_code: string | null
   qr_code_data: string | null
   payment_status: 'pending' | 'paid' | 'failed' | 'expired' | 'testing'
@@ -2137,6 +2138,7 @@ export function AdminDashboardClient({
     return {
       'Nama Peserta': participant.full_name,
       'Nama BIB': participant.bib_name,
+      'Jenis Peserta': participant.participant_type || '',
       'Instansi / Komunitas': participant.community_name || '',
       Kategori: formatParticipantCategory(participant),
       'No. KTP': participant.ktp_number,
@@ -4034,10 +4036,10 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                                       <p className="text-sm font-bold text-foreground">{participant.full_name}</p>
                                       <p className="text-[10px] text-sport-orange font-bold">{participant.participant_code || 'Belum ada kode'}</p>
                                       <p className="text-[10px] text-brand-muted">BIB: {participant.bib_name}</p>
-                                      {participant.community_name && (
+                                      {(participant.community_name || participant.participant_type) && (
                                         <p className="text-[10px] text-sport-purple font-bold mt-1">
-                                          <span className="px-1.5 py-0.5 rounded bg-sport-purple/10 border border-sport-purple/20">
-                                            Instansi: {participant.community_name}
+                                          <span className="px-1.5 py-0.5 rounded bg-sport-purple/10 border border-sport-purple/20 capitalize">
+                                            {participant.participant_type || 'Instansi'}{participant.community_name ? `: ${participant.community_name}` : ''}
                                           </span>
                                         </p>
                                       )}

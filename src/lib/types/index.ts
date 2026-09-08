@@ -407,6 +407,7 @@ export interface InvitationParticipant {
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
   community_name?: string | null
+  participant_type?: string | null
   provinsi: string | null
   kota: string | null
   kecamatan: string | null

@@ -25,6 +25,19 @@ import type { AppliedVoucher } from '@/lib/types/voucher'
 
 type CategoryOption = { value: string; label: string; price: number }
 
+// Jenis peserta invitation — label field nama menyesuaikan pilihan ini.
+const PARTICIPANT_TYPE_OPTIONS = [
+  { value: 'brand', label: 'Brand' },
+  { value: 'instansi', label: 'Instansi' },
+  { value: 'perseorangan', label: 'Perseorangan' },
+] as const
+
+const PARTICIPANT_TYPE_NAME_LABEL: Record<string, string> = {
+  brand: 'Nama Brand',
+  instansi: 'Nama Instansi',
+  perseorangan: 'Nama Perseorangan',
+}
+
 export default function InvitationForm() {
   const router = useRouter()
   const [activeSession, setActiveSession] = useActiveSession()
@@ -64,6 +77,7 @@ export default function InvitationForm() {
       emergency_contact_name: '',
       emergency_contact_phone: '',
       community_name: '',
+      participant_type: 'instansi',
       category: INVITATION_CATEGORY_OPTIONS[0].value,
       provinsi: '',
       kota: '',
@@ -79,6 +93,8 @@ export default function InvitationForm() {
   const selectedProvinsi = useWatch({ control, name: 'provinsi' })
   const selectedKota = useWatch({ control, name: 'kota' })
   const selectedCategory = useWatch({ control, name: 'category' })
+  const selectedParticipantType = useWatch({ control, name: 'participant_type' })
+  const participantNameLabel = PARTICIPANT_TYPE_NAME_LABEL[selectedParticipantType || ''] || 'Nama Instansi / Brand'
   const basePrice = categoryOptions.find((c) => c.value === selectedCategory)?.price || 0
 
   const invitationFallbacks = {
@@ -410,11 +426,20 @@ export default function InvitationForm() {
                 ) : (
                   <input type="hidden" value={invitationFallbacks.ktp_number} {...register('ktp_number')} />
                 )}
+                <Select
+                  label="Jenis Peserta"
+                  required
+                  error={errors.participant_type?.message}
+                  disabled={isSubmitting}
+                  options={PARTICIPANT_TYPE_OPTIONS}
+                  defaultValue="instansi"
+                  {...register('participant_type')}
+                />
                 {formSettings.invitation.participants.community_name?.visible ? (
                   <Input
-                    label={formSettings.invitation.participants.community_name.label}
+                    label={participantNameLabel}
                     required={formSettings.invitation.participants.community_name.required}
-                    placeholder={formSettings.invitation.participants.community_name.placeholder}
+                    placeholder={`Masukkan ${participantNameLabel.toLowerCase()}`}
                     error={errors.community_name?.message}
                     disabled={isSubmitting}
                     {...register('community_name')}
