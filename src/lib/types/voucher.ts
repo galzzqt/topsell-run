@@ -46,6 +46,8 @@ export interface VoucherValidation {
   discountValue?: number
   /** Potongan harga dalam Rp (sudah dihitung dari basePrice). */
   finalDiscount: number
+  /** Kategori yang berhak memakai voucher ini ([] = semua kategori). */
+  categories?: string[]
   /** Pesan error jika valid = false. */
   error?: string
 }

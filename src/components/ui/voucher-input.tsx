@@ -14,6 +14,12 @@ interface VoucherInputProps {
   onApply: (voucher: AppliedVoucher) => void
   /** Dipanggil saat voucher dilepas. */
   onRemove: () => void
+  /**
+   * Opsional. Kalau diisi, kode voucher dicari lebih dulu tanpa menyaring kategori;
+   * bila voucher hanya berlaku untuk satu kategori, kategori itu dikirim ke sini
+   * supaya form bisa mengisinya otomatis (dipakai di form invitation).
+   */
+  onCategoryResolved?: (category: string) => void
 }
 
 type Status = 'idle' | 'loading' | 'valid' | 'invalid'
@@ -22,7 +28,7 @@ function formatRp(amount: number) {
   return `Rp ${amount.toLocaleString('id-ID')}`
 }
 
-export function VoucherInput({ packageKey, basePrice, category, onApply, onRemove }: VoucherInputProps) {
+export function VoucherInput({ packageKey, basePrice, category, onApply, onRemove, onCategoryResolved }: VoucherInputProps) {
   const [code, setCode] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [applied, setApplied] = useState<AppliedVoucher | null>(null)
@@ -158,6 +164,35 @@ export function VoucherInput({ packageKey, basePrice, category, onApply, onRemov
   async function handleApply() {
     const trimmed = code.trim().toUpperCase()
     if (!trimmed) return
+
+    // Mode auto-isi kategori: cari vouchernya dulu tanpa filter kategori.
+    // Kalau voucher terikat ke satu kategori, set kategori form ke situ —
+    // perubahan basePrice memicu useEffect di atas yang menghitung ulang diskonnya.
+    if (onCategoryResolved) {
+      setStatus('loading')
+      setErrorMsg('')
+      try {
+        const url = `/api/voucher/validate?code=${encodeURIComponent(trimmed)}&pkg=${encodeURIComponent(packageKey)}&basePrice=${basePrice || 1}&discover=1`
+        const data: VoucherValidation = await (await fetch(url)).json()
+        if (!data.valid) {
+          setStatus('invalid')
+          setErrorMsg(data.error || 'Kode voucher tidak valid.')
+          return
+        }
+        const only = data.categories?.length === 1 ? data.categories[0] : null
+        if (only && only !== category) {
+          isDismissed.current = false
+          applyResult(trimmed, data)
+          onCategoryResolved(only)
+          return
+        }
+      } catch {
+        setStatus('invalid')
+        setErrorMsg('Gagal menghubungi server. Coba lagi.')
+        return
+      }
+    }
+
     if (!category) {
       setStatus('invalid')
       setErrorMsg('Pilih kategori terlebih dahulu sebelum memakai voucher.')

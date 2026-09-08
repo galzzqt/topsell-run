@@ -497,14 +497,23 @@ export default function InvitationForm() {
                 ) : (
                   <input type="hidden" value={invitationFallbacks.date_of_birth} {...register('date_of_birth')} />
                 )}
-                <Select
-                  label="Kategori"
-                  required
-                  error={errors.category?.message}
-                  disabled={isSubmitting}
-                  options={categoryOptions.map((o) => ({ value: o.value, label: o.label }))}
-                  {...register('category')}
-                />
+                <div className="flex flex-col gap-1">
+                  <Select
+                    label="Kategori"
+                    required
+                    error={errors.category?.message}
+                    // Voucher terikat kategori — kunci pilihan selama voucher terpasang.
+                    disabled={isSubmitting || !!appliedVoucher}
+                    value={selectedCategory}
+                    options={categoryOptions.map((o) => ({ value: o.value, label: o.label }))}
+                    {...register('category')}
+                  />
+                  {appliedVoucher && (
+                    <span className="text-[10px] text-sport-purple font-semibold">
+                      Kategori mengikuti voucher {appliedVoucher.code}. Hapus voucher untuk mengubah.
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -683,6 +692,54 @@ export default function InvitationForm() {
                 )}
               </div>
 
+              {/* --- VOUCHER INPUT --- */}
+              {selectedCategory && basePrice > 0 && (
+                <div className="mt-4">
+                  <VoucherInput
+                    packageKey="invitation"
+                    basePrice={basePrice}
+                    category={selectedCategory}
+                    onApply={(voucher) => setAppliedVoucher(voucher)}
+                    onRemove={() => setAppliedVoucher(null)}
+                    onCategoryResolved={(cat) => setValue('category', cat)}
+                  />
+
+                  {/* Kategori yang sedang dipilih — biar jelas voucher ini untuk lari yang mana. */}
+                  {selectedCategory && (
+                    <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-brand-gray/5 border border-card-border">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">Kategori Dipilih</span>
+                      <span className="text-xs font-black text-foreground">
+                        {categoryOptions.find((o) => o.value === selectedCategory)?.label || selectedCategory}
+                        {appliedVoucher && <span className="ml-1.5 text-[10px] font-bold text-sport-purple">(dikunci voucher)</span>}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* --- RINGKASAN BIAYA --- */}
+              {basePrice > 0 && (
+                <div className="mt-4 p-4 rounded-xl border border-card-border bg-brand-gray/5 flex flex-col gap-2">
+                  <h4 className="text-[10px] font-black uppercase text-brand-muted tracking-wider mb-1">Ringkasan Biaya</h4>
+                  <div className="flex justify-between text-xs text-brand-muted">
+                    <span>Biaya Pendaftaran</span>
+                    <span className="font-bold">Rp {basePrice.toLocaleString('id-ID')}</span>
+                  </div>
+                  {appliedVoucher && appliedVoucher.finalDiscount > 0 && (
+                    <div className="flex justify-between text-xs text-green-600">
+                      <span>Diskon Voucher ({appliedVoucher.name})</span>
+                      <span className="font-bold">- Rp {appliedVoucher.finalDiscount.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-card-border my-1" />
+                  <div className="flex justify-between text-sm text-foreground font-black uppercase">
+                    <span>Total Pembayaran</span>
+                    <span className="text-sport-orange">Rp {Math.max(0, basePrice - (appliedVoucher?.finalDiscount || 0)).toLocaleString('id-ID')}</span>
+                  </div>
+                </div>
+              )}
+
+
               {/* --- SYARAT & KETENTUAN (S&K) --- */}
               <div className="mt-2 p-4 bg-violet-50/50 border border-violet-100/80 rounded-xl flex flex-col gap-3">
                 <h4 className="text-[10px] font-black uppercase text-sport-purple tracking-wider">Syarat &amp; Ketentuan</h4>
@@ -718,42 +775,6 @@ export default function InvitationForm() {
                   </label>
                 ))}
               </div>
-
-              {/* --- VOUCHER INPUT --- */}
-              {selectedCategory && basePrice > 0 && (
-                <div className="mt-4">
-                  <VoucherInput
-                    packageKey="invitation"
-                    basePrice={basePrice}
-                    category={selectedCategory}
-                    onApply={(voucher) => setAppliedVoucher(voucher)}
-                    onRemove={() => setAppliedVoucher(null)}
-                  />
-                </div>
-              )}
-
-              {/* --- RINGKASAN BIAYA --- */}
-              {basePrice > 0 && (
-                <div className="mt-4 p-4 rounded-xl border border-card-border bg-brand-gray/5 flex flex-col gap-2">
-                  <h4 className="text-[10px] font-black uppercase text-brand-muted tracking-wider mb-1">Ringkasan Biaya</h4>
-                  <div className="flex justify-between text-xs text-brand-muted">
-                    <span>Biaya Pendaftaran</span>
-                    <span className="font-bold">Rp {basePrice.toLocaleString('id-ID')}</span>
-                  </div>
-                  {appliedVoucher && appliedVoucher.finalDiscount > 0 && (
-                    <div className="flex justify-between text-xs text-green-600">
-                      <span>Diskon Voucher ({appliedVoucher.name})</span>
-                      <span className="font-bold">- Rp {appliedVoucher.finalDiscount.toLocaleString('id-ID')}</span>
-                    </div>
-                  )}
-                  <div className="border-t border-card-border my-1" />
-                  <div className="flex justify-between text-sm text-foreground font-black uppercase">
-                    <span>Total Pembayaran</span>
-                    <span className="text-sport-orange">Rp {Math.max(0, basePrice - (appliedVoucher?.finalDiscount || 0)).toLocaleString('id-ID')}</span>
-                  </div>
-                </div>
-              )}
-
 
               <Button
                 type="submit"

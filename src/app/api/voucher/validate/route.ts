@@ -29,6 +29,9 @@ export async function GET(req: NextRequest) {
   const searchCategory = (searchParams.get('category') || '').trim()
   const category  = pkg === 'umkm' && !searchCategory ? 'Tenant UMKM 500.000' : searchCategory
   const basePrice = parseInt(searchParams.get('basePrice') || '0', 10)
+  // discover=1: cari voucher tanpa menyaring kategori, supaya form bisa tahu
+  // kategori mana yang berhak dan mengisinya otomatis.
+  const discover  = searchParams.get('discover') === '1'
 
   if (!pkg || !['community', 'family', 'individual', 'invitation', 'umkm'].includes(pkg)) {
     return NextResponse.json<VoucherValidation>(
@@ -64,14 +67,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Kode mode
-    if (!category && pkg !== 'umkm') {
+    if (!category && !discover && pkg !== 'umkm') {
       return NextResponse.json<VoucherValidation>(
         { valid: false, finalDiscount: 0, error: 'Pilih kategori terlebih dahulu.' },
         { status: 400 },
       )
     }
 
-    const voucher = await findVoucherByCode(code, pkg, category, now)
+    const voucher = await findVoucherByCode(code, pkg, discover ? '' : category, now)
     if (!voucher) {
       return NextResponse.json<VoucherValidation>({
         valid: false,
@@ -87,6 +90,7 @@ export async function GET(req: NextRequest) {
       discountType: voucher.discountType,
       discountValue: voucher.discountValue,
       finalDiscount,
+      categories: voucher.categories,
     })
   } catch (err) {
     console.error('[Voucher Validate] Error:', err)

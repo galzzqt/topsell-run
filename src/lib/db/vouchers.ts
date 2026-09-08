@@ -44,11 +44,17 @@ export async function findVoucherByCode(
     // Wajib: invitation & individu punya value kategori yang identik ('3K 99.000'/'6K 149.000'),
     // tanpa filter ini voucher invitation ikut bisa dipakai di form individu.
     packages: pkg,
-    $or: [
-      { categories: { $size: 0 } },    // berlaku semua kategori
-      { categories: category },          // berlaku kategori ini
-      ...(pkg === 'umkm' ? [{ categories: 'Tenant UMKM 500.000' }, { categories: '' }] : []),
-    ],
+    // category kosong = mode discovery: cari voucher lintas kategori supaya form
+    // bisa mengisi kategori otomatis dari voucher yang dipakai.
+    ...(category
+      ? {
+          $or: [
+            { categories: { $size: 0 } },    // berlaku semua kategori
+            { categories: category },          // berlaku kategori ini
+            ...(pkg === 'umkm' ? [{ categories: 'Tenant UMKM 500.000' }, { categories: '' }] : []),
+          ],
+        }
+      : {}),
     $expr: {
       $or: [
         { $eq: ['$maxUsage', 0] },       // tak terbatas
