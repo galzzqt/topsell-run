@@ -41,6 +41,9 @@ export async function findVoucherByCode(
     enabled: true,
     validFrom: { $lte: now },
     validUntil: { $gte: now },
+    // Wajib: invitation & individu punya value kategori yang identik ('3K 99.000'/'6K 149.000'),
+    // tanpa filter ini voucher invitation ikut bisa dipakai di form individu.
+    packages: pkg,
     $or: [
       { categories: { $size: 0 } },    // berlaku semua kategori
       { categories: category },          // berlaku kategori ini

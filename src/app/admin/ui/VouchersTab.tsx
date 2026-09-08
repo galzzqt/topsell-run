@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, TicketCheck, RefreshCw, X, Key, Sparkles } from 'lucide-react'
+import { useEffect, useCallback, useState } from 'react'
+import { Plus, Pencil, Trash2, TicketCheck, RefreshCw, X, Key, Sparkles, FileEdit, CheckCircle2, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
@@ -87,6 +87,11 @@ export function VouchersTab({
   voucherForm: VoucherFormState
   setVoucherForm: (v: VoucherFormState) => void
 }) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState('')
+  const [pageSize, setPageSize] = useState(10)
+  const [page, setPage] = useState(1)
+
   const loadVouchers = useCallback(async () => {
     setVoucherLoading(true)
     setVoucherError(null)
@@ -176,6 +181,71 @@ export function VouchersTab({
     }
   }
 
+  // ── Search & pagination (client-side; seluruh voucher sudah ada di memori) ──
+  const filtered = (() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return voucherList
+    return voucherList.filter((v) => v.name.toLowerCase().includes(q) || v.code.toLowerCase().includes(q))
+  })()
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pagedList = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  // ── Bulk actions ──────────────────────────────────────────────
+  // Pakai endpoint satu-satu yang sudah ada; jumlah voucher masih puluhan.
+  // ponytail: N request paralel, ganti ke endpoint bulk kalau daftarnya sudah ratusan.
+  const allSelected = pagedList.length > 0 && pagedList.every((v) => selectedIds.has(v.id))
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  // Pilih semua = semua baris di halaman yang sedang tampil.
+  const toggleSelectAll = () => {
+    const next = new Set(selectedIds)
+    for (const v of pagedList) {
+      if (allSelected) next.delete(v.id)
+      else next.add(v.id)
+    }
+    setSelectedIds(next)
+  }
+
+  const runBulk = async (label: string, fn: (id: string) => Promise<Response>) => {
+    setVoucherError(null)
+    setVoucherSuccess(null)
+    setVoucherLoading(true)
+    try {
+      const results = await Promise.allSettled([...selectedIds].map(fn))
+      const failed = results.filter((r) => r.status === 'rejected' || !r.value.ok).length
+      if (failed) throw new Error(`${failed} dari ${results.length} voucher gagal ${label}`)
+      setVoucherSuccess(`${results.length} voucher berhasil ${label}`)
+      setSelectedIds(new Set())
+    } catch (e) {
+      setVoucherError(e instanceof Error ? e.message : 'Terjadi kesalahan')
+    } finally {
+      await loadVouchers()
+      setVoucherLoading(false)
+    }
+  }
+
+  const bulkSetEnabled = (enabled: boolean) =>
+    runBulk(enabled ? 'diaktifkan' : 'dijadikan draft', (id) =>
+      fetch('/api/admin/vouchers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, enabled }),
+      })
+    )
+
+  const bulkDelete = () => {
+    if (!confirm(`Hapus ${selectedIds.size} voucher terpilih? Tindakan ini tidak bisa dibatalkan.`)) return
+    return runBulk('dihapus', (id) => fetch(`/api/admin/vouchers?id=${id}`, { method: 'DELETE' }))
+  }
+
   const handleDelete = async (v: VoucherDoc) => {
     if (!confirm(`Hapus voucher "${v.name}"? Tindakan ini tidak bisa dibatalkan.`)) return
     try {
@@ -243,7 +313,7 @@ export function VouchersTab({
 
   const now = getWibNowString()
   const getStatus = (v: VoucherDoc) => {
-    if (!v.enabled) return { label: 'Nonaktif', color: 'bg-brand-muted/20 text-brand-muted' }
+    if (!v.enabled) return { label: 'Draft', color: 'bg-brand-muted/20 text-brand-muted' }
     if (v.validUntil < now) return { label: 'Expired', color: 'bg-red-500/20 text-red-400' }
     if (v.validFrom > now) return { label: 'Belum Mulai', color: 'bg-amber-500/20 text-amber-400' }
     if (v.maxUsage > 0 && v.usedCount >= v.maxUsage) return { label: 'Habis', color: 'bg-orange-500/20 text-orange-400' }
@@ -280,6 +350,65 @@ export function VouchersTab({
         </div>
       )}
 
+      {voucherSuccess && (
+        <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-xs text-green-400 font-semibold">
+          {voucherSuccess}
+        </div>
+      )}
+
+      {/* Search & page size */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-brand-muted pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            placeholder="Cari nama atau kode voucher…"
+            className="w-full pl-9 pr-8 py-2 bg-card-bg border border-card-border rounded-lg text-xs text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-purple"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setPage(1) }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-brand-muted hover:text-foreground cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+          Tampilkan
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+            className="bg-card-bg border border-card-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-sport-purple cursor-pointer"
+          >
+            {[10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {/* Bulk actions */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-sport-purple/10 border border-sport-purple/30 rounded-lg">
+          <span className="text-xs font-bold text-foreground">{selectedIds.size} voucher dipilih</span>
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={() => bulkSetEnabled(false)} disabled={voucherLoading}>
+            <FileEdit className="w-3.5 h-3.5 mr-1" /> Jadikan Draft
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => bulkSetEnabled(true)} disabled={voucherLoading}>
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Aktifkan
+          </Button>
+          <Button variant="ghost" size="sm" onClick={bulkDelete} disabled={voucherLoading}>
+            <Trash2 className="w-3.5 h-3.5 mr-1 text-sport-red" /> <span className="text-sport-red">Hapus</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} disabled={voucherLoading}>
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      )}
+
       {/* Voucher List */}
       <section className="bg-card-bg border border-card-border rounded-lg overflow-hidden">
         {voucherLoading && voucherList.length === 0 ? (
@@ -288,11 +417,24 @@ export function VouchersTab({
           <div className="p-8 text-center text-brand-muted text-xs">
             Belum ada voucher. Klik <strong>Buat Voucher</strong> untuk mulai.
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center text-brand-muted text-xs">
+            Tidak ada voucher yang cocok dengan &quot;{search}&quot;.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-foreground">
               <thead>
                 <tr className="border-b border-card-border">
+                  <th className="pl-4 pr-1 py-2.5 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      className="w-3.5 h-3.5 accent-sport-purple cursor-pointer"
+                      title="Pilih semua"
+                    />
+                  </th>
                   <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase tracking-widest text-brand-muted">Nama / Kode</th>
                   <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase tracking-widest text-brand-muted">Diskon</th>
                   <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase tracking-widest text-brand-muted">Paket</th>
@@ -303,10 +445,18 @@ export function VouchersTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-card-border">
-                {voucherList.map((v) => {
+                {pagedList.map((v) => {
                   const status = getStatus(v)
                   return (
-                    <tr key={v.id} className="hover:bg-brand-dark/20 transition-colors">
+                    <tr key={v.id} className={`transition-colors ${selectedIds.has(v.id) ? 'bg-sport-purple/10' : 'hover:bg-brand-dark/20'}`}>
+                      <td className="pl-4 pr-1 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(v.id)}
+                          onChange={() => toggleSelect(v.id)}
+                          className="w-3.5 h-3.5 accent-sport-purple cursor-pointer"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="font-bold text-foreground">{v.name}</div>
                         {v.type === 'code' ? (
@@ -376,6 +526,30 @@ export function VouchersTab({
                 })}
               </tbody>
             </table>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-card-border">
+              <span className="text-[10px] text-brand-muted font-bold uppercase tracking-wider">
+                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} dari {filtered.length} voucher
+                {search && ` (difilter dari ${voucherList.length})`}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="p-1.5 rounded text-brand-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-[10px] font-bold text-foreground px-2">Hal {currentPage} / {totalPages}</span>
+                <button
+                  onClick={() => setPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="p-1.5 rounded text-brand-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>
