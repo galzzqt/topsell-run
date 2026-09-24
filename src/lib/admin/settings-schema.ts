@@ -11,6 +11,13 @@ export type FormInputConfig = {
 export type FormSelectOptionConfig = {
   value: string
   label: string
+  // Khusus opsi ukuran jersey (tshirt_size): tampil di form & kuota per ukuran (0 = tak terbatas).
+  enabled?: boolean
+  // Ditandai habis manual oleh admin (tetap tampil sebagai "Habis", tidak bisa dipilih).
+  soldOut?: boolean
+  quota?: number
+  // Diisi server (/api/settings/registration-form) saat kuota ukuran habis.
+  disabled?: boolean
 }
 
 export type FormSelectConfig = FormInputConfig & {
@@ -205,7 +212,7 @@ const DEFAULT_PARTICIPANT_GROUP: RegistrationFormParticipantSettings = {
     placeholder: 'Pilih ukuran',
     visible: true,
     required: true,
-    options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
+    options: TSHIRT_SIZES.map((size) => ({ value: size, label: size, enabled: true, quota: 0 })),
   },
   blood_type: {
     label: 'Golongan Darah',
@@ -284,7 +291,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
-        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
+        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size, enabled: true, quota: 0 })),
       },
     },
   },
@@ -313,7 +320,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
-        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
+        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size, enabled: true, quota: 0 })),
       },
     },
   },
@@ -342,7 +349,7 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
         placeholder: 'Pilih ukuran',
         visible: true,
         required: true,
-        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size })),
+        options: TSHIRT_SIZES.map((size) => ({ value: size, label: size, enabled: true, quota: 0 })),
       },
       age: { label: 'Usia', placeholder: 'Usia (tahun)', visible: true, required: true },
       sosmed_instagram: { label: 'Link Instagram', placeholder: 'https://instagram.com/username', visible: true, required: true },

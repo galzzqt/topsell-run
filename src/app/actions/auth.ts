@@ -46,7 +46,7 @@ export async function signUpCommunity(values: RegisterFormValues, voucherCode?: 
     return { error: gate.reason || 'Pendaftaran komunitas sedang ditutup.' }
   }
 
-  const quota = await checkPackageQuota('community', values.participants.length, values.category)
+  const quota = await checkPackageQuota('community', values.participants.length, values.category, values.participants.map((p) => p.tshirt_size))
   if (!quota.ok) {
     return { error: quota.reason || 'Kuota peserta komunitas sudah penuh.' }
   }

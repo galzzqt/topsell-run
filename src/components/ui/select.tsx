@@ -7,6 +7,7 @@ import { ChevronDown, Search, Check, X } from 'lucide-react'
 export interface SelectOption {
   value: string
   label: string
+  disabled?: boolean
 }
 
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'options'> {
@@ -14,7 +15,7 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   error?: string
   placeholder?: string
   searchPlaceholder?: string
-  options: readonly { readonly value: string; readonly label: string }[] | { value: string; label: string }[]
+  options: readonly { readonly value: string; readonly label: string; readonly disabled?: boolean }[] | SelectOption[]
   required?: boolean
 }
 
@@ -159,7 +160,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           >
             <option value="">{placeholder}</option>
             {options.map((opt, idx) => (
-              <option key={`${opt.value}-${idx}`} value={opt.value}>
+              <option key={`${opt.value}-${idx}`} value={opt.value} disabled={opt.disabled}>
                 {opt.label}
               </option>
             ))}
@@ -240,12 +241,15 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
                         type="button"
                         role="option"
                         aria-selected={isSelected}
+                        aria-disabled={opt.disabled}
+                        disabled={opt.disabled}
                         onClick={() => handleSelectOption(opt.value)}
                         className={cn(
                           'w-full px-3 py-2.5 rounded-lg text-xs text-left flex items-center justify-between gap-2 transition-all cursor-pointer font-medium',
                           isSelected
                             ? 'bg-orange-50 text-sport-orange font-bold'
-                            : 'text-slate-700 hover:bg-slate-100 hover:text-sport-orange'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-sport-orange',
+                          opt.disabled && 'text-slate-400 cursor-not-allowed hover:bg-transparent hover:text-slate-400'
                         )}
                       >
                         <span className="truncate">{opt.label}</span>

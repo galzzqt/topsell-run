@@ -69,7 +69,7 @@ export async function addFamilyParticipantsAction(values: AddParticipantsValues)
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
   const family = await findFamilyById(session.id)
-  const familyQuota = await checkPackageQuota('family', validated.data.participants.length, family?.category)
+  const familyQuota = await checkPackageQuota('family', validated.data.participants.length, family?.category, validated.data.participants.map((p) => p.tshirt_size))
   if (!familyQuota.ok) return { error: familyQuota.reason || 'Kuota peserta sudah penuh.' }
   const period = await resolvePeriodForCategory('family', family?.category)
 
@@ -165,7 +165,7 @@ export async function addCommunityParticipantsAction(values: AddParticipantsValu
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
 
   const community = await findCommunityById(session.id)
-  const communityQuota = await checkPackageQuota('community', validated.data.participants.length, community?.category)
+  const communityQuota = await checkPackageQuota('community', validated.data.participants.length, community?.category, validated.data.participants.map((p) => p.tshirt_size))
   if (!communityQuota.ok) return { error: communityQuota.reason || 'Kuota peserta sudah penuh.' }
   const period = await resolvePeriodForCategory('community', community?.category)
 

@@ -60,7 +60,7 @@ export async function signUpFamily(
     return { error: gate.reason || 'Pendaftaran paket ini sedang ditutup.' }
   }
 
-  const quota = await checkPackageQuota(registrationType, values.participants.length, values.category)
+  const quota = await checkPackageQuota(registrationType, values.participants.length, values.category, values.participants.map((p) => p.tshirt_size))
   if (!quota.ok) {
     return { error: quota.reason || 'Kuota peserta paket ini sudah penuh.' }
   }

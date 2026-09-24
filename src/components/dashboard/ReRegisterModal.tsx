@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
 import { usePackagesSettings, resolveCategoryLabel } from '@/lib/hooks/usePackagesSettings'
 import type { AppliedVoucher, VoucherPackageKey } from '@/lib/types/voucher'
+import type { FormSelectOptionConfig, RegistrationFormSettings } from '@/lib/admin/settings-schema'
 import {
   reRegisterIndividualAction,
   reRegisterInvitationAction,
@@ -90,6 +91,16 @@ export function ReRegisterModal({
     }
     return cats
   })()
+
+  // Opsi ukuran dari pengaturan paket (ukuran nonaktif disembunyikan, yang habis ditandai server).
+  const [sizeOptions, setSizeOptions] = useState<FormSelectOptionConfig[]>(TSHIRT_SIZES.map((s) => ({ value: s, label: s })))
+  useEffect(() => {
+    if (!isOpen) return
+    fetch('/api/settings/registration-form')
+      .then((res) => res.json())
+      .then((data: RegistrationFormSettings) => setSizeOptions(data[packageKey].participants.tshirt_size.options))
+      .catch(() => {})
+  }, [isOpen, packageKey])
 
   const [selectedCategory, setSelectedCategory] = useState('')
   const [participants, setParticipants] = useState<ParticipantFormState[]>([])
@@ -393,7 +404,7 @@ export function ReRegisterModal({
                       required
                       value={p.tshirt_size}
                       onChange={(e) => handleUpdateParticipant(idx, 'tshirt_size', e.target.value as any)}
-                      options={TSHIRT_SIZES.map((s) => ({ value: s, label: s }))}
+                      options={sizeOptions}
                     />
                   </div>
                   <div className="flex flex-col gap-1">

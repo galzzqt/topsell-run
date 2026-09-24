@@ -33,7 +33,7 @@ const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
 const ENV_PATH = path.join(process.cwd(), '.env.local')
 const FORM_SETTINGS_KEY = 'registration_form'
 
-const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'pacer', 'umkm']
+const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm']
 
 /**
  * Ukuran jersey tersimpan tetap dipakai (termasuk label yang mungkin sudah
@@ -44,7 +44,13 @@ const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'pacer'
 function mergeSizeOptions(base: FormSelectOptionConfig[], stored: FormSelectOptionConfig[] | undefined): FormSelectOptionConfig[] {
   if (!Array.isArray(stored) || stored.length === 0) return base
   const seen = new Set(stored.map((option) => option.value))
-  return [...stored, ...base.filter((option) => !seen.has(option.value))]
+  return [...stored, ...base.filter((option) => !seen.has(option.value))].map((option) => ({
+    value: option.value,
+    label: option.label,
+    enabled: option.enabled !== false,
+    soldOut: option.soldOut === true,
+    quota: Number.isFinite(Number(option.quota)) ? Math.max(0, Math.round(Number(option.quota))) : 0,
+  }))
 }
 
 function mergeInput<T extends { label: string; placeholder: string; visible: boolean; required: boolean }>(base: T, value: Partial<T> | undefined): T {
@@ -425,6 +431,60 @@ async function countPackageParticipantsByCategory(pkg: PackageKey, category: str
   })
 }
 
+/**
+ * Jumlah jersey terpakai per ukuran dalam satu paket (peserta pending/paid; pacer: akun pending/approved).
+ * Semua kategori & periode paket digabung. UMKM tidak punya jersey.
+ */
+export async function countJerseyUsage(pkg: PackageKey): Promise<Record<string, number>> {
+  if (pkg === 'umkm') return {}
+  const { getDb } = await import('@/lib/mongodb/client')
+  const db = await getDb()
+
+  let match: Record<string, unknown> = { payment_status: { $in: ['pending', 'paid'] } }
+  if (pkg === 'pacer') {
+    const pacerIds = await db
+      .collection('pacer_registrations')
+      .find({ status: { $in: ['pending', 'approved'] } })
+      .project({ id: 1 })
+      .toArray()
+    match = { pacer_id: { $in: pacerIds.map((p) => p.id) } }
+  }
+
+  const rows = await db
+    .collection(PACKAGE_PARTICIPANT_COLLECTION[pkg])
+    .aggregate<{ _id: string; count: number }>([{ $match: match }, { $group: { _id: '$tshirt_size', count: { $sum: 1 } } }])
+    .toArray()
+  return Object.fromEntries(rows.map((row) => [row._id, row.count]))
+}
+
+/** Cek ukuran jersey aktif & kuota per ukuran masih cukup untuk daftar ukuran yang akan ditambahkan. */
+async function checkJerseyQuota(pkg: PackageKey, sizes: string[]): Promise<{ ok: boolean; reason?: string }> {
+  const settings = await readAdminSettings()
+  const options = settings.registrationForm[pkg].participants.tshirt_size.options
+  const needed: Record<string, number> = {}
+  for (const size of sizes) needed[size] = (needed[size] || 0) + 1
+
+  const limited = Object.keys(needed).some((size) => (options.find((o) => o.value === size)?.quota || 0) > 0)
+  const used = limited ? await countJerseyUsage(pkg) : {}
+
+  for (const [size, count] of Object.entries(needed)) {
+    const option = options.find((o) => o.value === size)
+    if (!option || option.enabled === false) return { ok: false, reason: `Ukuran jersey ${size} tidak tersedia untuk paket ini.` }
+    if (option.soldOut) return { ok: false, reason: `Jersey ukuran ${option.label} sudah habis. Silakan pilih ukuran lain.` }
+    const quota = option.quota || 0
+    if (quota > 0 && (used[size] || 0) + count > quota) {
+      const remaining = Math.max(0, quota - (used[size] || 0))
+      return {
+        ok: false,
+        reason: remaining === 0
+          ? `Kuota jersey ukuran ${option.label} sudah habis. Silakan pilih ukuran lain.`
+          : `Sisa kuota jersey ukuran ${option.label} tinggal ${remaining} (butuh ${count}).`,
+      }
+    }
+  }
+  return { ok: true }
+}
+
 // Batas waktu kuota "ditahan" untuk registrasi yang belum dibayar sebelum otomatis
 // dilepas kembali. ponytail: konstanta tetap, jadikan setting admin kalau perlu diubah per paket.
 const PENDING_HOLD_HOURS = 24
@@ -477,8 +537,19 @@ async function releaseExpiredPendingRegistrations(pkg: PackageKey) {
 }
 
 /** Cek apakah kuota kategori masih tersedia untuk menambah `adding` peserta (0 = tak terbatas). */
-export async function checkPackageQuota(pkg: PackageKey, adding: number, category?: string | null): Promise<{ ok: boolean; reason?: string }> {
+export async function checkPackageQuota(
+  pkg: PackageKey,
+  adding: number,
+  category?: string | null,
+  sizes: string[] = []
+): Promise<{ ok: boolean; reason?: string }> {
   await releaseExpiredPendingRegistrations(pkg)
+
+  // ponytail: cek-lalu-insert (tidak atomik), pendaftaran bersamaan bisa lewat kuota 1-2 seperti kuota kategori.
+  if (sizes.length > 0) {
+    const jersey = await checkJerseyQuota(pkg, sizes)
+    if (!jersey.ok) return jersey
+  }
 
   const period = category ? await resolvePeriodForCategory(pkg, category) : null
   const categoryConfig = period?.categories.find((c) => c.value === category)

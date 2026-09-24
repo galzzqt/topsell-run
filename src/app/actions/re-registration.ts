@@ -155,7 +155,7 @@ export async function reRegisterIndividualAction(input: {
   const category = input.category.trim()
   if (!category) return { error: 'Pilih kategori terlebih dahulu.' }
 
-  const quota = await checkPackageQuota('individual', 1, category)
+  const quota = await checkPackageQuota('individual', 1, category, [pVal.data.tshirt_size])
   if (!quota.ok) return { error: quota.reason || 'Kuota peserta untuk kategori ini sudah penuh.' }
 
   const period = await resolvePeriodForCategory('individual', category)
@@ -319,7 +319,7 @@ export async function reRegisterInvitationAction(input: {
   const category = input.category.trim()
   if (!category) return { error: 'Pilih kategori terlebih dahulu.' }
 
-  const quota = await checkPackageQuota('invitation', 1, category)
+  const quota = await checkPackageQuota('invitation', 1, category, [pVal.data.tshirt_size])
   if (!quota.ok) return { error: quota.reason || 'Kuota peserta untuk kategori ini sudah penuh.' }
 
   const period = await resolvePeriodForCategory('invitation', category)
@@ -488,7 +488,7 @@ export async function reRegisterFamilyAction(input: {
   const category = input.category.trim()
   if (!category) return { error: 'Pilih kategori terlebih dahulu.' }
 
-  const quota = await checkPackageQuota('family', input.participants.length, category)
+  const quota = await checkPackageQuota('family', input.participants.length, category, input.participants.map((p) => p.tshirt_size))
   if (!quota.ok) return { error: quota.reason || 'Kuota peserta sudah penuh.' }
 
   const period = await resolvePeriodForCategory('family', category)
@@ -651,7 +651,7 @@ export async function reRegisterCommunityAction(input: {
   const category = input.category.trim()
   if (!category) return { error: 'Pilih kategori terlebih dahulu.' }
 
-  const quota = await checkPackageQuota('community', input.participants.length, category)
+  const quota = await checkPackageQuota('community', input.participants.length, category, input.participants.map((p) => p.tshirt_size))
   if (!quota.ok) return { error: quota.reason || 'Kuota peserta sudah penuh.' }
 
   const period = await resolvePeriodForCategory('community', category)

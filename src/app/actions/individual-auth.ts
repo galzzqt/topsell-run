@@ -51,7 +51,7 @@ export async function signUpIndividual(values: RegisterSoloFormValues, voucherCo
     return { error: gate.reason || 'Pendaftaran individu sedang ditutup.' }
   }
 
-  const quota = await checkPackageQuota('individual', values.participants.length, values.category)
+  const quota = await checkPackageQuota('individual', values.participants.length, values.category, values.participants.map((p) => p.tshirt_size))
   if (!quota.ok) {
     return { error: quota.reason || 'Kuota peserta individu sudah penuh.' }
   }

@@ -11,7 +11,6 @@ import {
   Timer, ArrowRight, UserPlus, Plus, Trash2, Mail,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
-import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
 import { registerFamilySchema, RegisterFamilyFormValues } from '@/lib/validations/auth'
 import { signUpFamily } from '@/app/actions/family-auth'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
@@ -531,7 +530,7 @@ export default function BroAndSistForm() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         {([
                           { label: 'Gender', key: 'gender', options: [{ value: 'male', label: 'Laki-laki' }, { value: 'female', label: 'Perempuan' }] },
-                          { label: 'Ukuran Jersey', key: 'tshirt_size', options: TSHIRT_SIZES.map((v) => ({ value: v, label: v })) },
+                          { label: 'Ukuran Jersey', key: 'tshirt_size', options: formSettings.family.participants.tshirt_size.options },
                           { label: 'Gol. Darah', key: 'blood_type', options: ['A', 'B', 'AB', 'O'].map((v) => ({ value: v, label: v })) },
                         ] as const).map(({ label, key, options }) => (
                           <div key={key} className="flex flex-col gap-1">

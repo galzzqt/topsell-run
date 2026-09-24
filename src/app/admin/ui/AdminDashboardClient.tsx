@@ -51,6 +51,7 @@ import {
   KeyRound,
   Copy,
   Check,
+  Shirt,
 } from 'lucide-react'
 import { adminTriggerPasswordReset } from '@/app/actions/password-reset'
 import {
@@ -106,12 +107,13 @@ import { Dialog } from '@/components/ui/dialog'
 import { DateInput } from '@/components/ui/date-input'
 import { formatCurrency } from '@/lib/utils/format'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
-import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, EmailTemplateConfig, FormInputConfig, FormSelectConfig, PackageKey, PackageConfig, PackageCategory, PackagePeriod, RegistrationFormGroupSettings, RegistrationFormParticipantSettings, WebhookPackageConfig } from '@/lib/admin/settings-schema'
+import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, EmailTemplateConfig, FormInputConfig, FormSelectConfig, FormSelectOptionConfig, PackageKey, PackageConfig, PackageCategory, PackagePeriod, RegistrationFormGroupSettings, RegistrationFormParticipantSettings, WebhookPackageConfig } from '@/lib/admin/settings-schema'
 import { DEFAULT_PACKAGES_SETTINGS } from '@/lib/admin/settings-schema'
 import type { AdminLogEntry } from '@/lib/axiom/logs'
 import type { VoucherDoc } from '@/lib/types/voucher'
 import type { UmkmRegistration, UmkmPayment } from '@/lib/types'
 import { VouchersTab } from './VouchersTab'
+import { JerseyRecapTab } from './JerseyRecapTab'
 
 type VoucherFormState = {
   name: string
@@ -326,6 +328,7 @@ type AdminTab =
   | 'admins'
   | 'logs'
   | 'vouchers'
+  | 'jersey'
 
 type ScanResult = {
   title: string
@@ -2858,11 +2861,11 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
     }))
   }
 
-  const updateSelectOptionLabel = (
+  const updateSelectOption = (
     pkg: PackageKey,
     key: 'gender' | 'tshirt_size' | 'blood_type' | 'has_smartwatch',
     value: string,
-    label: string
+    patch: Partial<FormSelectOptionConfig>
   ) => {
     setSettingsForm((current) => {
       const field = current.registrationForm[pkg].participants[key] as FormSelectConfig
@@ -2876,7 +2879,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
               ...current.registrationForm[pkg].participants,
               [key]: {
                 ...field,
-                options: field.options.map((option) => (option.value === value ? { ...option, label } : option)),
+                options: field.options.map((option) => (option.value === value ? { ...option, ...patch } : option)),
               },
             },
           },
@@ -3254,6 +3257,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
     { id: 'export_payments', label: 'Export Pembayaran', icon: Download },
     { id: 'pacer', label: 'Pacer', icon: UserCheck },
     { id: 'umkm', label: 'UMKM', icon: Store },
+    { id: 'jersey', label: 'Rekap Jersey', icon: Shirt },
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'packages' as const, label: 'Kelola Paket', icon: Package }] : []),
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'periods' as const, label: 'Kelola Periode', icon: Calendar }] : []),
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'vouchers' as const, label: 'Voucher', icon: TicketCheck }] : []),
@@ -3388,6 +3392,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                         ? 'Export Peserta'
                         : activeTab === 'export_payments'
                           ? 'Export Pembayaran'
+                          : activeTab === 'jersey'
+                            ? 'Rekap Jersey'
                           : activeTab === 'logs'
                             ? 'Log Axiom'
                             : activeTab === 'admins'
@@ -3407,6 +3413,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                         ? 'Ekspor data peserta per komunitas'
                         : activeTab === 'export_payments'
                           ? 'Ekspor data pembayaran per komunitas'
+                          : activeTab === 'jersey'
+                            ? 'Jumlah & kuota jersey per ukuran di setiap paket'
                           : activeTab === 'logs'
                             ? 'Monitoring log aplikasi dari Axiom'
                             : activeTab === 'admins'
@@ -4565,6 +4573,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           { id: 'export_payments', label: 'Export Pembayaran' },
                           { id: 'pacer', label: 'Pacer' },
                           { id: 'umkm', label: 'UMKM' },
+                          { id: 'jersey', label: 'Rekap Jersey' },
                           { id: 'packages', label: 'Kelola Paket' },
                           { id: 'periods', label: 'Kelola Periode' },
                           { id: 'logs', label: 'Log Axiom' },
@@ -6033,6 +6042,19 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
             </div>
           )}
 
+          {activeTab === 'jersey' && (
+            <JerseyRecapTab
+              settings={settingsForm}
+              rowsByPackage={{
+                community: participants,
+                family: familyParticipants,
+                individual: individualParticipants,
+                invitation: invitationParticipants,
+                pacer: pacerRows,
+              }}
+            />
+          )}
+
           {activeTab === 'vouchers' && currentAdmin.role === 'superadmin' && (
             <VouchersTab
               adminSettings={adminSettings}
@@ -6684,7 +6706,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                     {[...participantSelectSettingFields, ...(formEditingPkg === 'pacer' ? pacerOnlySelectFields : [])].map(([key, title]) => {
                       const field = settingsForm.registrationForm[formEditingPkg].participants[key] as FormSelectConfig
                       return (
-                        <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
+                        <div key={key} className={`border border-card-border rounded-lg p-3 bg-brand-gray/20 ${key === 'tshirt_size' ? 'md:col-span-3' : ''}`}>
                           <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
                           <input
                             value={field.label}
@@ -6716,18 +6738,57 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                               Wajib diisi
                             </label>
                           </div>
-                          <div className="flex flex-col gap-2">
-                            {field.options.map((option) => (
-                              <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
-                                <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
-                                <input
-                                  value={option.label}
-                                  onChange={(event) => updateSelectOptionLabel(formEditingPkg as PackageKey, key, option.value, event.target.value)}
-                                  className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
-                                />
-                              </label>
-                            ))}
-                          </div>
+                          {key === 'tshirt_size' ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="grid grid-cols-[3rem_1fr_5.5rem_7.5rem] gap-2 text-[9px] font-black uppercase text-brand-muted">
+                                <span>Ukuran</span><span>Label</span><span>Kuota (0 = ∞)</span><span>Status</span>
+                              </div>
+                              {field.options.map((option) => (
+                                <div key={option.value} className="grid grid-cols-[3rem_1fr_5.5rem_7.5rem] gap-2 items-center">
+                                  <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
+                                  <input
+                                    value={option.label}
+                                    onChange={(event) => updateSelectOption(formEditingPkg as PackageKey, key, option.value, { label: event.target.value })}
+                                    className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={option.quota ?? 0}
+                                    onChange={(event) => updateSelectOption(formEditingPkg as PackageKey, key, option.value, { quota: Math.max(0, Number(event.target.value) || 0) })}
+                                    aria-label={`Kuota ukuran ${option.value}`}
+                                    className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                                  />
+                                  <select
+                                    value={option.enabled === false ? 'hidden' : option.soldOut ? 'soldout' : 'available'}
+                                    onChange={(event) => updateSelectOption(formEditingPkg as PackageKey, key, option.value, {
+                                      enabled: event.target.value !== 'hidden',
+                                      soldOut: event.target.value === 'soldout',
+                                    })}
+                                    aria-label={`Status ukuran ${option.value}`}
+                                    className="w-full px-2 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                                  >
+                                    <option value="available">Tersedia</option>
+                                    <option value="soldout">Habis</option>
+                                    <option value="hidden">Sembunyikan</option>
+                                  </select>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {field.options.map((option) => (
+                                <label key={option.value} className="grid grid-cols-[3.5rem_1fr] gap-2 items-center">
+                                  <span className="text-[10px] font-black text-brand-muted">{option.value}</span>
+                                  <input
+                                    value={option.label}
+                                    onChange={(event) => updateSelectOption(formEditingPkg as PackageKey, key, option.value, { label: event.target.value })}
+                                    className="w-full px-3 py-2 bg-brand-dark/40 border border-card-border rounded-lg text-xs text-foreground"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -7256,6 +7317,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                     { id: 'export_payments', label: 'Export Pembayaran' },
                     { id: 'pacer', label: 'Pacer' },
                     { id: 'umkm', label: 'UMKM' },
+                    { id: 'jersey', label: 'Rekap Jersey' },
                     { id: 'packages', label: 'Kelola Paket' },
                     { id: 'periods', label: 'Kelola Periode' },
                     { id: 'logs', label: 'Log Axiom' },

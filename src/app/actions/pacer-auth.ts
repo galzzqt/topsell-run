@@ -37,7 +37,7 @@ export async function signUpPacer(values: RegisterPacerFormValues) {
     return { error: gate.reason || 'Pendaftaran pacer sedang ditutup.' }
   }
 
-  const quota = await checkPackageQuota('pacer', 1, values.category)
+  const quota = await checkPackageQuota('pacer', 1, values.category, [values.tshirt_size])
   if (!quota.ok) {
     return { error: quota.reason || 'Kuota pacer sudah penuh.' }
   }
