@@ -36,7 +36,8 @@ export async function findVoucherByCode(
 ): Promise<Voucher | null> {
   const db = await getDb()
   const doc = await db.collection<VoucherDoc>('vouchers').findOne({
-    code: { $regex: new RegExp(`^${code}$`, 'i') }, // case-insensitive
+    // case-insensitive; escape supaya input user (mis. `.*`) tidak dibaca sebagai regex
+    code: { $regex: new RegExp(`^${code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
     type: 'code',
     enabled: true,
     validFrom: { $lte: now },

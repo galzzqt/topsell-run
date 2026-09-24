@@ -433,6 +433,11 @@ export async function simulateInvitationPaymentSuccess(paymentId: string) {
   const payment = await findInvitationPaymentWithRegistration(paymentId)
   if (!payment) return { error: 'Invoice tidak ditemukan.' }
   if (payment.registration?.invitation_id !== session.id) return { error: 'Tidak memiliki akses.' }
+  // Server action bisa dipanggil langsung tanpa tombol — tolak selain invoice demo di server tanpa key Xendit asli.
+  const xenditSecretKey = process.env.XENDIT_SECRET_KEY || ''
+  if (!isDemoSession(payment) || (xenditSecretKey && !xenditSecretKey.includes('XXXXXX') && !xenditSecretKey.includes('your-'))) {
+    return { error: 'Simulasi pembayaran hanya tersedia di mode demo.' }
+  }
 
   await markInvitationPaymentPaid(paymentId, { payment_method: 'xendit_demo' })
 
