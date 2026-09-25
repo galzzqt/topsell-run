@@ -66,12 +66,6 @@ export default function LoginPage() {
       router.push('/invitation-dashboard')
       return
     }
-    if ('needsVerification' in invitationResult && invitationResult.needsVerification) {
-      setAuthError(invitationResult.error || null)
-      setNeedsVerification(true)
-      setResendId(invitationResult.invitationId || null)
-      return
-    }
 
     // Pacer — verifikasi email juga diperlukan.
     const pacerResult = await signInPacer(values)

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CheckCircle, Timer, ArrowRight, UserPlus, Trophy, User, Mail } from 'lucide-react'
+import { UserPlus, Trophy, User } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { registerInvitationSchema, RegisterInvitationFormValues } from '@/lib/validations/auth'
 import { signUpInvitation } from '@/app/actions/invitation-auth'
@@ -17,11 +17,8 @@ import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { SiteShell, useActiveSession } from '@/components/landing/shell'
-import { trackMetaPixelPurchase } from '@/lib/utils/meta-pixel'
 import { INVITATION_CATEGORY_OPTIONS } from '@/lib/types'
 import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
-import { VoucherInput } from '@/components/ui/voucher-input'
-import type { AppliedVoucher } from '@/lib/types/voucher'
 
 type CategoryOption = { value: string; label: string; price: number }
 
@@ -41,9 +38,6 @@ const PARTICIPANT_TYPE_NAME_LABEL: Record<string, string> = {
 export default function InvitationForm() {
   const router = useRouter()
   const [activeSession, setActiveSession] = useActiveSession()
-  const [isSuccess, setIsSuccess] = useState(false)
-  const [emailSent, setEmailSent] = useState(true)
-  const [registeredEmail, setRegisteredEmail] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>(
@@ -59,7 +53,6 @@ export default function InvitationForm() {
   const [loadingProvinsi, setLoadingProvinsi] = useState(false)
   const [loadingKota, setLoadingKota] = useState(false)
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
-  const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null)
 
   const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<RegisterInvitationFormValues>({
     resolver: zodResolver(registerInvitationSchema),
@@ -95,7 +88,6 @@ export default function InvitationForm() {
   const selectedCategory = useWatch({ control, name: 'category' })
   const selectedParticipantType = useWatch({ control, name: 'participant_type' })
   const participantNameLabel = PARTICIPANT_TYPE_NAME_LABEL[selectedParticipantType || ''] || 'Nama Instansi / Brand'
-  const basePrice = categoryOptions.find((c) => c.value === selectedCategory)?.price || 0
 
   const invitationFallbacks = {
     full_name: 'Peserta Invitation',
@@ -227,7 +219,7 @@ export default function InvitationForm() {
       agreement_safety,
       agreement_data,
       agreement_refund,
-    }, appliedVoucher?.code)
+    })
 
     if (result.error) {
       setAuthError(result.error)
@@ -240,111 +232,13 @@ export default function InvitationForm() {
       origin: { y: 0.6 },
       colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
     })
-    const chosenPrice = categoryOptions.find((c) => c.value === values.category)?.price || 0
-    const finalPrice = Math.max(0, chosenPrice - (appliedVoucher?.finalDiscount || 0))
-    await trackMetaPixelPurchase(finalPrice, 'IDR', {
-      content_ids: [values.email],
-      content_type: 'product',
-      num_items: 1,
-    })
-    setRegisteredEmail(values.email)
-    setEmailSent(result.emailSent !== false)
-    setIsSuccess(true)
+    // Tanpa aktivasi email & pembayaran — sesi sudah dibuat server, langsung ke dashboard.
+    router.refresh()
+    router.push('/invitation-dashboard')
   }
 
   return (
     <SiteShell session={activeSession} onLogout={() => setActiveSession(null)}>
-      {/* Email Verification Success Modal */}
-      <Dialog
-        isOpen={isSuccess}
-        onClose={() => {
-          setIsSuccess(false)
-          router.push('/login')
-        }}
-        title="REGISTRASI BERHASIL"
-      >
-        <div className="flex flex-col items-center text-center gap-6">
-          <div className="p-5 bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 rounded-full shadow-xl animate-pulse">
-            <CheckCircle className="w-12 h-12 text-white" strokeWidth={2.5} />
-          </div>
-
-          <div>
-            <h3 className="text-2xl font-black uppercase text-slate-900 mb-2">
-              Pendaftaran Invitation Berhasil!
-            </h3>
-            <p className="text-sm text-brand-muted leading-relaxed">
-              Akun Anda telah berhasil dibuat dengan email:
-            </p>
-            <p className="text-sm font-bold text-sport-purple mt-2 break-all">
-              {registeredEmail}
-            </p>
-          </div>
-
-          {emailSent ? (
-            <div className="w-full bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-5 text-left shadow-md">
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-amber-100 rounded-lg shrink-0">
-                  <Mail className="w-6 h-6 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-amber-900 mb-3 uppercase tracking-wide">
-                    Aktivasi Email Diperlukan
-                  </p>
-                  <p className="text-xs text-amber-800 leading-relaxed mb-3">
-                    Kami telah mengirim <strong>link aktivasi</strong> ke email Anda. Silakan buka email dan{' '}
-                    <strong>klik link untuk mengaktifkan akun</strong> sebelum login ke dashboard.
-                  </p>
-                  <div className="flex items-center gap-2 bg-amber-100 rounded-lg px-3 py-2">
-                    <Timer className="w-4 h-4 text-amber-700" />
-                    <p className="text-xs text-amber-700 font-semibold">
-                      Link aktivasi berlaku selama 24 jam
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-full bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 text-left shadow-md">
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-red-100 rounded-lg shrink-0">
-                  <Mail className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-red-900 mb-3 uppercase tracking-wide">
-                    Email Aktivasi Gagal Terkirim
-                  </p>
-                  <p className="text-xs text-red-800 leading-relaxed">
-                    Akun Anda <strong>berhasil dibuat</strong>, tetapi kami gagal mengirim email aktivasi.
-                    Silakan buka halaman <strong>Login</strong> lalu klik{' '}
-                    <strong>&quot;Kirim Ulang Email Verifikasi&quot;</strong> untuk mencoba lagi. Jika masih gagal,
-                    hubungi Admin via WhatsApp.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="w-full flex flex-col gap-3 mt-2">
-            <Button
-              onClick={() => {
-                setIsSuccess(false)
-                router.push('/login')
-              }}
-              variant="primary"
-              className="w-full py-4 text-sm font-black shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
-            >
-              <ArrowRight className="w-5 h-5 mr-2" />
-              Login Setelah Aktivasi
-            </Button>
-
-            <p className="text-xs text-center text-brand-muted leading-relaxed px-4">
-              Tidak menerima email? <strong>Cek folder spam</strong> atau minta kirim ulang dari halaman login.
-            </p>
-          </div>
-        </div>
-      </Dialog>
-
       {/* ——— FORM SECTION ——— */}
       <section className="px-4 pt-10 pb-8 z-10 relative max-w-3xl mx-auto">
         {/* Login prompt above form */}
@@ -375,7 +269,7 @@ export default function InvitationForm() {
               <User className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
               <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
                 <span className="text-slate-900 font-bold">Isi data diri Anda.</span> Akun akan dibuat dengan email &amp;
-                nomor WhatsApp ini, lalu lakukan checkout di dashboard untuk mendapatkan QR Race Pass resmi.
+                nomor WhatsApp ini, dan QR Race Pass resmi langsung tersedia di dashboard.
               </p>
             </div>
 
@@ -497,23 +391,15 @@ export default function InvitationForm() {
                 ) : (
                   <input type="hidden" value={invitationFallbacks.date_of_birth} {...register('date_of_birth')} />
                 )}
-                <div className="flex flex-col gap-1">
-                  <Select
-                    label="Kategori"
-                    required
-                    error={errors.category?.message}
-                    // Voucher terikat kategori — kunci pilihan selama voucher terpasang.
-                    disabled={isSubmitting || !!appliedVoucher}
-                    value={selectedCategory}
-                    options={categoryOptions.map((o) => ({ value: o.value, label: o.label }))}
-                    {...register('category')}
-                  />
-                  {appliedVoucher && (
-                    <span className="text-[10px] text-sport-purple font-semibold">
-                      Kategori mengikuti voucher {appliedVoucher.code}. Hapus voucher untuk mengubah.
-                    </span>
-                  )}
-                </div>
+                <Select
+                  label="Kategori"
+                  required
+                  error={errors.category?.message}
+                  disabled={isSubmitting}
+                  value={selectedCategory}
+                  options={categoryOptions.map((o) => ({ value: o.value, label: o.label }))}
+                  {...register('category')}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -691,53 +577,6 @@ export default function InvitationForm() {
                   <input type="hidden" value={invitationFallbacks.confirmPassword} {...register('confirmPassword')} />
                 )}
               </div>
-
-              {/* --- VOUCHER INPUT --- */}
-              {selectedCategory && basePrice > 0 && (
-                <div className="mt-4">
-                  <VoucherInput
-                    packageKey="invitation"
-                    basePrice={basePrice}
-                    category={selectedCategory}
-                    onApply={(voucher) => setAppliedVoucher(voucher)}
-                    onRemove={() => setAppliedVoucher(null)}
-                    onCategoryResolved={(cat) => setValue('category', cat)}
-                  />
-
-                  {/* Kategori yang sedang dipilih — biar jelas voucher ini untuk lari yang mana. */}
-                  {selectedCategory && (
-                    <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-brand-gray/5 border border-card-border">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">Kategori Dipilih</span>
-                      <span className="text-xs font-black text-foreground">
-                        {categoryOptions.find((o) => o.value === selectedCategory)?.label || selectedCategory}
-                        {appliedVoucher && <span className="ml-1.5 text-[10px] font-bold text-sport-purple">(dikunci voucher)</span>}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* --- RINGKASAN BIAYA --- */}
-              {basePrice > 0 && (
-                <div className="mt-4 p-4 rounded-xl border border-card-border bg-brand-gray/5 flex flex-col gap-2">
-                  <h4 className="text-[10px] font-black uppercase text-brand-muted tracking-wider mb-1">Ringkasan Biaya</h4>
-                  <div className="flex justify-between text-xs text-brand-muted">
-                    <span>Biaya Pendaftaran</span>
-                    <span className="font-bold">Rp {basePrice.toLocaleString('id-ID')}</span>
-                  </div>
-                  {appliedVoucher && appliedVoucher.finalDiscount > 0 && (
-                    <div className="flex justify-between text-xs text-green-600">
-                      <span>Diskon Voucher ({appliedVoucher.name})</span>
-                      <span className="font-bold">- Rp {appliedVoucher.finalDiscount.toLocaleString('id-ID')}</span>
-                    </div>
-                  )}
-                  <div className="border-t border-card-border my-1" />
-                  <div className="flex justify-between text-sm text-foreground font-black uppercase">
-                    <span>Total Pembayaran</span>
-                    <span className="text-sport-orange">Rp {Math.max(0, basePrice - (appliedVoucher?.finalDiscount || 0)).toLocaleString('id-ID')}</span>
-                  </div>
-                </div>
-              )}
 
 
               {/* --- SYARAT & KETENTUAN (S&K) --- */}

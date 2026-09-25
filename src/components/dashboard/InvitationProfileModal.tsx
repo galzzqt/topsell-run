@@ -58,12 +58,6 @@ export function InvitationProfileModal({ isOpen, onClose }: InvitationProfileMod
       alert(result.message)
     }
 
-    if ('requiresVerification' in result && result.requiresVerification) {
-      handleClose()
-      window.location.href = result.redirectTo || '/login'
-      return
-    }
-
     if (user?.id) {
       await fetchInvitationData()
     }
@@ -81,7 +75,7 @@ export function InvitationProfileModal({ isOpen, onClose }: InvitationProfileMod
         <div className="flex items-center gap-3 bg-sport-orange/10 border border-sport-orange/20 rounded-lg p-3">
           <KeyRound className="w-4 h-4 text-sport-orange shrink-0" />
           <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-            Anda dapat mengubah nama, instansi/komunitas, nomor HP, email, dan password akun. Jika email diubah, akun wajib aktivasi ulang melalui email baru.
+            Anda dapat mengubah nama, instansi/komunitas, nomor HP, email, dan password akun.
           </p>
         </div>
 

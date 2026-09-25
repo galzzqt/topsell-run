@@ -17,25 +17,16 @@ import {
   createInvitationRegistration,
   createInvitationPayment,
   linkInvitationParticipantsToRegistration,
-  setInvitationVerificationToken,
-  findVoucherByCode,
-  findBestAutoVoucher,
-  incrementVoucherUsage,
   markInvitationPaymentPaid,
+  verifyInvitationEmail,
 } from '@/lib/db'
 import { registerSoloSchema, loginSchema, RegisterSoloFormValues, LoginFormValues } from '@/lib/validations/auth'
 import { sendInvitationRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
-import { resolvePackagePrice, isPackageOpen, checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
-import { generateRandomReference, getWibNowString } from '@/lib/utils/format'
-import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
-import { rateLimit, rateLimitByIp, clearRateLimit } from '@/lib/security/rate-limit'
+import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
+import { rateLimitByIp, clearRateLimit } from '@/lib/security/rate-limit'
 
-function toXenditReference(value: string) {
-  return value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 64) || 'customer'
-}
-
-export async function signUpInvitation(values: RegisterSoloFormValues, voucherCode?: string) {
+export async function signUpInvitation(values: RegisterSoloFormValues) {
   const limit = await rateLimitByIp('invitation-signup', 20, 5 * 60 * 1000)
   if (limit.limited) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
@@ -75,47 +66,6 @@ export async function signUpInvitation(values: RegisterSoloFormValues, voucherCo
     }
   }
 
-  const basePrice = await resolvePackagePrice('invitation', values.category)
-  const totalAmount = values.participants.length * basePrice
-
-  let voucherDiscount = 0
-  let voucherId = null
-  let finalVoucherCode: string | null = null
-
-  const now = getWibNowString()
-  const cleanVoucherCode = typeof voucherCode === 'string' ? voucherCode.trim() : ''
-  const isAuto = !cleanVoucherCode || cleanVoucherCode.toUpperCase() === 'AUTO'
-
-  if (isAuto) {
-    // Try to auto-apply
-    const autoVoucher = await findBestAutoVoucher('invitation', values.category, now)
-    if (autoVoucher) {
-      voucherId = autoVoucher.id
-      finalVoucherCode = autoVoucher.code || 'AUTO'
-      if (autoVoucher.discountType === 'percent') {
-        voucherDiscount = Math.round((totalAmount * autoVoucher.discountValue) / 100)
-      } else {
-        voucherDiscount = Math.min(autoVoucher.discountValue, totalAmount)
-      }
-    }
-  } else {
-    // Manual voucher code entered
-    const voucher = await findVoucherByCode(cleanVoucherCode, 'invitation', values.category, now)
-    if (voucher) {
-      voucherId = voucher.id
-      finalVoucherCode = voucher.code
-      if (voucher.discountType === 'percent') {
-        voucherDiscount = Math.round((totalAmount * voucher.discountValue) / 100)
-      } else {
-        voucherDiscount = Math.min(voucher.discountValue, totalAmount)
-      }
-    } else {
-      return { error: 'Kode voucher tidak valid atau sudah kadaluarsa.' }
-    }
-  }
-
-  const finalAmount = Math.max(0, totalAmount - voucherDiscount)
-
   let invitation
   try {
     invitation = await createInvitation({
@@ -128,12 +78,15 @@ export async function signUpInvitation(values: RegisterSoloFormValues, voucherCo
       kota: values.kota,
       kecamatan: values.kecamatan,
       community_name: values.participants[0]?.community_name ? values.participants[0].community_name.trim() : null,
-      voucher_code: finalVoucherCode,
-      voucher_discount: voucherDiscount,
+      voucher_code: null,
+      voucher_discount: 0,
     })
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Gagal membuat profil peserta invitation.' }
   }
+
+  // Invitation tanpa aktivasi email — akun langsung aktif.
+  await verifyInvitationEmail(invitation.id)
 
   try {
     await saveInvitationAuth(invitation.id, values.phone, createPasswordRecord(values.password))
@@ -192,58 +145,45 @@ export async function signUpInvitation(values: RegisterSoloFormValues, voucherCo
     return { error: error instanceof Error ? error.message : 'Gagal menyimpan data peserta.' }
   }
 
-  const paymentRef = toXenditReference(generateRandomReference('IND'))
-
+  // Invitation tidak berbayar: buat record Rp0 lalu langsung paid supaya
+  // activatePaidInvitationParticipants generate kode & QR peserta.
   try {
-    const isFreeByVoucher = finalAmount === 0
-
     const registration = await createInvitationRegistration({
       invitation_id: invitation.id,
       total_participants: values.participants.length,
-      total_amount: finalAmount,
-      voucher_code: finalVoucherCode,
-      voucher_discount: voucherDiscount,
+      total_amount: 0,
+      voucher_code: null,
+      voucher_discount: 0,
       status: 'pending',
     })
     await linkInvitationParticipantsToRegistration(participantIds, registration.id)
     const payment = await createInvitationPayment({
       registration_id: registration.id,
-      amount: finalAmount,
-      payment_reference: isFreeByVoucher ? `FREE-INV-${invitation.invitation_code}` : paymentRef,
+      amount: 0,
+      payment_reference: `FREE-INV-${invitation.invitation_code}`,
       status: 'pending',
       period_key: period?.key ?? null,
     })
+    await markInvitationPaymentPaid(payment.id, {
+      payment_method: 'invitation_free',
+      paid_at: new Date().toISOString(),
+    })
 
-    // Jika gratis karena voucher: transisikan dari pending → paid sehingga
-    // activatePaidInvitationParticipants dipanggil (generate kode & QR peserta).
-    if (isFreeByVoucher) {
-      await markInvitationPaymentPaid(payment.id, {
-        payment_method: 'voucher_free',
-        paid_at: new Date().toISOString(),
-      })
-
-      // Lunas tanpa lewat Xendit tetap dapat notifikasi pembayaran yang sama:
-      // receipt + racepack email + webhook racepack ke GHL.
-      try {
-        const [{ sendInvitationRacepackEmailsForRegistration, sendInvitationReceiptEmail }, { sendInvitationRacepackWhatsappsForRegistration }] = await Promise.all([
-          import('@/lib/email/invitation'),
-          import('@/lib/whatsapp/invitation'),
-        ])
-        await Promise.all([
-          sendInvitationReceiptEmail(registration.id),
-          sendInvitationRacepackEmailsForRegistration(registration.id),
-          sendInvitationRacepackWhatsappsForRegistration(registration.id),
-        ])
-      } catch (notifyError) {
-        console.error('Failed to notify free invitation payment:', notifyError)
-      }
-    }
-
-    if (voucherId) {
-      await incrementVoucherUsage(voucherId)
+    // Racepack email + WhatsApp tetap dikirim (tanpa receipt — tidak ada pembayaran).
+    try {
+      const [{ sendInvitationRacepackEmailsForRegistration }, { sendInvitationRacepackWhatsappsForRegistration }] = await Promise.all([
+        import('@/lib/email/invitation'),
+        import('@/lib/whatsapp/invitation'),
+      ])
+      await Promise.all([
+        sendInvitationRacepackEmailsForRegistration(registration.id),
+        sendInvitationRacepackWhatsappsForRegistration(registration.id),
+      ])
+    } catch (notifyError) {
+      console.error('Failed to send invitation racepack:', notifyError)
     }
   } catch (error) {
-    console.error('Failed to create invitation auto-payment record:', error)
+    console.error('Failed to create invitation registration record:', error)
   }
 
   // Semua isi form dikirim ke GHL kecuali password. `name`/`leader_name` dibuang:
@@ -263,35 +203,10 @@ export async function signUpInvitation(values: RegisterSoloFormValues, voucherCo
       email: values.email,
       category: values.category,
       registrationCode: invitation.invitation_code,
-      amount: finalAmount,
+      amount: 0,
     })
   } catch (sendError) {
     console.error('Failed to send invitation registration confirmation WhatsApp:', sendError)
-  }
-
-  let emailSent = false
-  if (values.email) {
-    try {
-      const verificationToken = generateVerificationToken()
-      const tokenExpiry = getVerificationTokenExpiry()
-      await setInvitationVerificationToken(invitation.id, verificationToken, tokenExpiry)
-
-      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
-      const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}&type=invitation`
-
-      const emailResult = await sendVerificationEmail({
-        email: values.email,
-        name: values.leader_name || values.name,
-        verificationUrl,
-        packageType: 'invitation',
-      })
-      emailSent = emailResult.success
-      if (!emailResult.success) {
-        console.error('Failed to send invitation verification email:', emailResult.error)
-      }
-    } catch (emailError) {
-      console.error('Failed to send invitation verification email:', emailError)
-    }
   }
 
   try {
@@ -306,7 +221,10 @@ export async function signUpInvitation(values: RegisterSoloFormValues, voucherCo
     console.error('Failed to log invitation signup:', logError)
   }
 
-  return { success: true, phone: values.phone, emailSent }
+  // Tanpa aktivasi email: langsung login supaya bisa diarahkan ke dashboard.
+  await createInvitationSession({ id: invitation.id, phone: invitation.phone, name: invitation.name })
+
+  return { success: true, phone: values.phone }
 }
 
 export async function signInInvitation(values: LoginFormValues) {
@@ -336,14 +254,6 @@ export async function signInInvitation(values: LoginFormValues) {
 
   if (!invitation || !auth || !verifyPassword(values.password, auth)) {
     return { error: 'Nomor HP/Email atau password salah' }
-  }
-
-  if (!invitation.email_verified) {
-    return {
-      error: 'Email belum diverifikasi. Silakan cek email Anda untuk link aktivasi atau minta kirim ulang.',
-      needsVerification: true,
-      invitationId: invitation.id,
-    }
   }
 
   clearRateLimit('invitation-login')

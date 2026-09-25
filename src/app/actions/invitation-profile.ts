@@ -1,6 +1,6 @@
 'use server'
 
-import { clearInvitationSession, getInvitationSession } from '@/lib/auth/invitation'
+import { getInvitationSession } from '@/lib/auth/invitation'
 import { createPasswordRecord } from '@/lib/auth/password'
 import {
   findAuthEmailOwner,
@@ -8,7 +8,6 @@ import {
   findInvitationByEmail,
   findInvitationByPhoneExcept,
   findInvitationParticipantsByInvitationId,
-  setInvitationVerificationToken,
   updateInvitation,
   updateInvitationAuthPassword,
   updateInvitationAuthPhone,
@@ -17,7 +16,6 @@ import {
 import { invitationProfileSchema, InvitationProfileValues } from '@/lib/validations/invitation'
 import { revalidatePath } from 'next/cache'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
-import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email/verification'
 
 function normalizeInputEmail(email: string) {
   return email.trim().toLowerCase()
@@ -54,45 +52,14 @@ export async function updateInvitationProfile(values: InvitationProfileValues) {
   const nextEmail = normalizeInputEmail(values.email)
   const emailChanged = currentEmail !== nextEmail
 
-  let verificationToken: string | null = null
-  let tokenExpiry: Date | null = null
-
-  if (emailChanged) {
-    verificationToken = generateVerificationToken()
-    tokenExpiry = getVerificationTokenExpiry()
-
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '')
-    const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}&type=invitation`
-    const emailResult = await sendVerificationEmail({
-      email: values.email,
-      name: values.full_name,
-      verificationUrl,
-      packageType: 'invitation',
-    })
-
-    if (!emailResult.success) {
-      return { error: emailResult.error || 'Gagal mengirim email aktivasi ke alamat baru.' }
-    }
-  }
-
+  // Invitation tanpa aktivasi email — ganti email langsung berlaku.
   await updateInvitation(session.id, {
     name: values.full_name,
     leader_name: values.full_name,
     phone: values.phone,
     email: values.email,
     community_name: values.community_name ? values.community_name.trim() : null,
-    ...(emailChanged
-      ? {
-          email_verified: false,
-          verification_token: null,
-          verification_token_expires: null,
-        }
-      : {}),
   })
-
-  if (emailChanged && verificationToken && tokenExpiry) {
-    await setInvitationVerificationToken(session.id, verificationToken, tokenExpiry)
-  }
 
   await updateInvitationAuthPhone(session.id, values.phone)
 
@@ -122,7 +89,7 @@ export async function updateInvitationProfile(values: InvitationProfileValues) {
       source: 'invitation',
       event: emailChanged ? 'invitation_profile_email_changed' : 'invitation_profile_updated',
       message: emailChanged
-        ? `Profil invitation diperbarui dan email login diganti oleh pengguna: ${session.name} (Nama Baru: ${values.full_name}, HP Baru: ${values.phone}, Email Baru: ${values.email}). Aktivasi ulang diperlukan.`
+        ? `Profil invitation diperbarui dan email login diganti oleh pengguna: ${session.name} (Nama Baru: ${values.full_name}, HP Baru: ${values.phone}, Email Baru: ${values.email}).`
         : `Profil invitation diperbarui sendiri oleh pengguna: ${session.name} (Nama Baru: ${values.full_name}, HP Baru: ${values.phone}, Email Baru: ${values.email}).`,
       data: {
         invitationId: session.id,
@@ -137,16 +104,6 @@ export async function updateInvitationProfile(values: InvitationProfileValues) {
   }
 
   revalidatePath('/invitation-dashboard')
-
-  if (emailChanged) {
-    await clearInvitationSession()
-    return {
-      success: true,
-      requiresVerification: true,
-      redirectTo: '/login',
-      message: 'Email berhasil diubah. Kami telah mengirim email aktivasi ke alamat baru. Silakan aktivasi ulang lalu login kembali.',
-    }
-  }
 
   return { success: true, message: 'Profil akun berhasil diperbarui.' }
 }

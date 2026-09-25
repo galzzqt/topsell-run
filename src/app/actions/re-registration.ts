@@ -74,8 +74,8 @@ async function notifyFreeRegistration(
         import('@/lib/email/invitation'),
         import('@/lib/whatsapp/invitation'),
       ])
+      // Invitation tidak berbayar — tanpa receipt.
       await Promise.all([
-        email.sendInvitationReceiptEmail(registrationId),
         email.sendInvitationRacepackEmailsForRegistration(registrationId),
         wa.sendInvitationRacepackWhatsappsForRegistration(registrationId),
       ])
@@ -303,7 +303,6 @@ export async function reRegisterIndividualAction(input: {
 export async function reRegisterInvitationAction(input: {
   category: string
   participant: z.infer<typeof participantInputSchema>
-  voucherCode?: string
 }) {
   const session = await getInvitationSession()
   if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
@@ -335,34 +334,6 @@ export async function reRegisterInvitationAction(input: {
     }
   }
 
-  const unitPrice = await resolvePackagePrice('invitation', category)
-  const basePrice = unitPrice
-  const now = getWibNowString()
-
-  // Voucher calculation
-  let voucherDiscount = 0
-  let voucherCodeUsed: string | null = null
-  let voucherId: string | null = null
-
-  if (input.voucherCode && input.voucherCode.trim() && input.voucherCode.trim().toUpperCase() !== 'AUTO') {
-    const code = input.voucherCode.trim().toUpperCase()
-    const v = await findVoucherByCode(code, 'invitation', category, now)
-    if (!v) {
-      return { error: 'Kode voucher tidak valid, sudah kadaluarsa, atau tidak berlaku untuk kategori ini.' }
-    }
-    voucherDiscount = calcDiscount(v.discountType, v.discountValue, basePrice)
-    voucherCodeUsed = v.code
-    voucherId = v.id
-  } else {
-    const autoV = await findBestAutoVoucher('invitation', category, now)
-    if (autoV) {
-      voucherDiscount = calcDiscount(autoV.discountType, autoV.discountValue, basePrice)
-      voucherCodeUsed = 'AUTO'
-      voucherId = autoV.id
-    }
-  }
-
-  const finalAmount = Math.max(0, basePrice - voucherDiscount)
   const pData = pVal.data
 
   let inserted
@@ -404,19 +375,15 @@ export async function reRegisterInvitationAction(input: {
   }
 
   const participantIds = inserted.map((p) => p.id)
-  const isFreeByVoucher = finalAmount === 0
-  const paymentRef = isFreeByVoucher
-    ? `FREE-INV-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`
-    : toXenditReference(generateRandomReference('IND'))
 
   let registration
   try {
     registration = await createInvitationRegistration({
       invitation_id: session.id,
       total_participants: 1,
-      total_amount: finalAmount,
-      voucher_code: voucherCodeUsed,
-      voucher_discount: voucherDiscount,
+      total_amount: 0,
+      voucher_code: null,
+      voucher_discount: 0,
       status: 'pending',
     })
     await linkInvitationParticipantsToRegistration(participantIds, registration.id)
@@ -424,23 +391,20 @@ export async function reRegisterInvitationAction(input: {
     return { error: 'Gagal membuat registrasi: ' + (err instanceof Error ? err.message : 'Error') }
   }
 
+  // Invitation tidak berbayar: langsung aktifkan peserta (generate kode & QR).
   try {
     const payment = await dbCreateInvitationPayment({
       registration_id: registration.id,
-      amount: finalAmount,
-      payment_reference: paymentRef,
+      amount: 0,
+      payment_reference: `FREE-INV-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`,
       status: 'pending',
       period_key: period?.key ?? null,
     })
-    // Jika gratis karena voucher: langsung aktifkan peserta (generate kode & QR)
-    if (isFreeByVoucher) {
-      await markInvitationPaymentPaid(payment.id, {
-        payment_method: 'voucher_free',
-        paid_at: new Date().toISOString(),
-      })
-      await notifyFreeRegistration('invitation', registration.id)
-    }
-    if (voucherId) await incrementVoucherUsage(voucherId)
+    await markInvitationPaymentPaid(payment.id, {
+      payment_method: 'invitation_free',
+      paid_at: new Date().toISOString(),
+    })
+    await notifyFreeRegistration('invitation', registration.id)
   } catch (err) {
     return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
   }
@@ -453,7 +417,7 @@ export async function reRegisterInvitationAction(input: {
       email: invitation.email,
       category,
       registrationCode: invitation.invitation_code,
-      amount: finalAmount,
+      amount: 0,
     })
   } catch (sendError) {
     console.error('Failed to send invitation re-registration confirmation webhook:', sendError)
