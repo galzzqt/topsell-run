@@ -15,11 +15,11 @@ import {
   isDuplicateKeyError,
 } from '@/lib/db'
 import { after } from 'next/server'
-import { registerInvitationSchema, RegisterInvitationFormValues } from '@/lib/validations/auth'
+import { buildInvitationSchema, hiddenInvitationFields, RegisterInvitationFormValues } from '@/lib/validations/auth'
 import { sendInvitationRegistrationConfirmationWebhook } from '@/lib/ghl/webhook'
 import { sendInvitationRegistrationEmail } from '@/lib/email/invitation'
 import { ingestAdminLog } from '@/lib/axiom/ingest'
-import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory } from '@/lib/admin/settings'
+import { isPackageOpen, checkPackageQuota, resolvePeriodForCategory, readAdminSettings } from '@/lib/admin/settings'
 import { rateLimitByIp } from '@/lib/security/rate-limit'
 
 const ALREADY_REGISTERED = 'Email atau nomor WhatsApp ini sudah terdaftar di invitation. Hubungi admin jika ada kendala.'
@@ -33,23 +33,52 @@ export async function registerInvitation(values: RegisterInvitationFormValues) {
     return { error: 'Terlalu banyak percobaan registrasi. Coba lagi beberapa menit lagi.' }
   }
 
-  const validated = registerInvitationSchema.safeParse(values)
-  if (!validated.success) {
-    return { error: validated.error.issues[0]?.message || 'Data registrasi tidak valid' }
-  }
-  const {
-    category, provinsi, kota, kecamatan,
-    agreement_safety: _s, agreement_data: _d, agreement_refund: _r,
-    ...participant
-  } = validated.data
-  void _s; void _d; void _r
-
   const gate = await isPackageOpen('invitation')
   if (!gate.open) {
     return { error: gate.reason || 'Pendaftaran invitation sedang ditutup.' }
   }
 
-  const quota = await checkPackageQuota('invitation', 1, category, [participant.tshirt_size])
+  // Validasi mengikuti pengaturan form admin. Field yang disembunyikan dikosongkan di sini
+  // (jangan percaya nilai dari client); kategori tersembunyi/kosong → kategori pertama periode aktif.
+  const formSettings = (await readAdminSettings()).registrationForm.invitation
+  const input: Record<string, unknown> = { ...values }
+  for (const key of hiddenInvitationFields(formSettings)) input[key] = ''
+  if (formSettings.registrant.category?.visible === false || !input.category) {
+    input.category = gate.period?.categories[0]?.value || ''
+  }
+  if (!input.category) return { error: 'Kategori wajib dipilih.' }
+
+  const validated = buildInvitationSchema(formSettings).safeParse(input)
+  if (!validated.success) {
+    return { error: validated.error.issues[0]?.message || 'Data registrasi tidak valid' }
+  }
+  const {
+    category, provinsi: rawProvinsi, kota: rawKota, kecamatan: rawKecamatan,
+    agreement_safety: _s, agreement_data: _d, agreement_refund: _r,
+    ...rest
+  } = validated.data
+  void _s; void _d; void _r
+  // Field kosong ('' dari form) disimpan sebagai null.
+  const blank = <T,>(value: T | '' | undefined) => (value === '' || value === undefined ? null : value)
+  const provinsi = blank(rawProvinsi)
+  const kota = blank(rawKota)
+  const kecamatan = blank(rawKecamatan)
+  const participant = {
+    ...rest,
+    full_name: rest.full_name || '',
+    bib_name: rest.bib_name || '',
+    ktp_number: rest.ktp_number || '',
+    date_of_birth: blank(rest.date_of_birth),
+    gender: blank(rest.gender),
+    tshirt_size: blank(rest.tshirt_size),
+    blood_type: rest.blood_type === 'none' ? null : blank(rest.blood_type),
+    medical_condition: blank(rest.medical_condition),
+    emergency_contact_name: blank(rest.emergency_contact_name),
+    emergency_contact_phone: blank(rest.emergency_contact_phone),
+  }
+  const sizes = participant.tshirt_size ? [participant.tshirt_size] : []
+
+  const quota = await checkPackageQuota('invitation', 1, category, sizes)
   if (!quota.ok) {
     return { error: quota.reason || 'Kuota peserta invitation sudah penuh.' }
   }
@@ -112,7 +141,7 @@ export async function registerInvitation(values: RegisterInvitationFormValues) {
       gender: participant.gender,
       tshirt_size: participant.tshirt_size,
       blood_type: participant.blood_type,
-      medical_condition: participant.medical_condition || null,
+      medical_condition: participant.medical_condition,
       emergency_contact_name: participant.emergency_contact_name,
       emergency_contact_phone: participant.emergency_contact_phone,
       community_name: communityName,
@@ -138,7 +167,7 @@ export async function registerInvitation(values: RegisterInvitationFormValues) {
 
   // Cek ulang kuota setelah insert: dua pendaftar bersamaan bisa sama-sama lolos cek awal
   // untuk sisa kuota terakhir (mis. jersey 4XL tinggal 1). Yang kelebihan di-rollback.
-  const recheck = await checkPackageQuota('invitation', 1, category, [participant.tshirt_size], true)
+  const recheck = await checkPackageQuota('invitation', 1, category, sizes, true)
   if (!recheck.ok) {
     await deleteInvitation(invitation.id)
     return { error: recheck.reason || 'Kuota peserta invitation sudah penuh.' }

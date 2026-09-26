@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { useForm, useWatch, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { UserPlus, Trophy, User, CheckCircle } from 'lucide-react'
 import confetti from 'canvas-confetti'
-import { registerInvitationSchema, RegisterInvitationFormValues } from '@/lib/validations/auth'
+import { buildInvitationSchema, RegisterInvitationFormValues } from '@/lib/validations/auth'
 import { registerInvitation } from '@/app/actions/invitation-registration'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { Input } from '@/components/ui/input'
@@ -43,6 +43,8 @@ export default function InvitationForm() {
   )
   const [sizeChartImage, setSizeChartImage] = useState('')
   const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
+  // Dibaca resolver saat submit — selalu pengaturan admin terbaru.
+  const formSettingsRef = useRef(formSettings)
 
   // Location states
   const [provinsiList, setProvinsiList] = useState<Array<{ value: string; label: string }>>([])
@@ -53,7 +55,9 @@ export default function InvitationForm() {
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
 
   const { register, handleSubmit, control, setValue, reset, formState: { errors, isSubmitting } } = useForm<RegisterInvitationFormValues>({
-    resolver: zodResolver(registerInvitationSchema),
+    // Validasi mengikuti pengaturan admin terbaru (field tersembunyi / tidak wajib boleh kosong).
+    resolver: ((values, context, options) =>
+      zodResolver(buildInvitationSchema(formSettingsRef.current.invitation))(values, context, options as never)) as Resolver<RegisterInvitationFormValues>,
     defaultValues: {
       full_name: '',
       bib_name: '',
@@ -85,25 +89,6 @@ export default function InvitationForm() {
   const selectedParticipantType = useWatch({ control, name: 'participant_type' })
   const participantNameLabel = PARTICIPANT_TYPE_NAME_LABEL[selectedParticipantType || ''] || 'Nama Instansi / Brand'
 
-  const invitationFallbacks = {
-    full_name: 'Peserta Invitation',
-    bib_name: 'PESERTA',
-    ktp_number: '0000000000000000',
-    community_name: '',
-    email: 'peserta@topsell-run.com',
-    phone: '081234567890',
-    date_of_birth: '2000-01-01',
-    gender: 'male',
-    tshirt_size: 'M',
-    blood_type: 'A',
-    medical_condition: '',
-    emergency_contact_name: '-',
-    emergency_contact_phone: '081234567890',
-    provinsi: '-',
-    kota: '-',
-    kecamatan: '-',
-  }
-
   // Load kategori & harga invitation dari pengaturan admin (Kelola Paket / Kelola Periode)
   useEffect(() => {
     fetch('/api/settings/packages')
@@ -126,7 +111,10 @@ export default function InvitationForm() {
     fetch('/api/settings/registration-form')
       .then((r) => (r.ok ? r.json() : null))
       .then((settings) => {
-        if (settings) setFormSettings(settings)
+        if (settings) {
+          formSettingsRef.current = settings
+          setFormSettings(settings)
+        }
       })
       .catch(() => undefined)
   }, [])
@@ -274,9 +262,7 @@ export default function InvitationForm() {
                     disabled={isSubmitting}
                     {...register('full_name')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.full_name} {...register('full_name')} />
-                )}
+                ) : null}
                 {formSettings.invitation.participants.bib_name.visible ? (
                   <Input
                     label={formSettings.invitation.participants.bib_name.label}
@@ -286,9 +272,7 @@ export default function InvitationForm() {
                     disabled={isSubmitting}
                     {...register('bib_name')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.bib_name} {...register('bib_name')} />
-                )}
+                ) : null}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -301,9 +285,7 @@ export default function InvitationForm() {
                     disabled={isSubmitting}
                     {...register('ktp_number')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.ktp_number} {...register('ktp_number')} />
-                )}
+                ) : null}
                 <Select
                   label="Jenis Peserta"
                   required
@@ -322,37 +304,28 @@ export default function InvitationForm() {
                     disabled={isSubmitting}
                     {...register('community_name')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.community_name} {...register('community_name')} />
-                )}
+                ) : null}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {formSettings.invitation.participants.email.visible ? (
-                  <Input
-                    label={formSettings.invitation.participants.email.label}
-                    required={formSettings.invitation.participants.email.required}
-                    type="email"
-                    placeholder={formSettings.invitation.participants.email.placeholder}
-                    error={errors.email?.message}
-                    disabled={isSubmitting}
-                    {...register('email')}
-                  />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.email} {...register('email')} />
-                )}
-                {formSettings.invitation.participants.phone.visible ? (
-                  <Input
-                    label={formSettings.invitation.participants.phone.label}
-                    required={formSettings.invitation.participants.phone.required}
-                    placeholder={formSettings.invitation.participants.phone.placeholder}
-                    error={errors.phone?.message}
-                    disabled={isSubmitting}
-                    {...register('phone')}
-                  />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.phone} {...register('phone')} />
-                )}
+                {/* Email & WA selalu tampil & wajib (cek duplikat + konfirmasi). */}
+                <Input
+                  label={formSettings.invitation.participants.email.label}
+                  required
+                  type="email"
+                  placeholder={formSettings.invitation.participants.email.placeholder}
+                  error={errors.email?.message}
+                  disabled={isSubmitting}
+                  {...register('email')}
+                />
+                <Input
+                  label={formSettings.invitation.participants.phone.label}
+                  required
+                  placeholder={formSettings.invitation.participants.phone.placeholder}
+                  error={errors.phone?.message}
+                  disabled={isSubmitting}
+                  {...register('phone')}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -372,18 +345,19 @@ export default function InvitationForm() {
                       />
                     )}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.date_of_birth} {...register('date_of_birth')} />
-                )}
-                <Select
-                  label="Kategori"
-                  required
-                  error={errors.category?.message}
-                  disabled={isSubmitting}
-                  value={selectedCategory}
-                  options={categoryOptions.map((o) => ({ value: o.value, label: o.label }))}
-                  {...register('category')}
-                />
+                ) : null}
+                {/* Kategori disembunyikan admin → server pakai kategori pertama periode aktif. */}
+                {formSettings.invitation.registrant.category?.visible !== false ? (
+                  <Select
+                    label={formSettings.invitation.registrant.category?.label || 'Kategori'}
+                    required={formSettings.invitation.registrant.category?.required !== false}
+                    error={errors.category?.message}
+                    disabled={isSubmitting}
+                    value={selectedCategory}
+                    options={categoryOptions.map((o) => ({ value: o.value, label: o.label }))}
+                    {...register('category')}
+                  />
+                ) : null}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -396,9 +370,7 @@ export default function InvitationForm() {
                     options={formSettings.invitation.participants.gender.options}
                     {...register('gender')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.gender} {...register('gender')} />
-                )}
+                ) : null}
                 {formSettings.invitation.participants.tshirt_size.visible ? (
                   <div className="flex flex-col gap-1">
                     <Select
@@ -417,9 +389,7 @@ export default function InvitationForm() {
                       Lihat Size Chart
                     </button>
                   </div>
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.tshirt_size} {...register('tshirt_size')} />
-                )}
+                ) : null}
                 {formSettings.invitation.participants.blood_type.visible ? (
                   <Select
                     label={formSettings.invitation.participants.blood_type.label}
@@ -429,9 +399,7 @@ export default function InvitationForm() {
                     options={formSettings.invitation.participants.blood_type.options}
                     {...register('blood_type')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.blood_type} {...register('blood_type')} />
-                )}
+                ) : null}
               </div>
 
               {formSettings.invitation.participants.medical_condition.visible ? (
@@ -443,9 +411,7 @@ export default function InvitationForm() {
                   disabled={isSubmitting}
                   {...register('medical_condition')}
                 />
-              ) : (
-                <input type="hidden" value={invitationFallbacks.medical_condition} {...register('medical_condition')} />
-              )}
+              ) : null}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {formSettings.invitation.participants.emergency_contact_name.visible ? (
@@ -457,9 +423,7 @@ export default function InvitationForm() {
                     disabled={isSubmitting}
                     {...register('emergency_contact_name')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.emergency_contact_name} {...register('emergency_contact_name')} />
-                )}
+                ) : null}
                 {formSettings.invitation.participants.emergency_contact_phone.visible ? (
                   <Input
                     label={formSettings.invitation.participants.emergency_contact_phone.label}
@@ -469,9 +433,7 @@ export default function InvitationForm() {
                     disabled={isSubmitting}
                     {...register('emergency_contact_phone')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.emergency_contact_phone} {...register('emergency_contact_phone')} />
-                )}
+                ) : null}
               </div>
 
               {/* Address Section */}
@@ -490,9 +452,7 @@ export default function InvitationForm() {
                     options={provinsiList}
                     {...register('provinsi')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.provinsi} {...register('provinsi')} />
-                )}
+                ) : null}
                 {formSettings.invitation.registrant.kota.visible ? (
                   <Select
                     label={formSettings.invitation.registrant.kota.label}
@@ -509,9 +469,7 @@ export default function InvitationForm() {
                     options={kotaList}
                     {...register('kota')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.kota} {...register('kota')} />
-                )}
+                ) : null}
                 {formSettings.invitation.registrant.kecamatan.visible ? (
                   <Select
                     label={formSettings.invitation.registrant.kecamatan.label}
@@ -528,9 +486,7 @@ export default function InvitationForm() {
                     options={kecamatanList}
                     {...register('kecamatan')}
                   />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.kecamatan} {...register('kecamatan')} />
-                )}
+                ) : null}
               </div>
 
               {/* --- SYARAT & KETENTUAN (S&K) --- */}

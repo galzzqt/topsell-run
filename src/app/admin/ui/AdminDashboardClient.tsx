@@ -2151,7 +2151,7 @@ export function AdminDashboardClient({
       Email: participant.email,
       WhatsApp: participant.phone,
       'Tanggal Lahir': participant.date_of_birth || '',
-      Gender: participant.gender === 'male' ? 'Laki-laki' : 'Perempuan',
+      Gender: participant.gender === 'male' ? 'Laki-laki' : participant.gender === 'female' ? 'Perempuan' : '-',
       Jersey: participant.tshirt_size,
       'Golongan Darah': participant.blood_type || '',
       'Penyakit Bawaan': participant.medical_condition || '',
@@ -2194,7 +2194,7 @@ export function AdminDashboardClient({
     'Tanggal Lahir': row.date_of_birth || '',
     Usia: row.age ?? '',
     Kategori: row.category,
-    Gender: row.gender === 'male' ? 'Laki-laki' : 'Perempuan',
+    Gender: row.gender === 'male' ? 'Laki-laki' : row.gender === 'female' ? 'Perempuan' : '-',
     Jersey: row.tshirt_size,
     'Golongan Darah': row.blood_type || '',
     'Penyakit Bawaan': row.medical_condition || '',
@@ -3673,7 +3673,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           { label: 'Nomor BIB', value: scanResult.participant.participant_code || '-' },
                           { label: 'Tanggal Lahir', value: scanResult.participant.date_of_birth || '-' },
                           { label: 'Ukuran Baju', value: scanResult.participant.tshirt_size },
-                          { label: 'Gender', value: scanResult.participant.gender === 'male' ? 'Laki-laki' : 'Perempuan' },
+                          { label: 'Gender', value: scanResult.participant.gender === 'male' ? 'Laki-laki' : scanResult.participant.gender === 'female' ? 'Perempuan' : '-' },
                           { label: 'Gol. Darah', value: scanResult.participant.blood_type || '-' },
                           { label: 'Nama Kontak Darurat', value: scanResult.participant.emergency_contact_name || '-' },
                           { label: 'No. Kontak Darurat', value: scanResult.participant.emergency_contact_phone || '-' },
@@ -6616,8 +6616,9 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Pendaftar</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {communitySettingFields
-                      // Invitation tanpa akun/login — field password tidak dipakai.
-                      .filter(([key]) => formEditingPkg !== 'invitation' || (key !== 'password' && key !== 'confirmPassword'))
+                      // Form invitation hanya memakai kategori & alamat di level pendaftar (nama/kontak
+                      // diambil dari field peserta, tanpa akun/password).
+                      .filter(([key]) => formEditingPkg !== 'invitation' || ['category', 'provinsi', 'kota', 'kecamatan'].includes(key))
                       .map(([key, title]) => {
                       const field = settingsForm.registrationForm[formEditingPkg].registrant[key]
                       return (
@@ -6664,6 +6665,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[...participantInputSettingFields, ...(formEditingPkg === 'pacer' ? pacerOnlyInputFields : [])].map(([key, title]) => {
                       const field = settingsForm.registrationForm[formEditingPkg].participants[key] as FormInputConfig
+                      // Invitation: email & WA dipakai cek duplikat + konfirmasi → selalu tampil & wajib.
+                      const locked = formEditingPkg === 'invitation' && (key === 'email' || key === 'phone')
                       return (
                         <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">
                           <p className="text-[10px] font-black uppercase text-sport-orange mb-2">{title}</p>
@@ -6683,7 +6686,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                             <label className="inline-flex items-center gap-2 text-xs font-bold text-brand-muted">
                               <input
                                 type="checkbox"
-                                checked={field.visible}
+                                checked={locked || field.visible}
+                                disabled={locked}
                                 onChange={(event) => updateParticipantField(formEditingPkg, key, { visible: event.target.checked })}
                               />
                               Tampilkan field
@@ -6691,12 +6695,14 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                             <label className="inline-flex items-center gap-2 text-xs font-bold text-sport-orange">
                               <input
                                 type="checkbox"
-                                checked={field.required}
+                                checked={locked || field.required}
+                                disabled={locked}
                                 onChange={(event) => updateParticipantField(formEditingPkg, key, { required: event.target.checked })}
                               />
                               Wajib diisi
                             </label>
                           </div>
+                          {locked && <p className="text-[10px] text-brand-muted mt-2">Selalu wajib untuk invitation (cek duplikat &amp; konfirmasi email/WA).</p>}
                         </div>
                       )
                     })}

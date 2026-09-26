@@ -400,8 +400,9 @@ export interface InvitationParticipant {
   email: string
   phone: string
   date_of_birth: string | null
-  gender: 'male' | 'female'
-  tshirt_size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL' | '4XL' | '5XL'
+  // null = field disembunyikan / tidak diisi (diatur admin di form invitation)
+  gender: 'male' | 'female' | null
+  tshirt_size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL' | '4XL' | '5XL' | null
   blood_type: 'A' | 'B' | 'AB' | 'O' | null
   medical_condition: string | null
   emergency_contact_name: string | null

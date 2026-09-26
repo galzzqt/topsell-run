@@ -573,7 +573,7 @@ export async function checkPackageQuota(
 }
 
 /** Cek apakah pendaftaran paket sedang dibuka: enabled + ada periode yang jendela pendaftarannya mencakup saat ini. */
-export async function isPackageOpen(pkg: PackageKey): Promise<{ open: boolean; reason?: string }> {
+export async function isPackageOpen(pkg: PackageKey): Promise<{ open: boolean; reason?: string; period?: PackagePeriod }> {
   const packages = await getPackagesSettings()
   const config = packages[pkg]
   if (!config?.enabled) return { open: false, reason: 'Pendaftaran paket ini sedang ditutup.' }
@@ -587,7 +587,7 @@ export async function isPackageOpen(pkg: PackageKey): Promise<{ open: boolean; r
   })
 
   if (!activePeriod) return { open: false, reason: 'Belum ada periode pendaftaran yang buka saat ini.' }
-  return { open: true }
+  return { open: true, period: activePeriod }
 }
 
 /** Cek apakah jendela pembayaran periode (dari kategori terpilih) sedang buka. Tanpa batas jika kosong. */

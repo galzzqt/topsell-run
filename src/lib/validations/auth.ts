@@ -206,6 +206,8 @@ export const registerIndividualSchema = participantItemSchema
 export const registerInvitationSchema = participantItemSchema
   .extend({
     participant_type: z.enum(PARTICIPANT_TYPES, { message: 'Jenis peserta wajib dipilih' }),
+    // Opsi "Tidak Tahu" di form bernilai 'none' (disimpan sebagai null).
+    blood_type: z.enum(['A', 'B', 'AB', 'O', 'none'], { message: 'Golongan darah wajib dipilih' }),
     category: invitationCategorySchema,
     provinsi: z.string().min(1, 'Provinsi wajib dipilih'),
     kota: z.string().min(1, 'Kota/Kabupaten wajib dipilih'),
@@ -214,6 +216,53 @@ export const registerInvitationSchema = participantItemSchema
     agreement_data: z.boolean().refine(val => val === true, 'Persetujuan data wajib dicentang'),
     agreement_refund: z.boolean().refine(val => val === true, 'Persetujuan pembatalan/S&K wajib dicentang'),
   })
+
+type FieldToggle = { visible: boolean; required: boolean }
+type InvitationFieldSettings = {
+  participants: Partial<Record<string, FieldToggle>>
+  registrant: Partial<Record<string, FieldToggle>>
+}
+
+// Email & WA wajib: dipakai cek pendaftaran ganda + kanal konfirmasi, tidak bisa dimatikan admin.
+export const INVITATION_LOCKED_FIELDS = ['email', 'phone'] as const
+const INVITATION_PARTICIPANT_FIELDS = [
+  'full_name', 'bib_name', 'ktp_number', 'community_name', 'date_of_birth', 'gender', 'tshirt_size',
+  'blood_type', 'medical_condition', 'emergency_contact_name', 'emergency_contact_phone',
+] as const
+const INVITATION_REGISTRANT_FIELDS = ['provinsi', 'kota', 'kecamatan'] as const
+
+/** Field invitation yang disembunyikan admin (nilainya dikosongkan server). */
+export function hiddenInvitationFields(settings: InvitationFieldSettings) {
+  return [
+    ...INVITATION_PARTICIPANT_FIELDS.filter((key) => settings.participants[key]?.visible === false),
+    ...INVITATION_REGISTRANT_FIELDS.filter((key) => settings.registrant[key]?.visible === false),
+  ]
+}
+
+/**
+ * Skema invitation mengikuti pengaturan form admin: field yang disembunyikan atau tidak wajib
+ * boleh kosong (tetap divalidasi formatnya kalau diisi). Kategori ditangani terpisah (default
+ * ke kategori pertama periode aktif kalau disembunyikan).
+ */
+export function buildInvitationSchema(settings: InvitationFieldSettings) {
+  const shape = registerInvitationSchema.shape
+  const overrides: Partial<Record<keyof typeof shape, z.ZodTypeAny>> = {}
+  const relax = (key: keyof typeof shape, cfg: FieldToggle | undefined) => {
+    if (cfg && (!cfg.visible || !cfg.required)) overrides[key] = shape[key].optional().or(z.literal(''))
+  }
+  for (const key of INVITATION_PARTICIPANT_FIELDS) relax(key, settings.participants[key])
+  for (const key of INVITATION_REGISTRANT_FIELDS) relax(key, settings.registrant[key])
+  // Kategori boleh kosong di form kalau disembunyikan/tidak wajib; server selalu mengisi default
+  // (kategori pertama periode aktif) sebelum validasi, jadi tipenya tetap string.
+  relax('category', settings.registrant.category)
+  // Cast: overrides hanya melebarkan field relaxable menjadi opsional/'' — persis tipe di bawah.
+  return registerInvitationSchema.extend(overrides) as unknown as z.ZodType<InvitationRegistrationData, InvitationRegistrationData>
+}
+
+type RelaxableInvitationField = (typeof INVITATION_PARTICIPANT_FIELDS)[number] | (typeof INVITATION_REGISTRANT_FIELDS)[number]
+export type InvitationRegistrationData = Omit<RegisterInvitationFormValues, RelaxableInvitationField> & {
+  [K in RelaxableInvitationField]?: RegisterInvitationFormValues[K] | ''
+}
 
 // Kategori pacer dikelola admin (Kelola Paket), sama seperti individu.
 const pacerCategorySchema = z.string().min(1, 'Kategori wajib dipilih')
