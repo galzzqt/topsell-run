@@ -8,6 +8,7 @@ import {
 } from './invitation-participants'
 import { updateInvitationRegistration } from './invitation-registrations'
 import { findInvitationPaymentById, updateInvitationPayment } from './invitation-payments'
+import { isDuplicateKeyError } from './invitations'
 import type { InvitationPayment } from '@/lib/types'
 
 async function activatePaidInvitationParticipants(registrationId: string) {
@@ -19,15 +20,23 @@ async function activatePaidInvitationParticipants(registrationId: string) {
   for (const participant of participants) {
     if (participant.payment_status === 'paid' && participant.participant_code) continue
 
-    sequence += 1
-    const participantCode = `TSR-INV-${sequence}`
-    const qrPayload = `TSR_PARTICIPANT:${participant.id}|BIB:${participantCode}|NAME:${participant.bib_name || participant.full_name}`
-
-    await updateInvitationParticipantById(participant.id, {
-      payment_status: 'paid',
-      participant_code: participantCode,
-      qr_code_data: qrPayload,
-    })
+    // Nomor urut dari count bisa sama untuk 2 pendaftaran bersamaan (atau bolong kalau ada
+    // yang dihapus). Index unik participant_code menolak duplikat → coba nomor berikutnya.
+    for (let attempt = 0; ; attempt += 1) {
+      sequence += 1
+      const participantCode = `TSR-INV-${sequence}`
+      const qrPayload = `TSR_PARTICIPANT:${participant.id}|BIB:${participantCode}|NAME:${participant.bib_name || participant.full_name}`
+      try {
+        await updateInvitationParticipantById(participant.id, {
+          payment_status: 'paid',
+          participant_code: participantCode,
+          qr_code_data: qrPayload,
+        })
+        break
+      } catch (error) {
+        if (!isDuplicateKeyError(error) || attempt >= 50) throw error
+      }
+    }
   }
 }
 

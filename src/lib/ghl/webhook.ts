@@ -163,7 +163,7 @@ export async function sendInvitationRegistrationConfirmationWebhook(payload: {
     category: payload.category || '',
     registration_code: payload.registrationCode || '',
     amount: payload.amount ?? null,
-    message: `Pendaftaran invitation ${payload.participantName} untuk TOPSELL RUN 2026 sudah diterima. Silakan masuk ke dashboard dan lakukan pembayaran agar Race Pass dan QR racepack aktif.`,
+    message: `Pendaftaran invitation ${payload.participantName} untuk TOPSELL RUN 2026 sudah diterima. Informasi racepack akan dikirimkan oleh panitia.`,
   })
 }
 

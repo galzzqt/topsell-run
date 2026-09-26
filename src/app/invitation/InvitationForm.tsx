@@ -2,14 +2,12 @@
 
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { UserPlus, Trophy, User } from 'lucide-react'
+import { UserPlus, Trophy, User, CheckCircle } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { registerInvitationSchema, RegisterInvitationFormValues } from '@/lib/validations/auth'
-import { signUpInvitation } from '@/app/actions/invitation-auth'
+import { registerInvitation } from '@/app/actions/invitation-registration'
 import { fetchProvinsi, fetchKota, fetchKecamatan } from '@/lib/utils/location'
 import { Input } from '@/components/ui/input'
 import { DateInput } from '@/components/ui/date-input'
@@ -36,9 +34,9 @@ const PARTICIPANT_TYPE_NAME_LABEL: Record<string, string> = {
 }
 
 export default function InvitationForm() {
-  const router = useRouter()
   const [activeSession, setActiveSession] = useActiveSession()
   const [authError, setAuthError] = useState<string | null>(null)
+  const [isSuccess, setIsSuccess] = useState(false)
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>(
     INVITATION_CATEGORY_OPTIONS.map((o) => ({ value: o.value, label: o.label, price: 0 }))
@@ -54,7 +52,7 @@ export default function InvitationForm() {
   const [loadingKota, setLoadingKota] = useState(false)
   const [loadingKecamatan, setLoadingKecamatan] = useState(false)
 
-  const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm<RegisterInvitationFormValues>({
+  const { register, handleSubmit, control, setValue, reset, formState: { errors, isSubmitting } } = useForm<RegisterInvitationFormValues>({
     resolver: zodResolver(registerInvitationSchema),
     defaultValues: {
       full_name: '',
@@ -75,8 +73,6 @@ export default function InvitationForm() {
       provinsi: '',
       kota: '',
       kecamatan: '',
-      password: '',
-      confirmPassword: '',
       agreement_safety: false,
       agreement_data: false,
       agreement_refund: false,
@@ -106,8 +102,6 @@ export default function InvitationForm() {
     provinsi: '-',
     kota: '-',
     kecamatan: '-',
-    password: 'topsell123',
-    confirmPassword: 'topsell123',
   }
 
   // Load kategori & harga invitation dari pengaturan admin (Kelola Paket / Kelola Periode)
@@ -194,31 +188,11 @@ export default function InvitationForm() {
 
   const onSubmit = async (values: RegisterInvitationFormValues) => {
     setAuthError(null)
-    const {
-      category, provinsi, kota, kecamatan, password, confirmPassword,
-      agreement_safety, agreement_data, agreement_refund, ...participant
-    } = values
-
-    const provinsiName = provinsiList.find((p) => p.value === provinsi)?.label || provinsi
-    const kotaName = kotaList.find((k) => k.value === kota)?.label || kota
-    const kecamatanName = kecamatanList.find((k) => k.value === kecamatan)?.label || kecamatan
-
-    const result = await signUpInvitation({
-      // Akun invitation = record 1 peserta, dinamai sesuai peserta itu sendiri
-      name: participant.full_name,
-      leader_name: participant.full_name,
-      phone: participant.phone,
-      email: participant.email,
-      category,
-      provinsi: provinsiName,
-      kota: kotaName,
-      kecamatan: kecamatanName,
-      password,
-      confirmPassword,
-      participants: [participant],
-      agreement_safety,
-      agreement_data,
-      agreement_refund,
+    const result = await registerInvitation({
+      ...values,
+      provinsi: provinsiList.find((p) => p.value === values.provinsi)?.label || values.provinsi,
+      kota: kotaList.find((k) => k.value === values.kota)?.label || values.kota,
+      kecamatan: kecamatanList.find((k) => k.value === values.kecamatan)?.label || values.kecamatan,
     })
 
     if (result.error) {
@@ -232,27 +206,37 @@ export default function InvitationForm() {
       origin: { y: 0.6 },
       colors: ['#7c3aed', '#ef4444', '#f97316', '#ffffff'],
     })
-    // Tanpa aktivasi email & pembayaran — sesi sudah dibuat server, langsung ke dashboard.
-    router.refresh()
-    router.push('/invitation-dashboard')
+    reset()
+    setIsSuccess(true)
   }
 
   return (
     <SiteShell session={activeSession} onLogout={() => setActiveSession(null)}>
+      <Dialog isOpen={isSuccess} onClose={() => setIsSuccess(false)} title="PENDAFTARAN DITERIMA">
+        <div className="flex flex-col items-center text-center gap-5">
+          <div className="p-5 bg-linear-to-br from-green-400 via-green-500 to-emerald-600 rounded-full shadow-xl">
+            <CheckCircle className="w-12 h-12 text-white" strokeWidth={2.5} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black uppercase text-slate-900 mb-2">Pendaftaran Invitation Diterima!</h3>
+            <p className="text-sm text-brand-muted leading-relaxed">
+              Terima kasih, data pendaftaran Anda sudah kami terima. Konfirmasi pendaftaran akan dikirim melalui
+              <strong> email</strong> dan <strong>WhatsApp</strong>, dan informasi racepack akan dikirimkan oleh panitia.
+            </p>
+          </div>
+          <Button
+            onClick={() => setIsSuccess(false)}
+            variant="primary"
+            className="w-full py-4 text-sm font-black"
+            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ef4444 50%, #f97316 100%)' }}
+          >
+            Tutup
+          </Button>
+        </div>
+      </Dialog>
+
       {/* ——— FORM SECTION ——— */}
       <section className="px-4 pt-10 pb-8 z-10 relative max-w-3xl mx-auto">
-        {/* Login prompt above form */}
-        <div className="mb-4 flex items-center justify-between gap-3 bg-white border border-card-border rounded-xl px-4 py-3 shadow-sm">
-          <p className="text-xs text-brand-muted font-medium">Sudah punya akun?</p>
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 text-xs font-black text-white px-4 py-1.5 rounded-lg transition-all active:scale-95 shadow-sm"
-            style={{ background: 'linear-gradient(90deg, #7c3aed, #ef4444, #f97316)' }}
-          >
-            Login Sekarang →
-          </Link>
-        </div>
-
         <div className="bg-white border border-card-border rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-sport-purple via-sport-red to-sport-orange" />
 
@@ -268,8 +252,8 @@ export default function InvitationForm() {
             <div className="flex items-start gap-3 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3">
               <User className="w-4 h-4 text-sport-purple shrink-0 mt-0.5" />
               <p className="text-[10px] text-brand-muted leading-relaxed font-medium">
-                <span className="text-slate-900 font-bold">Isi data diri Anda.</span> Akun akan dibuat dengan email &amp;
-                nomor WhatsApp ini, dan QR Race Pass resmi langsung tersedia di dashboard.
+                <span className="text-slate-900 font-bold">Isi data diri Anda.</span> Konfirmasi pendaftaran akan dikirim ke email &amp;
+                nomor WhatsApp ini.
               </p>
             </div>
 
@@ -549,36 +533,6 @@ export default function InvitationForm() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {formSettings.invitation.registrant.password.visible ? (
-                  <Input
-                    label={formSettings.invitation.registrant.password.label}
-                    required={formSettings.invitation.registrant.password.required}
-                    type="password"
-                    placeholder={formSettings.invitation.registrant.password.placeholder}
-                    error={errors.password?.message}
-                    disabled={isSubmitting}
-                    {...register('password')}
-                  />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.password} {...register('password')} />
-                )}
-                {formSettings.invitation.registrant.confirmPassword.visible ? (
-                  <Input
-                    label={formSettings.invitation.registrant.confirmPassword.label}
-                    required={formSettings.invitation.registrant.confirmPassword.required}
-                    type="password"
-                    placeholder={formSettings.invitation.registrant.confirmPassword.placeholder}
-                    error={errors.confirmPassword?.message}
-                    disabled={isSubmitting}
-                    {...register('confirmPassword')}
-                  />
-                ) : (
-                  <input type="hidden" value={invitationFallbacks.confirmPassword} {...register('confirmPassword')} />
-                )}
-              </div>
-
-
               {/* --- SYARAT & KETENTUAN (S&K) --- */}
               <div className="mt-2 p-4 bg-violet-50/50 border border-violet-100/80 rounded-xl flex flex-col gap-3">
                 <h4 className="text-[10px] font-black uppercase text-sport-purple tracking-wider">Syarat &amp; Ketentuan</h4>
@@ -626,10 +580,6 @@ export default function InvitationForm() {
               </Button>
             </form>
 
-            <p className="text-xs text-center text-brand-muted mt-2">
-              Sudah punya akun?{' '}
-              <Link href="/login" className="font-bold hover:underline text-sport-purple">Login di sini</Link>
-            </p>
           </div>
         </div>
       </section>

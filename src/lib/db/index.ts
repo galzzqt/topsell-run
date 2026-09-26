@@ -248,6 +248,7 @@ export {
   findInvitationByResetPasswordToken,
   findInvitationByEmailOrPhone,
   clearInvitationResetPasswordToken,
+  isDuplicateKeyError,
 } from './invitations'
 
 export {

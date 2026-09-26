@@ -2,39 +2,31 @@
 
 import { z } from 'zod'
 import { getIndividualSession } from '@/lib/auth/individual'
-import { getInvitationSession } from '@/lib/auth/invitation'
 import { getFamilySession } from '@/lib/auth/family'
 import { getCommunitySession } from '@/lib/auth/community'
 import {
   findIndividualById,
-  findInvitationById,
   findFamilyById,
   findCommunityById,
   findIndividualParticipantsByIndividualId,
-  findInvitationParticipantsByInvitationId,
   findFamilyParticipantsByFamilyId,
   findParticipantsByCommunityId,
   insertIndividualParticipants,
-  insertInvitationParticipants,
   insertFamilyParticipants,
   insertParticipants,
   createIndividualRegistration,
-  createInvitationRegistration,
   createFamilyRegistration,
   createRegistration,
   createIndividualPayment as dbCreateIndividualPayment,
-  createInvitationPayment as dbCreateInvitationPayment,
   createFamilyPayment as dbCreateFamilyPayment,
   createPayment as dbCreatePayment,
   linkIndividualParticipantsToRegistration,
-  linkInvitationParticipantsToRegistration,
   linkFamilyParticipantsToRegistration,
   linkParticipantsToRegistration,
   incrementVoucherUsage,
   findVoucherByCode,
   findBestAutoVoucher,
   markIndividualPaymentPaid,
-  markInvitationPaymentPaid,
   markFamilyPaymentPaid,
   markPaymentPaid,
 } from '@/lib/db'
@@ -42,7 +34,6 @@ import {
   sendRegistrationConfirmationWebhook,
   sendFamilyRegistrationConfirmationWebhook,
   sendIndividualRegistrationConfirmationWebhook,
-  sendInvitationRegistrationConfirmationWebhook,
 } from '@/lib/ghl/webhook'
 import {
   checkPackageQuota,
@@ -55,7 +46,7 @@ import { TSHIRT_SIZES } from '@/lib/admin/settings-schema'
 // Pendaftaran gratis via voucher tidak lewat Xendit, jadi webhook pembayaran tidak
 // pernah jalan. Kirim notifikasi lunas yang sama seperti flow form pendaftaran.
 async function notifyFreeRegistration(
-  pkg: 'community' | 'family' | 'individual' | 'invitation',
+  pkg: 'community' | 'family' | 'individual',
   registrationId: string
 ) {
   try {
@@ -68,16 +59,6 @@ async function notifyFreeRegistration(
         email.sendIndividualReceiptEmail(registrationId),
         email.sendIndividualRacepackEmailsForRegistration(registrationId),
         wa.sendIndividualRacepackWhatsappsForRegistration(registrationId),
-      ])
-    } else if (pkg === 'invitation') {
-      const [email, wa] = await Promise.all([
-        import('@/lib/email/invitation'),
-        import('@/lib/whatsapp/invitation'),
-      ])
-      // Invitation tidak berbayar — tanpa receipt.
-      await Promise.all([
-        email.sendInvitationRacepackEmailsForRegistration(registrationId),
-        wa.sendInvitationRacepackWhatsappsForRegistration(registrationId),
       ])
     } else {
       const [receipt, racepack, wa] = await Promise.all([
@@ -294,133 +275,6 @@ export async function reRegisterIndividualAction(input: {
     })
   } catch (sendError) {
     console.error('Failed to send individual re-registration confirmation webhook:', sendError)
-  }
-
-  return { success: true, registrationId: registration.id }
-}
-
-// ── RE-REGISTER FAMILY (BRO & SIST) ──
-export async function reRegisterInvitationAction(input: {
-  category: string
-  participant: z.infer<typeof participantInputSchema>
-}) {
-  const session = await getInvitationSession()
-  if (!session) return { error: 'Sesi habis. Silakan login kembali.' }
-
-  const invitation = await findInvitationById(session.id)
-  if (!invitation) return { error: 'Data akun invitation tidak ditemukan.' }
-
-  const pVal = participantInputSchema.safeParse(input.participant)
-  if (!pVal.success) {
-    return { error: pVal.error.issues[0]?.message || 'Data peserta tidak valid.' }
-  }
-
-  const category = input.category.trim()
-  if (!category) return { error: 'Pilih kategori terlebih dahulu.' }
-
-  const quota = await checkPackageQuota('invitation', 1, category, [pVal.data.tshirt_size])
-  if (!quota.ok) return { error: quota.reason || 'Kuota peserta untuk kategori ini sudah penuh.' }
-
-  const period = await resolvePeriodForCategory('invitation', category)
-
-  // Block re-registration if user ALREADY has a PAID participant for this period
-  const existingParticipants = await findInvitationParticipantsByInvitationId(session.id)
-  const hasPaidInPeriod = existingParticipants.some(
-    (p) => p.payment_status === 'paid' && (!period?.key || p.period_key === period.key)
-  )
-  if (hasPaidInPeriod) {
-    return {
-      error: 'Anda sudah memiliki pendaftaran LUNAS untuk periode ini. Pendaftaran ulang hanya dapat dilakukan jika status sebelumnya kadaluarsa/gagal atau untuk periode baru.',
-    }
-  }
-
-  const pData = pVal.data
-
-  let inserted
-  try {
-    inserted = await insertInvitationParticipants([
-      {
-        invitation_id: session.id,
-        registration_id: null,
-        period_key: period?.key ?? null,
-        full_name: pData.full_name,
-        bib_name: pData.bib_name,
-        ktp_number: pData.ktp_number,
-        email: pData.email,
-        phone: pData.phone,
-        date_of_birth: pData.date_of_birth,
-        gender: pData.gender,
-        tshirt_size: pData.tshirt_size,
-        blood_type: pData.blood_type,
-        medical_condition: pData.medical_condition || null,
-        emergency_contact_name: pData.emergency_contact_name,
-        emergency_contact_phone: pData.emergency_contact_phone,
-        community_name: pData.community_name ? pData.community_name.trim() : null,
-        provinsi: invitation.provinsi || '-',
-        kota: invitation.kota || '-',
-        kecamatan: invitation.kecamatan || '-',
-        participant_code: null,
-        qr_code_data: null,
-        payment_status: 'pending',
-        checked_in: false,
-        checked_in_at: null,
-        racepack_email_sent_at: null,
-        racepack_email_error: null,
-        racepack_whatsapp_sent_at: null,
-        racepack_whatsapp_error: null,
-      },
-    ])
-  } catch (err) {
-    return { error: 'Gagal menyimpan peserta: ' + (err instanceof Error ? err.message : 'Error') }
-  }
-
-  const participantIds = inserted.map((p) => p.id)
-
-  let registration
-  try {
-    registration = await createInvitationRegistration({
-      invitation_id: session.id,
-      total_participants: 1,
-      total_amount: 0,
-      voucher_code: null,
-      voucher_discount: 0,
-      status: 'pending',
-    })
-    await linkInvitationParticipantsToRegistration(participantIds, registration.id)
-  } catch (err) {
-    return { error: 'Gagal membuat registrasi: ' + (err instanceof Error ? err.message : 'Error') }
-  }
-
-  // Invitation tidak berbayar: langsung aktifkan peserta (generate kode & QR).
-  try {
-    const payment = await dbCreateInvitationPayment({
-      registration_id: registration.id,
-      amount: 0,
-      payment_reference: `FREE-INV-REREG-${session.id.slice(-8).toUpperCase()}-${Date.now()}`,
-      status: 'pending',
-      period_key: period?.key ?? null,
-    })
-    await markInvitationPaymentPaid(payment.id, {
-      payment_method: 'invitation_free',
-      paid_at: new Date().toISOString(),
-    })
-    await notifyFreeRegistration('invitation', registration.id)
-  } catch (err) {
-    return { error: 'Gagal membuat invoice: ' + (err instanceof Error ? err.message : 'Error') }
-  }
-
-  try {
-    await sendInvitationRegistrationConfirmationWebhook({
-      phone: invitation.phone,
-      participantName: invitation.name,
-      participantCount: 1,
-      email: invitation.email,
-      category,
-      registrationCode: invitation.invitation_code,
-      amount: 0,
-    })
-  } catch (sendError) {
-    console.error('Failed to send invitation re-registration confirmation webhook:', sendError)
   }
 
   return { success: true, registrationId: registration.id }

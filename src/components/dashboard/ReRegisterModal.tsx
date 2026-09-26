@@ -12,7 +12,6 @@ import type { AppliedVoucher, VoucherPackageKey } from '@/lib/types/voucher'
 import type { FormSelectOptionConfig, RegistrationFormSettings } from '@/lib/admin/settings-schema'
 import {
   reRegisterIndividualAction,
-  reRegisterInvitationAction,
   reRegisterFamilyAction,
   reRegisterCommunityAction,
 } from '@/app/actions/re-registration'
@@ -50,7 +49,7 @@ const emptyParticipant = (defaultName = '', defaultEmail = '', defaultPhone = ''
 interface ReRegisterModalProps {
   isOpen: boolean
   onClose: () => void
-  packageKey: 'individual' | 'invitation' | 'family' | 'community'
+  packageKey: 'individual' | 'family' | 'community'
   userProfile: {
     name?: string | null
     leader_name?: string | null
@@ -70,9 +69,8 @@ export function ReRegisterModal({
   existingParticipants = [],
   onSuccess,
 }: ReRegisterModalProps) {
-  // Individu & invitation = pendaftaran 1 peserta; family/community minimal 3.
-  const isSolo = packageKey === 'individual' || packageKey === 'invitation'
-  const isFree = packageKey === 'invitation'
+  // Individu = pendaftaran 1 peserta; family/community minimal 3.
+  const isSolo = packageKey === 'individual'
   const packages = usePackagesSettings()
   const pkgConfig = packages?.[packageKey]
 
@@ -187,7 +185,7 @@ export function ReRegisterModal({
 
     try {
       if (isSolo) {
-        const res = await (packageKey === 'invitation' ? reRegisterInvitationAction : reRegisterIndividualAction)({
+        const res = await reRegisterIndividualAction({
           category: selectedCategory,
           participant: participants[0],
           voucherCode: appliedVoucher?.code === 'AUTO' ? undefined : appliedVoucher?.code,
@@ -228,7 +226,7 @@ export function ReRegisterModal({
   }
 
   const packageTitle =
-    packageKey === 'individual' ? 'Individu' : packageKey === 'invitation' ? 'Invitation' : packageKey === 'family' ? 'Bro & Sist' : 'Komunitas'
+    packageKey === 'individual' ? 'Individu' : packageKey === 'family' ? 'Bro & Sist' : 'Komunitas'
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={`Daftar Kembali — Paket ${packageTitle}`} className="max-w-3xl">
@@ -248,9 +246,9 @@ export function ReRegisterModal({
           <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 font-bold flex items-start gap-2.5 text-xs">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
-              <p className="text-amber-300 font-black uppercase">Pendaftaran Periode Ini Sudah {isFree ? 'Aktif' : 'Lunas'}</p>
+              <p className="text-amber-300 font-black uppercase">Pendaftaran Periode Ini Sudah Lunas</p>
               <p className="text-[11px] text-amber-400/90 font-normal mt-0.5">
-                {isFree ? 'Anda sudah terdaftar untuk periode ini.' : 'Anda telah menyelesaikan pembayaran (LUNAS) untuk periode ini.'} Pendaftaran ulang di periode yang sama tidak diperbolehkan. Silakan daftar kembali jika ada periode baru.
+                Anda telah menyelesaikan pembayaran (LUNAS) untuk periode ini. Pendaftaran ulang di periode yang sama tidak diperbolehkan. Silakan daftar kembali jika ada periode baru.
               </p>
             </div>
           </div>
@@ -282,7 +280,7 @@ export function ReRegisterModal({
               >
                 <div>
                   <p className="text-xs font-black uppercase">{cat.label || cat.value}</p>
-                  {!isFree && <p className="text-[10px] text-sport-orange">Rp {cat.price.toLocaleString('id-ID')} / peserta</p>}
+                  <p className="text-[10px] text-sport-orange">Rp {cat.price.toLocaleString('id-ID')} / peserta</p>
                 </div>
                 {selectedCategory === cat.value && (
                   <span className="w-2.5 h-2.5 rounded-full bg-sport-orange shrink-0" />
@@ -442,8 +440,8 @@ export function ReRegisterModal({
           </div>
         </div>
 
-        {/* VOUCHER INPUT — invitation tidak berbayar */}
-        {!isFree && selectedCategory && basePrice > 0 && (
+        {/* VOUCHER INPUT */}
+        {selectedCategory && basePrice > 0 && (
           <div className="mt-2">
             <VoucherInput
               packageKey={packageKey as VoucherPackageKey}
@@ -456,7 +454,7 @@ export function ReRegisterModal({
         )}
 
         {/* RINGKASAN BIAYA */}
-        {!isFree && basePrice > 0 && (
+        {basePrice > 0 && (
           <div className="p-3.5 rounded-xl border border-card-border bg-brand-dark/40 flex flex-col gap-2">
             <p className="text-[10px] font-black uppercase tracking-wider text-brand-muted">Ringkasan Biaya</p>
             <div className="flex justify-between text-xs text-brand-muted">

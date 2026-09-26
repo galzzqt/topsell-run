@@ -6615,7 +6615,10 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted mb-3">Field Pendaftar</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {communitySettingFields.map(([key, title]) => {
+                    {communitySettingFields
+                      // Invitation tanpa akun/login — field password tidak dipakai.
+                      .filter(([key]) => formEditingPkg !== 'invitation' || (key !== 'password' && key !== 'confirmPassword'))
+                      .map(([key, title]) => {
                       const field = settingsForm.registrationForm[formEditingPkg].registrant[key]
                       return (
                         <div key={key} className="border border-card-border rounded-lg p-3 bg-brand-gray/20">

@@ -210,15 +210,9 @@ export const registerInvitationSchema = participantItemSchema
     provinsi: z.string().min(1, 'Provinsi wajib dipilih'),
     kota: z.string().min(1, 'Kota/Kabupaten wajib dipilih'),
     kecamatan: z.string().min(1, 'Kecamatan wajib dipilih'),
-    password: z.string().min(6, 'Password minimal 6 karakter'),
-    confirmPassword: z.string().min(1, 'Konfirmasi password wajib diisi'),
     agreement_safety: z.boolean().refine(val => val === true, 'Persetujuan risiko wajib dicentang'),
     agreement_data: z.boolean().refine(val => val === true, 'Persetujuan data wajib dicentang'),
     agreement_refund: z.boolean().refine(val => val === true, 'Persetujuan pembatalan/S&K wajib dicentang'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Konfirmasi password tidak cocok',
-    path: ['confirmPassword'],
   })
 
 // Kategori pacer dikelola admin (Kelola Paket), sama seperti individu.

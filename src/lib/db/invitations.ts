@@ -37,6 +37,40 @@ export async function listInvitations() {
   return docs.map((doc) => docToInvitation(stripMongoId(doc) as Record<string, unknown>))
 }
 
+// ensureIndexes() tidak pernah dipanggil saat startup, jadi index unik invitation dibuat
+// lazily sekali per proses. Index ini yang mencegah pendaftaran ganda saat submit bersamaan.
+let invitationIndexesPromise: Promise<void> | null = null
+export function ensureInvitationIndexes() {
+  invitationIndexesPromise ??= (async () => {
+    const db = await getDb()
+    await Promise.all([
+      db.collection('invitations').createIndexes([
+        { key: { id: 1 }, unique: true },
+        { key: { phone: 1 }, unique: true },
+        { key: { email: 1 }, unique: true, partialFilterExpression: { email: { $type: 'string' } } },
+        { key: { invitation_code: 1 }, unique: true },
+        { key: { category: 1 } },
+      ]),
+      db.collection('invitation_participants').createIndexes([
+        { key: { id: 1 }, unique: true },
+        { key: { invitation_id: 1 } },
+        { key: { registration_id: 1 } },
+        { key: { participant_code: 1 }, unique: true, partialFilterExpression: { participant_code: { $type: 'string' } } },
+        { key: { payment_status: 1 } },
+      ]),
+    ])
+  })().catch((error) => {
+    // Jangan blokir pendaftaran (mis. data lama duplikat); coba lagi di request berikutnya.
+    invitationIndexesPromise = null
+    console.error('Failed to ensure invitation indexes:', error)
+  })
+  return invitationIndexesPromise
+}
+
+export function isDuplicateKeyError(error: unknown) {
+  return typeof error === 'object' && error !== null && (error as { code?: number }).code === 11000
+}
+
 export async function createUniqueInvitationCode() {
   const db = await getDb()
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -60,6 +94,7 @@ export async function createInvitation(input: {
   voucher_code?: string | null
   voucher_discount?: number
 }) {
+  await ensureInvitationIndexes()
   const db = await getDb()
   const id = newId()
   const timestamp = nowIso()

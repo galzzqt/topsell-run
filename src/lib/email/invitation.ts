@@ -116,6 +116,44 @@ function renderInvitationEmail(
   `
 }
 
+// Konfirmasi pendaftaran invitation (tanpa pembayaran & tanpa QR — QR dari EO).
+export async function sendInvitationRegistrationEmail(input: { email: string; name: string; code: string; category: string }) {
+  if (!isEmailConfigured()) return { skipped: true }
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:600px;margin:0 auto">
+      <div style="background:linear-gradient(90deg,#7c3aed,#ef4444,#f97316);padding:20px;text-align:center;border-radius:12px 12px 0 0">
+        <h2 style="margin:0;color:#fff;font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:2px">PENDAFTARAN DITERIMA</h2>
+        <p style="margin:5px 0 0;color:#fff;opacity:.8;font-size:12px">TOPSELL RUN 2026 — Invitation</p>
+      </div>
+      <div style="padding:24px;background:#fff;border:1px solid #e5e7eb;border-radius:0 0 12px 12px">
+        <p style="margin:0 0 20px">Halo <strong>${escapeHtml(input.name)}</strong>,<br/><br/>
+          Terima kasih, pendaftaran invitation Anda untuk TOPSELL RUN 2026 sudah kami terima.
+          Informasi racepack akan dikirimkan oleh panitia kepada Anda.</p>
+        <div style="background:#f9fafb;padding:16px;border-radius:8px">
+          <table style="width:100%;border-collapse:collapse">
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:12px">Kode Pendaftaran</td><td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700;color:#7c3aed">${escapeHtml(input.code)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:12px">Kategori</td><td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700">${escapeHtml(input.category)}</td></tr>
+          </table>
+        </div>
+        <p style="margin:20px 0 0;color:#6b7280;font-size:12px">Email otomatis dari sistem TOPSELL RUN 2026.</p>
+      </div>
+    </div>
+  `
+
+  try {
+    await createTransporter().sendMail({
+      from: getSmtpConfig().from,
+      to: input.email,
+      subject: `Pendaftaran Diterima - TOPSELL RUN 2026 (${input.code})`,
+      html,
+    })
+    return { success: true }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Gagal mengirim email konfirmasi' }
+  }
+}
+
 export async function sendInvitationReceiptEmail(registrationId: string) {
   if (!isEmailConfigured()) return { skipped: true }
 

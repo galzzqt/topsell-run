@@ -458,7 +458,7 @@ export async function countJerseyUsage(pkg: PackageKey): Promise<Record<string, 
 }
 
 /** Cek ukuran jersey aktif & kuota per ukuran masih cukup untuk daftar ukuran yang akan ditambahkan. */
-async function checkJerseyQuota(pkg: PackageKey, sizes: string[]): Promise<{ ok: boolean; reason?: string }> {
+async function checkJerseyQuota(pkg: PackageKey, sizes: string[], alreadyCounted = false): Promise<{ ok: boolean; reason?: string }> {
   const settings = await readAdminSettings()
   const options = settings.registrationForm[pkg].participants.tshirt_size.options
   const needed: Record<string, number> = {}
@@ -472,7 +472,7 @@ async function checkJerseyQuota(pkg: PackageKey, sizes: string[]): Promise<{ ok:
     if (!option || option.enabled === false) return { ok: false, reason: `Ukuran jersey ${size} tidak tersedia untuk paket ini.` }
     if (option.soldOut) return { ok: false, reason: `Jersey ukuran ${option.label} sudah habis. Silakan pilih ukuran lain.` }
     const quota = option.quota || 0
-    if (quota > 0 && (used[size] || 0) + count > quota) {
+    if (quota > 0 && (used[size] || 0) + (alreadyCounted ? 0 : count) > quota) {
       const remaining = Math.max(0, quota - (used[size] || 0))
       return {
         ok: false,
@@ -541,13 +541,16 @@ export async function checkPackageQuota(
   pkg: PackageKey,
   adding: number,
   category?: string | null,
-  sizes: string[] = []
+  sizes: string[] = [],
+  /** true = cek ulang SETELAH insert (peserta baru sudah ikut terhitung di `used`). */
+  alreadyCounted = false
 ): Promise<{ ok: boolean; reason?: string }> {
   await releaseExpiredPendingRegistrations(pkg)
 
   // ponytail: cek-lalu-insert (tidak atomik), pendaftaran bersamaan bisa lewat kuota 1-2 seperti kuota kategori.
+  // Invitation menutup celah ini dengan cek ulang alreadyCounted setelah insert + rollback.
   if (sizes.length > 0) {
-    const jersey = await checkJerseyQuota(pkg, sizes)
+    const jersey = await checkJerseyQuota(pkg, sizes, alreadyCounted)
     if (!jersey.ok) return jersey
   }
 
@@ -555,7 +558,7 @@ export async function checkPackageQuota(
   const categoryConfig = period?.categories.find((c) => c.value === category)
   if (categoryConfig && categoryConfig.quota > 0) {
     const usedInCategory = await countPackageParticipantsByCategory(pkg, category!)
-    if (usedInCategory + adding > categoryConfig.quota) {
+    if (usedInCategory + (alreadyCounted ? 0 : adding) > categoryConfig.quota) {
       const remaining = Math.max(0, categoryConfig.quota - usedInCategory)
       return {
         ok: false,

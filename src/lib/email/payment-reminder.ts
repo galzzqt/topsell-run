@@ -21,7 +21,6 @@ const POOLS: Pool[] = [
   { payments: 'payments', registrations: 'registrations', owners: 'communities', ownerIdField: 'community_id', codeField: 'community_code', dashboardPath: '/community-dashboard' },
   { payments: 'family_payments', registrations: 'family_registrations', owners: 'families', ownerIdField: 'family_id', codeField: 'family_code', dashboardPath: '/dashboard' },
   { payments: 'individual_payments', registrations: 'individual_registrations', owners: 'individuals', ownerIdField: 'individual_id', codeField: 'individual_code', dashboardPath: '/individu-dashboard' },
-  { payments: 'invitation_payments', registrations: 'invitation_registrations', owners: 'invitations', ownerIdField: 'invitation_id', codeField: 'invitation_code', dashboardPath: '/invitation-dashboard' },
 ]
 
 function getSmtpConfig() {

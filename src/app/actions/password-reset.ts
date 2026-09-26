@@ -4,37 +4,31 @@ import {
   findIndividualByEmailOrPhone,
   findFamilyByEmailOrPhone,
   findCommunityByEmailOrPhone,
-  findInvitationByEmailOrPhone,
   findPacerByEmailOrPhone,
   findUmkmByEmailOrPhone,
   findIndividualById,
   findFamilyById,
   findCommunityById,
-  findInvitationById,
   findPacerById,
   findUmkmById,
   findIndividualByResetPasswordToken,
   findFamilyByResetPasswordToken,
   findCommunityByResetPasswordToken,
-  findInvitationByResetPasswordToken,
   findPacerByResetPasswordToken,
   findUmkmByResetPasswordToken,
   setIndividualResetPasswordToken,
   setFamilyResetPasswordToken,
   setCommunityResetPasswordToken,
-  setInvitationResetPasswordToken,
   setPacerResetPasswordToken,
   setUmkmResetPasswordToken,
   clearIndividualResetPasswordToken,
   clearFamilyResetPasswordToken,
   clearCommunityResetPasswordToken,
-  clearInvitationResetPasswordToken,
   clearPacerResetPasswordToken,
   clearUmkmResetPasswordToken,
   updateIndividualAuthPassword,
   updateFamilyAuthPassword,
   updateCommunityAuthPassword,
-  updateInvitationAuthPassword,
   updatePacerAuthPassword,
   updateUmkmAuthPassword,
 } from '@/lib/db'
@@ -47,7 +41,7 @@ import {
 import { ingestAdminLog } from '@/lib/axiom/ingest'
 import { getAdminSession } from '@/lib/admin/auth'
 
-type PackageType = 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm'
+type PackageType = 'community' | 'family' | 'individual' | 'pacer' | 'umkm'
 
 async function getBaseAppUrl(): Promise<string> {
   if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
@@ -141,21 +135,6 @@ export async function requestPasswordReset(identifier: string): Promise<{
     }
   }
 
-  // Cek Invitation
-  if (!user) {
-    const invitation = await findInvitationByEmailOrPhone(trimmed)
-    if (invitation) {
-      user = {
-        id: invitation.id,
-        name: invitation.name,
-        email: invitation.email,
-        phone: invitation.phone,
-        packageType: 'invitation',
-        resetSentAt: invitation.reset_password_sent_at,
-      }
-    }
-  }
-
   // Cek Pacer
   if (!user) {
     const pacer = await findPacerByEmailOrPhone(trimmed)
@@ -222,9 +201,6 @@ export async function requestPasswordReset(identifier: string): Promise<{
       break
     case 'community':
       await setCommunityResetPasswordToken(user.id, token, expiresAt)
-      break
-    case 'invitation':
-      await setInvitationResetPasswordToken(user.id, token, expiresAt)
       break
     case 'pacer':
       await setPacerResetPasswordToken(user.id, token, expiresAt)
@@ -325,19 +301,6 @@ export async function verifyResetPasswordToken(token: string): Promise<{
         packageType: 'community',
         expiresAt: community.reset_password_token_expires,
         loginUrl: '/community-login',
-      }
-    }
-  }
-
-  if (!foundUser) {
-    const invitation = await findInvitationByResetPasswordToken(token)
-    if (invitation) {
-      foundUser = {
-        name: invitation.name,
-        email: invitation.email,
-        packageType: 'invitation',
-        expiresAt: invitation.reset_password_token_expires,
-        loginUrl: '/login',
       }
     }
   }
@@ -465,20 +428,6 @@ export async function completePasswordReset(
   }
 
   if (!user) {
-    const invitation = await findInvitationByResetPasswordToken(token)
-    if (invitation) {
-      user = {
-        id: invitation.id,
-        name: invitation.name,
-        email: invitation.email,
-        packageType: 'invitation',
-        expiresAt: invitation.reset_password_token_expires,
-        loginUrl: '/login',
-      }
-    }
-  }
-
-  if (!user) {
     const pacer = await findPacerByResetPasswordToken(token)
     if (pacer) {
       user = {
@@ -537,10 +486,6 @@ export async function completePasswordReset(
     case 'community':
       await updateCommunityAuthPassword(user.id, passwordRecord)
       await clearCommunityResetPasswordToken(user.id)
-      break
-    case 'invitation':
-      await updateInvitationAuthPassword(user.id, passwordRecord)
-      await clearInvitationResetPasswordToken(user.id)
       break
     case 'pacer':
       await updatePacerAuthPassword(user.id, passwordRecord)
@@ -605,9 +550,6 @@ export async function adminTriggerPasswordReset(
   } else if (packageType === 'community') {
     const doc = await findCommunityById(id)
     if (doc) user = { id: doc.id, name: doc.name, email: doc.email, packageType: 'community' }
-  } else if (packageType === 'invitation') {
-    const doc = await findInvitationById(id)
-    if (doc) user = { id: doc.id, name: doc.name, email: doc.email, packageType: 'invitation' }
   } else if (packageType === 'pacer') {
     const doc = await findPacerById(id)
     if (doc) user = { id: doc.id, name: doc.name, email: doc.email, packageType: 'pacer' }
@@ -632,9 +574,6 @@ export async function adminTriggerPasswordReset(
       break
     case 'community':
       await setCommunityResetPasswordToken(user.id, token, expiresAt)
-      break
-    case 'invitation':
-      await setInvitationResetPasswordToken(user.id, token, expiresAt)
       break
     case 'pacer':
       await setPacerResetPasswordToken(user.id, token, expiresAt)
