@@ -29,7 +29,7 @@ const PARTICIPANT_TYPE_OPTIONS = [
 
 const PARTICIPANT_TYPE_NAME_LABEL: Record<string, string> = {
   brand: 'Nama Brand',
-  instansi: 'Nama Instansi',
+  instansi: 'Nama Instansi/Brand',
   perseorangan: 'Nama Perseorangan',
 }
 
@@ -72,7 +72,8 @@ export default function InvitationForm() {
       emergency_contact_name: '',
       emergency_contact_phone: '',
       community_name: '',
-      participant_type: 'instansi',
+      // Kosong agar user wajib memilih sendiri (divalidasi skema).
+      participant_type: '' as RegisterInvitationFormValues['participant_type'],
       category: INVITATION_CATEGORY_OPTIONS[0].value,
       provinsi: '',
       kota: '',
@@ -87,7 +88,7 @@ export default function InvitationForm() {
   const selectedKota = useWatch({ control, name: 'kota' })
   const selectedCategory = useWatch({ control, name: 'category' })
   const selectedParticipantType = useWatch({ control, name: 'participant_type' })
-  const participantNameLabel = PARTICIPANT_TYPE_NAME_LABEL[selectedParticipantType || ''] || 'Nama Instansi / Brand'
+  const participantNameLabel = PARTICIPANT_TYPE_NAME_LABEL[selectedParticipantType || ''] || 'Nama Instansi/Brand'
 
   // Load kategori & harga invitation dari pengaturan admin (Kelola Paket / Kelola Periode)
   useEffect(() => {
@@ -292,14 +293,14 @@ export default function InvitationForm() {
                   error={errors.participant_type?.message}
                   disabled={isSubmitting}
                   options={PARTICIPANT_TYPE_OPTIONS}
-                  defaultValue="instansi"
+                  placeholder="Pilih jenis peserta"
                   {...register('participant_type')}
                 />
                 {formSettings.invitation.participants.community_name?.visible ? (
                   <Input
                     label={participantNameLabel}
                     required={formSettings.invitation.participants.community_name.required}
-                    placeholder={`Masukkan ${participantNameLabel.toLowerCase()}`}
+                    placeholder={selectedParticipantType === 'perseorangan' ? 'Masukkan nama perseorangan' : 'Contoh : Samsung, Mandiri, dll'}
                     error={errors.community_name?.message}
                     disabled={isSubmitting}
                     {...register('community_name')}
