@@ -206,7 +206,7 @@ export const registerIndividualSchema = participantItemSchema
 export const registerInvitationSchema = participantItemSchema
   .extend({
     participant_type: z.enum(PARTICIPANT_TYPES, { message: 'Jenis peserta wajib dipilih' }),
-    community_name: z.string().trim().min(1, 'Nama instansi/brand wajib diisi').max(100, 'Nama instansi/brand maksimal 100 karakter'),
+    community_name: z.string().trim().min(1, 'Nama wajib diisi').max(100, 'Nama maksimal 100 karakter'),
     // Opsi "Tidak Tahu" di form bernilai 'none' (disimpan sebagai null).
     blood_type: z.enum(['A', 'B', 'AB', 'O', 'none'], { message: 'Golongan darah wajib dipilih' }),
     category: invitationCategorySchema,

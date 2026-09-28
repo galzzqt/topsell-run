@@ -27,10 +27,11 @@ const PARTICIPANT_TYPE_OPTIONS = [
   { value: 'perseorangan', label: 'Perseorangan' },
 ] as const
 
-const PARTICIPANT_TYPE_NAME_LABEL: Record<string, string> = {
-  brand: 'Nama Brand',
-  instansi: 'Nama Instansi/Brand',
-  perseorangan: 'Nama Perseorangan',
+// Field nama baru muncul setelah jenis peserta dipilih; label & placeholder mengikuti pilihan.
+const PARTICIPANT_TYPE_NAME_FIELD: Record<string, { label: string; placeholder: string }> = {
+  brand: { label: 'Nama Brand', placeholder: 'Contoh : Samsung, Mandiri, dll' },
+  instansi: { label: 'Nama Instansi', placeholder: 'Contoh : Dinkes, Polres, dll' },
+  perseorangan: { label: 'Nama Perseorangan', placeholder: 'Masukkan nama perseorangan' },
 }
 
 export default function InvitationForm() {
@@ -88,7 +89,7 @@ export default function InvitationForm() {
   const selectedKota = useWatch({ control, name: 'kota' })
   const selectedCategory = useWatch({ control, name: 'category' })
   const selectedParticipantType = useWatch({ control, name: 'participant_type' })
-  const participantNameLabel = PARTICIPANT_TYPE_NAME_LABEL[selectedParticipantType || ''] || 'Nama Instansi/Brand'
+  const participantNameField = PARTICIPANT_TYPE_NAME_FIELD[selectedParticipantType || '']
 
   // Load kategori & harga invitation dari pengaturan admin (Kelola Paket / Kelola Periode)
   useEffect(() => {
@@ -296,15 +297,17 @@ export default function InvitationForm() {
                   placeholder="Pilih jenis peserta"
                   {...register('participant_type')}
                 />
-                {/* Nama instansi/brand selalu tampil & wajib. */}
-                <Input
-                  label={participantNameLabel}
-                  required
-                  placeholder={selectedParticipantType === 'perseorangan' ? 'Masukkan nama perseorangan' : 'Contoh : Samsung, Mandiri, dll'}
-                  error={errors.community_name?.message}
-                  disabled={isSubmitting}
-                  {...register('community_name')}
-                />
+                {/* Nama brand/instansi/perseorangan wajib, tampil setelah jenis peserta dipilih. */}
+                {participantNameField ? (
+                  <Input
+                    label={participantNameField.label}
+                    required
+                    placeholder={participantNameField.placeholder}
+                    error={errors.community_name?.message}
+                    disabled={isSubmitting}
+                    {...register('community_name')}
+                  />
+                ) : null}
 
               </div>
 
