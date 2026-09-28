@@ -206,6 +206,7 @@ export const registerIndividualSchema = participantItemSchema
 export const registerInvitationSchema = participantItemSchema
   .extend({
     participant_type: z.enum(PARTICIPANT_TYPES, { message: 'Jenis peserta wajib dipilih' }),
+    community_name: z.string().trim().min(1, 'Nama instansi/brand wajib diisi').max(100, 'Nama instansi/brand maksimal 100 karakter'),
     // Opsi "Tidak Tahu" di form bernilai 'none' (disimpan sebagai null).
     blood_type: z.enum(['A', 'B', 'AB', 'O', 'none'], { message: 'Golongan darah wajib dipilih' }),
     category: invitationCategorySchema,
@@ -223,10 +224,11 @@ type InvitationFieldSettings = {
   registrant: Partial<Record<string, FieldToggle>>
 }
 
-// Email & WA wajib: dipakai cek pendaftaran ganda + kanal konfirmasi, tidak bisa dimatikan admin.
-export const INVITATION_LOCKED_FIELDS = ['email', 'phone'] as const
+// Email & WA wajib: dipakai cek pendaftaran ganda + kanal konfirmasi; nama instansi/brand juga
+// selalu wajib. Tidak bisa dimatikan admin.
+export const INVITATION_LOCKED_FIELDS = ['email', 'phone', 'community_name'] as const
 const INVITATION_PARTICIPANT_FIELDS = [
-  'full_name', 'bib_name', 'ktp_number', 'community_name', 'date_of_birth', 'gender', 'tshirt_size',
+  'full_name', 'bib_name', 'ktp_number', 'date_of_birth', 'gender', 'tshirt_size',
   'blood_type', 'medical_condition', 'emergency_contact_name', 'emergency_contact_phone',
 ] as const
 const INVITATION_REGISTRANT_FIELDS = ['provinsi', 'kota', 'kecamatan'] as const

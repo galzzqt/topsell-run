@@ -296,16 +296,16 @@ export default function InvitationForm() {
                   placeholder="Pilih jenis peserta"
                   {...register('participant_type')}
                 />
-                {formSettings.invitation.participants.community_name?.visible ? (
-                  <Input
-                    label={participantNameLabel}
-                    required={formSettings.invitation.participants.community_name.required}
-                    placeholder={selectedParticipantType === 'perseorangan' ? 'Masukkan nama perseorangan' : 'Contoh : Samsung, Mandiri, dll'}
-                    error={errors.community_name?.message}
-                    disabled={isSubmitting}
-                    {...register('community_name')}
-                  />
-                ) : null}
+                {/* Nama instansi/brand selalu tampil & wajib. */}
+                <Input
+                  label={participantNameLabel}
+                  required
+                  placeholder={selectedParticipantType === 'perseorangan' ? 'Masukkan nama perseorangan' : 'Contoh : Samsung, Mandiri, dll'}
+                  error={errors.community_name?.message}
+                  disabled={isSubmitting}
+                  {...register('community_name')}
+                />
+
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
