@@ -223,7 +223,8 @@ export async function registerInvitation(values: RegisterInvitationFormValues) {
         email: participant.email,
         name: participant.full_name,
         code: invitationCode,
-        category,
+        participantType: participant.participant_type || '-',
+        participantTypeName: communityName || '-',
       }).then((result) => {
         if ('error' in result) throw new Error(result.error)
       }),

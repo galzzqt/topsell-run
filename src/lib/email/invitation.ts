@@ -117,7 +117,7 @@ function renderInvitationEmail(
 }
 
 // Konfirmasi pendaftaran invitation (tanpa pembayaran & tanpa QR — QR dari EO).
-export async function sendInvitationRegistrationEmail(input: { email: string; name: string; code: string; category: string }) {
+export async function sendInvitationRegistrationEmail(input: { email: string; name: string; code: string; participantType: string; participantTypeName: string }) {
   if (!isEmailConfigured()) return { skipped: true }
 
   const html = `
@@ -133,7 +133,8 @@ export async function sendInvitationRegistrationEmail(input: { email: string; na
         <div style="background:#f9fafb;padding:16px;border-radius:8px">
           <table style="width:100%;border-collapse:collapse">
             <tr><td style="padding:6px 0;color:#6b7280;font-size:12px">Kode Pendaftaran</td><td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700;color:#7c3aed">${escapeHtml(input.code)}</td></tr>
-            <tr><td style="padding:6px 0;color:#6b7280;font-size:12px">Kategori</td><td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700">${escapeHtml(input.category)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:12px">Tipe Peserta</td><td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700;text-transform:capitalize">${escapeHtml(input.participantType)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;font-size:12px">Nama Instansi / Brand</td><td style="padding:6px 0;text-align:right;font-size:12px;font-weight:700">${escapeHtml(input.participantTypeName)}</td></tr>
           </table>
         </div>
         <p style="margin:20px 0 0;color:#6b7280;font-size:12px">Email otomatis dari sistem TOPSELL RUN 2026.</p>
