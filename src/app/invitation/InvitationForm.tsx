@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useForm, useWatch, Controller, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { SiteShell, useActiveSession } from '@/components/landing/shell'
 import { INVITATION_CATEGORY_OPTIONS } from '@/lib/types'
-import { DEFAULT_REGISTRATION_FORM_SETTINGS, type RegistrationFormSettings } from '@/lib/admin/settings-schema'
+import type { RegistrationFormSettings } from '@/lib/admin/settings-schema'
 
 type CategoryOption = { value: string; label: string; price: number }
 
@@ -34,7 +34,7 @@ const PARTICIPANT_TYPE_NAME_FIELD: Record<string, { label: string; placeholder: 
   perseorangan: { label: 'Nama Perseorangan', placeholder: 'Masukkan nama perseorangan' },
 }
 
-export default function InvitationForm() {
+export default function InvitationForm({ initialFormSettings }: { initialFormSettings: RegistrationFormSettings }) {
   const [activeSession, setActiveSession] = useActiveSession()
   const [authError, setAuthError] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
@@ -43,9 +43,7 @@ export default function InvitationForm() {
     INVITATION_CATEGORY_OPTIONS.map((o) => ({ value: o.value, label: o.label, price: 0 }))
   )
   const [sizeChartImage, setSizeChartImage] = useState('')
-  const [formSettings, setFormSettings] = useState<RegistrationFormSettings>(DEFAULT_REGISTRATION_FORM_SETTINGS)
-  // Dibaca resolver saat submit — selalu pengaturan admin terbaru.
-  const formSettingsRef = useRef(formSettings)
+  const formSettings = initialFormSettings
 
   // Location states
   const [provinsiList, setProvinsiList] = useState<Array<{ value: string; label: string }>>([])
@@ -58,7 +56,7 @@ export default function InvitationForm() {
   const { register, handleSubmit, control, setValue, reset, formState: { errors, isSubmitting } } = useForm<RegisterInvitationFormValues>({
     // Validasi mengikuti pengaturan admin terbaru (field tersembunyi / tidak wajib boleh kosong).
     resolver: ((values, context, options) =>
-      zodResolver(buildInvitationSchema(formSettingsRef.current.invitation))(values, context, options as never)) as Resolver<RegisterInvitationFormValues>,
+      zodResolver(buildInvitationSchema(formSettings.invitation))(values, context, options as never)) as Resolver<RegisterInvitationFormValues>,
     defaultValues: {
       full_name: '',
       bib_name: '',
@@ -107,19 +105,6 @@ export default function InvitationForm() {
       })
       .catch(() => undefined)
   }, [setValue])
-
-  // Load konfigurasi field form pendaftaran invitation (label/placeholder/visibility) dari admin
-  useEffect(() => {
-    fetch('/api/settings/registration-form')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((settings) => {
-        if (settings) {
-          formSettingsRef.current = settings
-          setFormSettings(settings)
-        }
-      })
-      .catch(() => undefined)
-  }, [])
 
   // Load provinces on mount
   useEffect(() => {

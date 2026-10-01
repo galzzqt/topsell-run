@@ -606,6 +606,26 @@ export async function checkPaymentWindow(pkg: PackageKey, category: string | nul
   return { ok: true }
 }
 
+/**
+ * Pengaturan form pendaftaran untuk publik: ukuran jersey nonaktif disembunyikan; ukuran yang
+ * kuotanya habis ditandai "Habis" & tidak bisa dipilih.
+ */
+export async function readPublicRegistrationForm(): Promise<RegistrationFormSettings> {
+  const { registrationForm } = await readAdminSettings()
+  await Promise.all(
+    (Object.keys(registrationForm) as PackageKey[]).map(async (pkg) => {
+      const field = registrationForm[pkg].participants.tshirt_size
+      const enabled = field.options.filter((option) => option.enabled !== false)
+      const used = enabled.some((option) => (option.quota || 0) > 0) ? await countJerseyUsage(pkg) : {}
+      field.options = enabled.map(({ value, label, soldOut, quota = 0 }) => {
+        const full = soldOut || (quota > 0 && (used[value] || 0) >= quota)
+        return full ? { value, label: `${label} (Habis)`, disabled: true } : { value, label }
+      })
+    })
+  )
+  return registrationForm
+}
+
 export async function readAdminSettings(): Promise<AdminSettings> {
   try {
     const value = await getAppSetting<Partial<AdminSettings>>(FORM_SETTINGS_KEY)

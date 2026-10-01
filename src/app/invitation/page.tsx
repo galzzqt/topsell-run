@@ -1,4 +1,4 @@
-import { isPackageOpen } from '@/lib/admin/settings'
+import { isPackageOpen, readPublicRegistrationForm } from '@/lib/admin/settings'
 import { ClosedNotice } from '@/components/landing/ClosedNotice'
 import InvitationForm from './InvitationForm'
 
@@ -7,5 +7,6 @@ export default async function InvitationPage() {
   if (!gate.open) {
     return <ClosedNotice reason={gate.reason} />
   }
-  return <InvitationForm />
+  // Pengaturan form dimuat di server agar field tersembunyi tidak sempat tampil (flash) saat load.
+  return <InvitationForm initialFormSettings={await readPublicRegistrationForm()} />
 }
