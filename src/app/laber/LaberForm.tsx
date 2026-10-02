@@ -136,7 +136,7 @@ export default function LaberForm({ communities }: { communities: { value: strin
                 Pendaftaran Laber
               </h1>
               <p className="text-xs text-brand-muted font-medium max-w-sm">
-                Lari Bersama Komunitas Menuju Topsell Run 2026. Lengkapi data diri Anda di bawah ini untuk bergabung.
+                Lengkapi data diri Anda di bawah ini untuk bergabung.
               </p>
             </div>
 
@@ -218,7 +218,7 @@ export default function LaberForm({ communities }: { communities: { value: strin
 
               <div className="flex items-center justify-center gap-1.5 text-[11px] text-brand-muted font-medium pt-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Data aman dan langsung terdaftar di sistem Topsell Run 2026
+                Data aman dan langsung terdaftar di sistem.
               </div>
             </form>
           </div>
