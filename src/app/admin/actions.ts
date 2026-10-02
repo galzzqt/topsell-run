@@ -288,7 +288,7 @@ export async function markRacepackPickedUp(scanValue: string) {
   return { success: true, participant: updated }
 }
 
-const phoneRegex = /^08[1-9][0-9]{8,11}$/
+const phoneRegex = /^08[1-9][0-9]{7,11}$/
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export type AdminParticipantUpdateValues = {

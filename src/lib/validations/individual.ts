@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const phoneRegex = /^08[1-9][0-9]{8,11}$/
+const phoneRegex = /^08[1-9][0-9]{7,11}$/
 const emailDomainRegex = /@(gmail\.com|yahoo\.com|yahoo\.co\.id|icloud\.com|hotmail\.com|outlook\.com)$/i
 
 export const individualProfileSchema = z.object({
@@ -9,7 +9,7 @@ export const individualProfileSchema = z.object({
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')
-    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
   email: z
     .string()
     .min(1, 'Email wajib diisi')

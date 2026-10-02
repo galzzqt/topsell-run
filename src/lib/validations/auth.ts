@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const phoneRegex = /^08[1-9][0-9]{8,11}$/
+const phoneRegex = /^08[1-9][0-9]{7,11}$/
 const ktpNumberSchema = z
   .string()
   .min(1, 'Nomor KTP wajib diisi')
@@ -57,7 +57,7 @@ export const participantItemSchema = z.object({
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')
-    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
   date_of_birth: dateOfBirthSchema,
   gender: z.enum(['male', 'female'], { message: 'Jenis kelamin wajib dipilih' }),
   tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'], { message: 'Ukuran jersey wajib dipilih' }),
@@ -67,7 +67,7 @@ export const participantItemSchema = z.object({
   emergency_contact_phone: z
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
-    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 10 digit'),
   community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
   // Khusus invitation: jenis peserta (brand/instansi/perseorangan). Opsional di skema bersama,
   // diwajibkan di registerInvitationSchema.
@@ -81,7 +81,7 @@ export const registerSchema = z
     phone: z
       .string()
       .min(1, 'Nomor HP wajib diisi')
-      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
     email: emailSchema,
     category: z.literal('6K 1̶4̶9̶.̶0̶0̶0̶ 135.000', { message: 'Kategori wajib dipilih' }),
     provinsi: z
@@ -138,7 +138,7 @@ const makeFamilySchema = <C extends z.ZodTypeAny>(minParticipants: number, categ
     phone: z
       .string()
       .min(1, 'Nomor HP wajib diisi')
-      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
     email: emailSchema,
     category: categorySchema,
     provinsi: z
@@ -318,7 +318,7 @@ export const registerUmkmSchema = z
     phone: z
       .string()
       .min(1, 'Nomor HP wajib diisi')
-      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+      .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
     email: emailSchema,
     business_field: z.string().min(2, 'Bidang usaha wajib diisi').max(100, 'Bidang usaha maksimal 100 karakter'),
     description: z.string().min(5, 'Deskripsi usaha wajib diisi (minimal 5 karakter)').max(500, 'Deskripsi maksimal 500 karakter'),

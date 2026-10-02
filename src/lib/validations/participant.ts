@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const phoneRegex = /^08[1-9][0-9]{8,11}$/
+const phoneRegex = /^08[1-9][0-9]{7,11}$/
 const ktpNumberSchema = z
   .string()
   .min(1, 'Nomor KTP wajib diisi')
@@ -44,7 +44,7 @@ export const participantSchema = z.object({
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')
-    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
   date_of_birth: dateOfBirthSchema,
   gender: z.enum(['male', 'female'], { message: 'Jenis kelamin wajib dipilih' }),
   tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'], { message: 'Ukuran jersey wajib dipilih' }),
@@ -58,7 +58,7 @@ export const participantSchema = z.object({
   emergency_contact_phone: z
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
-    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 10 digit'),
   community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
   provinsi: z
     .string()
@@ -85,7 +85,7 @@ export const participantFormSchema = z.object({
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')
-    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
   date_of_birth: dateOfBirthSchema,
   gender: z.enum(['male', 'female'], { message: 'Jenis kelamin wajib dipilih' }),
   tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'], { message: 'Ukuran jersey wajib dipilih' }),
@@ -99,7 +99,7 @@ export const participantFormSchema = z.object({
   emergency_contact_phone: z
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
-    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 10 digit'),
   community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
   provinsi: z.string().optional().or(z.literal('')),
   kota: z.string().optional().or(z.literal('')),
@@ -120,7 +120,7 @@ export const participantEditSchema = z.object({
   phone: z
     .string()
     .min(1, 'Nomor HP wajib diisi')
-    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor HP harus berawalan 08 dan minimal 10 digit'),
   date_of_birth: dateOfBirthSchema,
   gender: z.enum(['male', 'female'], { message: 'Jenis kelamin wajib dipilih' }),
   tshirt_size: z.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'], { message: 'Ukuran jersey wajib dipilih' }),
@@ -134,7 +134,7 @@ export const participantEditSchema = z.object({
   emergency_contact_phone: z
     .string()
     .min(1, 'Nomor kontak darurat wajib diisi')
-    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 11 digit'),
+    .regex(phoneRegex, 'Nomor kontak darurat harus berawalan 08 dan minimal 10 digit'),
   community_name: z.string().max(100, 'Nama instansi/komunitas maksimal 100 karakter').optional().or(z.literal('')),
 })
 
