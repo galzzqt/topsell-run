@@ -48,6 +48,9 @@ import {
   // umkm database imports
   findUmkmById,
   updateUmkm,
+  // laber database imports
+  findLaberById,
+  deleteLaber,
 } from '@/lib/db'
 import { sendPacerStatusWebhook, sendUmkmStatusWebhook } from '@/lib/ghl/webhook'
 import { clearAdminSession, createAdminSession, getAdminSession } from '@/lib/admin/auth'
@@ -1249,6 +1252,36 @@ export async function updateAdminUmkmStatus(
     })
   } catch (webhookError) {
     console.error('Failed to send UMKM status webhook to GHL:', webhookError)
+  }
+
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export async function deleteAdminLaber(id: string) {
+  const session = await getAdminSession()
+  if (!session) {
+    return { error: 'Sesi admin habis. Silakan login ulang.' }
+  }
+
+  const laber = await findLaberById(id)
+  if (!laber) {
+    return { error: 'Data pendaftar laber tidak ditemukan.' }
+  }
+
+  await deleteLaber(id)
+
+  try {
+    await ingestAdminLog({
+      level: 'warning',
+      source: 'admin',
+      event: 'admin_laber_deleted',
+      message: `Admin ${session.name} menghapus data pendaftaran laber: ${laber.name} (${laber.phone}, ${laber.community}).`,
+      actor: session,
+      data: { laberId: id, name: laber.name, phone: laber.phone, community: laber.community },
+    })
+  } catch (logError) {
+    console.error('Failed to log admin laber delete:', logError)
   }
 
   revalidatePath('/admin')

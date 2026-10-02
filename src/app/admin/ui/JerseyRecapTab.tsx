@@ -5,7 +5,7 @@ import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { AdminSettings, PackageKey } from '@/lib/admin/settings-schema'
 
-type JerseyPackageKey = Exclude<PackageKey, 'umkm'>
+type JerseyPackageKey = Exclude<PackageKey, 'umkm' | 'laber'>
 type SizeRow = { tshirt_size: string; payment_status?: string; status?: string }
 
 const PACKAGE_KEYS: JerseyPackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer']

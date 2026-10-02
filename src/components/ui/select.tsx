@@ -15,6 +15,7 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   error?: string
   placeholder?: string
   searchPlaceholder?: string
+  searchable?: boolean
   options: readonly { readonly value: string; readonly label: string; readonly disabled?: boolean }[] | SelectOption[]
   required?: boolean
 }
@@ -27,6 +28,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       error,
       placeholder = '-- Pilih --',
       searchPlaceholder = 'Search for an item...',
+      searchable = true,
       options = [],
       required,
       value,
@@ -126,7 +128,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     }
 
     return (
-      <div className="w-full flex flex-col gap-1.5" ref={containerRef}>
+      <div className={cn('w-full flex flex-col gap-1.5', isOpen && 'relative z-50')} ref={containerRef}>
         {label && (
           <label htmlFor={selectId} className="text-xs font-bold uppercase tracking-wider text-brand-muted">
             {label}
@@ -134,7 +136,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           </label>
         )}
 
-        <div className="relative">
+        <div className={cn('relative', isOpen && 'z-50')}>
           {/* Hidden native select for standard HTML form submission, accessibility, and react-hook-form integration */}
           <select
             id={selectId}
@@ -145,7 +147,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
               onChange?.(e)
             }}
             disabled={disabled}
-            required={required}
+            // Sengaja tanpa `required` native (sama seperti Input): select tersembunyi tidak bisa
+            // menampilkan bubble validasi browser, jadi submit terblokir diam-diam & pesan zod tak muncul.
             className="sr-only pointer-events-none absolute -z-10 opacity-0 h-0 w-0"
             tabIndex={-1}
             ref={(node) => {
@@ -207,28 +210,30 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           {isOpen && (
             <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
               {/* Search Input Box */}
-              <div className="p-2 border-b border-slate-100 bg-slate-50/80">
-                <div className="relative flex items-center">
-                  <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder={searchPlaceholder}
-                    className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sport-orange focus:ring-1 focus:ring-sport-orange/30 transition-all shadow-inner"
-                  />
-                  {searchTerm && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 p-0.5 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+              {searchable && (
+                <div className="p-2 border-b border-slate-100 bg-slate-50/80">
+                  <div className="relative flex items-center">
+                    <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder={searchPlaceholder}
+                      className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sport-orange focus:ring-1 focus:ring-sport-orange/30 transition-all shadow-inner"
+                    />
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-2.5 p-0.5 text-slate-400 hover:text-slate-700 rounded-full cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Options List */}
               <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5" role="listbox">

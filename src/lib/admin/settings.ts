@@ -33,7 +33,7 @@ const SETTINGS_PATH = path.join(process.cwd(), 'data', 'admin-settings.json')
 const ENV_PATH = path.join(process.cwd(), '.env.local')
 const FORM_SETTINGS_KEY = 'registration_form'
 
-const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm']
+const PACKAGE_KEYS: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm', 'laber']
 
 /**
  * Ukuran jersey tersimpan tetap dipakai (termasuk label yang mungkin sudah
@@ -171,6 +171,7 @@ export function normalizeRegistrationFormSettings(value: Partial<RegistrationFor
     invitation: normalizeRegistrationFormPackage(base.invitation, value?.invitation),
     pacer: normalizeRegistrationFormPackage(base.pacer, value?.pacer),
     umkm: normalizeRegistrationFormPackage(base.umkm, value?.umkm),
+    laber: normalizeRegistrationFormPackage(base.laber, value?.laber),
   }
 }
 
@@ -248,6 +249,7 @@ function normalizePackagesSettings(value: Partial<PackagesSettings> | undefined)
     invitation: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.invitation, value?.invitation),
     pacer: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.pacer, value?.pacer),
     umkm: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.umkm, value?.umkm),
+    laber: normalizePackageConfig(DEFAULT_PACKAGES_SETTINGS.laber, value?.laber),
   }
 }
 
@@ -269,6 +271,7 @@ function normalizeEmailTemplateSettings(value: Partial<EmailTemplateSettings> | 
     invitation: normalizeEmailTemplate(base.invitation, value?.invitation),
     pacer: normalizeEmailTemplate(base.pacer, value?.pacer),
     umkm: normalizeEmailTemplate(base.umkm, value?.umkm),
+    laber: normalizeEmailTemplate(base.laber, value?.laber),
   }
 }
 
@@ -298,6 +301,7 @@ function normalizeWebhookSettings(value: Partial<WebhookSettings> | undefined): 
     invitation: normalizeWebhookPackage(base.invitation, value?.invitation),
     pacer: normalizeWebhookPackage(base.pacer, value?.pacer),
     umkm: normalizeWebhookPackage(base.umkm, value?.umkm),
+    laber: normalizeWebhookPackage(base.laber, value?.laber),
   }
 }
 
@@ -373,6 +377,7 @@ const PACKAGE_PARTICIPANT_COLLECTION: Record<PackageKey, string> = {
   invitation: 'invitation_participants',
   pacer: 'pacer_participants',
   umkm: 'umkm_registrations',
+  laber: 'laber_registrations',
 }
 
 const PACKAGE_REGISTRATION_COLLECTION: Record<PackageKey, string> = {
@@ -382,6 +387,7 @@ const PACKAGE_REGISTRATION_COLLECTION: Record<PackageKey, string> = {
   invitation: 'invitation_registrations',
   pacer: 'pacer_registrations',
   umkm: 'umkm_registrations',
+  laber: 'laber_registrations',
 }
 
 // Kategori disimpan di record owner (community/family/individual/pacer/umkm), bukan di peserta.
@@ -392,6 +398,7 @@ const PACKAGE_OWNER_COLLECTION: Record<PackageKey, string> = {
   invitation: 'invitations',
   pacer: 'pacer_registrations',
   umkm: 'umkm_registrations',
+  laber: 'laber_registrations',
 }
 
 const PACKAGE_OWNER_ID_FIELD: Record<PackageKey, string> = {
@@ -401,6 +408,7 @@ const PACKAGE_OWNER_ID_FIELD: Record<PackageKey, string> = {
   invitation: 'invitation_id',
   pacer: 'pacer_id',
   umkm: 'id',
+  laber: 'id',
 }
 
 /** Jumlah peserta aktif (pending/paid) untuk sebuah kategori dalam paket (join ke record owner). */
@@ -416,6 +424,11 @@ async function countPackageParticipantsByCategory(pkg: PackageKey, category: str
 
   if (pkg === 'umkm') {
     return db.collection('umkm_registrations').countDocuments({ status: { $in: ['pending', 'approved'] } })
+  }
+
+  // Laber: kategori = komunitas, tanpa alur bayar — semua pendaftar dihitung.
+  if (pkg === 'laber') {
+    return db.collection('laber_registrations').countDocuments({ community: category })
   }
 
   const ownerIds = await db
@@ -436,7 +449,7 @@ async function countPackageParticipantsByCategory(pkg: PackageKey, category: str
  * Semua kategori & periode paket digabung. UMKM tidak punya jersey.
  */
 export async function countJerseyUsage(pkg: PackageKey): Promise<Record<string, number>> {
-  if (pkg === 'umkm') return {}
+  if (pkg === 'umkm' || pkg === 'laber') return {}
   const { getDb } = await import('@/lib/mongodb/client')
   const db = await getDb()
 
@@ -497,7 +510,7 @@ const PENDING_HOLD_HOURS = 24
  */
 async function releaseExpiredPendingRegistrations(pkg: PackageKey) {
   // Status 'pending' di pacer & umkm berarti "menunggu approval admin" — tidak boleh di-auto-expire.
-  if (pkg === 'pacer' || pkg === 'umkm') return
+  if (pkg === 'pacer' || pkg === 'umkm' || pkg === 'laber') return
 
   const { getDb } = await import('@/lib/mongodb/client')
   const db = await getDb()

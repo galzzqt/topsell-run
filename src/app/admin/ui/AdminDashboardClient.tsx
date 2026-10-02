@@ -52,6 +52,7 @@ import {
   Copy,
   Check,
   Shirt,
+  Flame,
 } from 'lucide-react'
 import { adminTriggerPasswordReset } from '@/app/actions/password-reset'
 import {
@@ -97,6 +98,7 @@ import {
   updateAdminPacerStatus,
   updateAdminPacerParticipant,
   updateAdminUmkmStatus,
+  deleteAdminLaber,
   type AdminCommunityUpdateValues,
   type AdminParticipantUpdateValues,
   type AdminPacerParticipantUpdateValues,
@@ -111,7 +113,7 @@ import type { AdminEditableEnvField, AdminEnvSnapshot, AdminSettings, EmailTempl
 import { DEFAULT_PACKAGES_SETTINGS } from '@/lib/admin/settings-schema'
 import type { AdminLogEntry } from '@/lib/axiom/logs'
 import type { VoucherDoc } from '@/lib/types/voucher'
-import type { UmkmRegistration, UmkmPayment } from '@/lib/types'
+import type { UmkmRegistration, UmkmPayment, LaberRegistration } from '@/lib/types'
 import { VouchersTab } from './VouchersTab'
 import { JerseyRecapTab } from './JerseyRecapTab'
 
@@ -324,6 +326,7 @@ type AdminTab =
   | 'periods'
   | 'pacer'
   | 'umkm'
+  | 'laber'
   | 'settings'
   | 'admins'
   | 'logs'
@@ -764,6 +767,7 @@ export function AdminDashboardClient({
   pacerRows = [],
   umkmRows = [],
   umkmPayments = [],
+  laberRows = [],
   adminSettings,
   editableEnv,
   currentAdmin,
@@ -787,6 +791,7 @@ export function AdminDashboardClient({
   pacerRows?: AdminPacerRow[]
   umkmRows?: UmkmRegistration[]
   umkmPayments?: UmkmPayment[]
+  laberRows?: LaberRegistration[]
   adminSettings: AdminSettings
   editableEnv: AdminEnvSnapshot[]
   currentAdmin: AdminUser
@@ -894,6 +899,48 @@ export function AdminDashboardClient({
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
       setUmkmStartDate(formatDateForInput(start))
       setUmkmEndDate(formatDateForInput(end))
+    }
+  }
+
+  const [laberCommunityFilter, setLaberCommunityFilter] = useState<string>('all')
+  const [laberStartDate, setLaberStartDate] = useState('')
+  const [laberEndDate, setLaberEndDate] = useState('')
+  const [laberDatePreset, setLaberDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom'>('all')
+  const [laberSort, setLaberSort] = useState<'newest' | 'oldest' | 'name_asc' | 'name_desc'>('newest')
+  const [laberDeleteTarget, setLaberDeleteTarget] = useState<LaberRegistration | null>(null)
+
+  const handleLaberDatePresetChange = (preset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'custom') => {
+    setLaberDatePreset(preset)
+    const now = new Date()
+    const formatDateForInput = (d: Date) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'all') {
+      setLaberStartDate('')
+      setLaberEndDate('')
+    } else if (preset === 'today') {
+      const todayStr = formatDateForInput(now)
+      setLaberStartDate(todayStr)
+      setLaberEndDate(todayStr)
+    } else if (preset === '7d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 6)
+      setLaberStartDate(formatDateForInput(start))
+      setLaberEndDate(formatDateForInput(now))
+    } else if (preset === '30d') {
+      const start = new Date(now)
+      start.setDate(now.getDate() - 29)
+      setLaberStartDate(formatDateForInput(start))
+      setLaberEndDate(formatDateForInput(now))
+    } else if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setLaberStartDate(formatDateForInput(start))
+      setLaberEndDate(formatDateForInput(end))
     }
   }
 
@@ -1672,6 +1719,66 @@ export function AdminDashboardClient({
     })
   }, [umkmRows, query, umkmPaymentStatusFilter, umkmStartDate, umkmEndDate, umkmSort, umkmPayments])
 
+  const laberStats = useMemo(() => {
+    const communityCounts: Record<string, number> = {}
+    for (const r of laberRows) {
+      communityCounts[r.community] = (communityCounts[r.community] || 0) + 1
+    }
+    // Komunitas dari kategori paket Laber (semua periode) + komunitas lama yang sudah tidak ada di setelan.
+    const configured = (settingsForm.packages?.laber?.periods || []).flatMap((p) => p.categories.map((c) => c.value))
+    const communities = [...new Set([...configured, ...Object.keys(communityCounts)])]
+    return {
+      total: laberRows.length,
+      communityCounts,
+      communities,
+    }
+  }, [laberRows, settingsForm.packages])
+
+  const filteredLaberRows = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    let list = laberRows
+
+    if (keyword) {
+      list = list.filter((l) => {
+        return [
+          l.name || '',
+          l.phone || '',
+          l.community || '',
+          l.laber_code || '',
+        ].some((val) => val.toLowerCase().includes(keyword))
+      })
+    }
+
+    if (laberCommunityFilter !== 'all') {
+      list = list.filter((l) => l.community === laberCommunityFilter)
+    }
+
+    if (laberStartDate || laberEndDate) {
+      const start = laberStartDate ? new Date(`${laberStartDate}T00:00:00`).getTime() : -Infinity
+      const end = laberEndDate ? new Date(`${laberEndDate}T23:59:59.999`).getTime() : Infinity
+
+      list = list.filter((l) => {
+        if (!l.created_at) return false
+        const t = new Date(l.created_at).getTime()
+        if (Number.isNaN(t)) return false
+        return t >= start && t <= end
+      })
+    }
+
+    return [...list].sort((a, b) => {
+      if (laberSort === 'name_asc') {
+        return (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' })
+      }
+      if (laberSort === 'name_desc') {
+        return (b.name || '').localeCompare(a.name || '', 'id', { sensitivity: 'base' })
+      }
+      if (laberSort === 'oldest') {
+        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+      }
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    })
+  }, [laberRows, query, laberCommunityFilter, laberStartDate, laberEndDate, laberSort])
+
   const groupedParticipants = useMemo(() => {
     const groups = new Map<
       string,
@@ -1770,6 +1877,7 @@ export function AdminDashboardClient({
   const pagedGroups = usePaged(groupedParticipants)
   const pagedPacer = usePaged(filteredPacerRows)
   const pagedUmkm = usePaged(filteredUmkmRows)
+  const pagedLaber = usePaged(filteredLaberRows)
 
   const dailyParticipants = useMemo<SummaryDailyParticipant[]>(() => {
     const DAYS_TO_SHOW = 14
@@ -1807,7 +1915,7 @@ export function AdminDashboardClient({
   // Hitung ringkasan kuota per paket dan per kategori
   const packageQuotaSummaries = useMemo<Record<PackageKey, PackageQuotaSummary>>(() => {
     const packagesConfig = settingsForm.packages || DEFAULT_PACKAGES_SETTINGS
-    const keys: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm']
+    const keys: PackageKey[] = ['community', 'family', 'individual', 'invitation', 'pacer', 'umkm', 'laber']
     const result = {} as Record<PackageKey, PackageQuotaSummary>
 
     const countUsage = (
@@ -1877,6 +1985,9 @@ export function AdminDashboardClient({
             pendingCount++
           }
         }
+      } else if (pkg === 'laber') {
+        // Gratis tanpa alur bayar: tiap pendaftar langsung terhitung.
+        paidCount = laberRows.filter((l) => l.community === cat.value).length
       }
 
       return {
@@ -1939,7 +2050,7 @@ export function AdminDashboardClient({
     }
 
     return result
-  }, [settingsForm.packages, participants, familyParticipants, individualParticipants, invitationParticipants, pacerRows, umkmRows])
+  }, [settingsForm.packages, participants, familyParticipants, individualParticipants, invitationParticipants, pacerRows, umkmRows, laberRows])
 
   // Opsi filter kategori untuk tab peserta
   const participantCategoryOptions = useMemo(() => {
@@ -2260,6 +2371,37 @@ export function AdminDashboardClient({
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildUmkmExportRows(filteredUmkmRows)), 'UMKM')
     XLSX.writeFile(workbook, `topsell-run-umkm-${today}.xlsx`)
+  }
+
+  const buildLaberExportRows = (rows: LaberRegistration[]) =>
+    rows.map((row, index) => ({
+      No: index + 1,
+      'Kode Laber': row.laber_code,
+      Nama: row.name,
+      'No. WhatsApp': row.phone,
+      Komunitas: row.community,
+      'Tanggal Daftar': formatDateTime(row.created_at),
+    }))
+
+  const exportLaberRows = async () => {
+    const XLSX = await import('xlsx')
+    const today = new Date().toISOString().slice(0, 10)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(buildLaberExportRows(filteredLaberRows)), 'Laber')
+    XLSX.writeFile(workbook, `topsell-run-laber-${today}.xlsx`)
+  }
+
+  const handleDeleteLaber = async () => {
+    if (!laberDeleteTarget) return
+    startTransition(async () => {
+      const res = await deleteAdminLaber(laberDeleteTarget.id)
+      if (res?.error) {
+        alert(res.error)
+      } else {
+        setLaberDeleteTarget(null)
+        router.refresh()
+      }
+    })
   }
 
   const exportWorkbook = async (type: 'participants' | 'payments' | 'all', mode: 'all' | 'selected' = 'all') => {
@@ -3257,6 +3399,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
     { id: 'export_payments', label: 'Export Pembayaran', icon: Download },
     { id: 'pacer', label: 'Pacer', icon: UserCheck },
     { id: 'umkm', label: 'UMKM', icon: Store },
+    { id: 'laber', label: 'Laber', icon: Flame },
     { id: 'jersey', label: 'Rekap Jersey', icon: Shirt },
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'packages' as const, label: 'Kelola Paket', icon: Package }] : []),
     ...(currentAdmin.role === 'superadmin' ? [{ id: 'periods' as const, label: 'Kelola Periode', icon: Calendar }] : []),
@@ -3392,8 +3535,14 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                         ? 'Export Peserta'
                         : activeTab === 'export_payments'
                           ? 'Export Pembayaran'
-                          : activeTab === 'jersey'
-                            ? 'Rekap Jersey'
+                          : activeTab === 'pacer'
+                            ? 'Pendaftar Pacer'
+                            : activeTab === 'umkm'
+                              ? 'Pendaftar UMKM'
+                              : activeTab === 'laber'
+                                ? 'Pendaftar Laber'
+                                : activeTab === 'jersey'
+                                  ? 'Rekap Jersey'
                           : activeTab === 'logs'
                             ? 'Log Axiom'
                             : activeTab === 'admins'
@@ -3413,8 +3562,14 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                         ? 'Ekspor data peserta per komunitas'
                         : activeTab === 'export_payments'
                           ? 'Ekspor data pembayaran per komunitas'
-                          : activeTab === 'jersey'
-                            ? 'Jumlah & kuota jersey per ukuran di setiap paket'
+                          : activeTab === 'pacer'
+                            ? 'Review & persetujuan pendaftar pacer'
+                            : activeTab === 'umkm'
+                              ? 'Monitoring & persetujuan pendaftar tenant UMKM'
+                              : activeTab === 'laber'
+                                ? 'Monitoring pendaftaran peserta latihan bersama komunitas'
+                                : activeTab === 'jersey'
+                                  ? 'Jumlah & kuota jersey per ukuran di setiap paket'
                           : activeTab === 'logs'
                             ? 'Monitoring log aplikasi dari Axiom'
                             : activeTab === 'admins'
@@ -3423,7 +3578,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
             </p>
           </div>
 
-          {(activeTab === 'participants' || activeTab === 'payments' || activeTab === 'pacer' || activeTab === 'umkm') && (
+          {(activeTab === 'participants' || activeTab === 'payments' || activeTab === 'pacer' || activeTab === 'umkm' || activeTab === 'laber') && (
             <div className="flex items-center gap-3">
               <label className="relative w-64">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -3437,7 +3592,9 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                         ? 'Cari pacer...'
                         : activeTab === 'umkm'
                           ? 'Cari UMKM...'
-                          : 'Cari peserta, komunitas...'
+                          : activeTab === 'laber'
+                            ? 'Cari peserta, no WA, komunitas...'
+                            : 'Cari peserta, komunitas...'
                   }
                   className="w-full pl-9 pr-3 py-2 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted/70 focus:outline-none focus:border-sport-orange"
                 />
@@ -3446,8 +3603,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
           )}
         </header>
 
-        {/* Mobile-only Search Bar (Visible under mobile header when participants, payments, pacer, or umkm tab) */}
-        {(activeTab === 'participants' || activeTab === 'payments' || activeTab === 'pacer' || activeTab === 'umkm') && (
+        {/* Mobile-only Search Bar (Visible under mobile header when participants, payments, pacer, umkm, or laber tab) */}
+        {(activeTab === 'participants' || activeTab === 'payments' || activeTab === 'pacer' || activeTab === 'umkm' || activeTab === 'laber') && (
           <div className="md:hidden px-4 py-3 border-b border-card-border/50 bg-brand-dark/20">
             <label className="relative w-full block">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
@@ -3461,7 +3618,9 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                       ? 'Cari pacer...'
                       : activeTab === 'umkm'
                         ? 'Cari UMKM...'
-                        : 'Cari peserta, komunitas...'
+                        : activeTab === 'laber'
+                          ? 'Cari peserta, no WA, komunitas...'
+                          : 'Cari peserta, komunitas...'
                 }
                 className="w-full pl-9 pr-3 py-2.5 bg-brand-gray/40 border border-card-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-foreground placeholder:text-brand-muted focus:outline-none focus:border-sport-orange"
               />
@@ -4573,6 +4732,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           { id: 'export_payments', label: 'Export Pembayaran' },
                           { id: 'pacer', label: 'Pacer' },
                           { id: 'umkm', label: 'UMKM' },
+                          { id: 'laber', label: 'Laber' },
                           { id: 'jersey', label: 'Rekap Jersey' },
                           { id: 'packages', label: 'Kelola Paket' },
                           { id: 'periods', label: 'Kelola Periode' },
@@ -4637,6 +4797,9 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                                     export_participants: 'Export Peserta',
                                     export_payments: 'Export Pembayaran',
                                     pacer: 'Pacer',
+                                    umkm: 'UMKM',
+                                    laber: 'Laber',
+                                    jersey: 'Rekap Jersey',
                                     packages: 'Kelola Paket',
                                     periods: 'Kelola Periode',
                                     logs: 'Logs',
@@ -5525,6 +5688,330 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
             </div>
           )}
 
+          {activeTab === 'laber' && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sport-orange">Laber</p>
+                  <h2 className="text-sm font-black uppercase text-foreground">
+                    Pendaftar Laber ({filteredLaberRows.length}{filteredLaberRows.length !== laberRows.length ? ` / ${laberRows.length}` : ''})
+                  </h2>
+                  <p className="text-[11px] text-brand-muted mt-1">Latihan Bersama Komunitas — Pantau pendaftaran peserta Laber di bawah ini.</p>
+                </div>
+                <Button onClick={exportLaberRows} disabled={filteredLaberRows.length === 0} className="shrink-0 cursor-pointer">
+                  <Download className="w-4 h-4 mr-2" />Export ke Excel
+                </Button>
+              </div>
+
+              {/* Statistics Breakdown Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                <div
+                  onClick={() => setLaberCommunityFilter('all')}
+                  className={`bg-card-bg border border-card-border rounded-xl p-3.5 flex flex-col justify-between shadow-xs cursor-pointer transition-all hover:scale-[1.02] ${
+                    laberCommunityFilter === 'all' ? 'ring-2 ring-sport-orange' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted">Total Laber</span>
+                    <Flame className="w-4 h-4 text-sport-orange" />
+                  </div>
+                  <p className="text-xl font-black text-foreground mt-2">{laberStats.total}</p>
+                  <span className="text-[9px] text-brand-muted font-medium mt-0.5">Semua Komunitas</span>
+                </div>
+
+                {laberStats.communities.map((name, i) => {
+                  const palette = [
+                    { color: 'text-violet-400', border: 'border-violet-500/30' },
+                    { color: 'text-emerald-400', border: 'border-emerald-500/30' },
+                    { color: 'text-blue-400', border: 'border-blue-500/30' },
+                    { color: 'text-amber-400', border: 'border-amber-500/30' },
+                    { color: 'text-rose-400', border: 'border-rose-500/30' },
+                    { color: 'text-indigo-400', border: 'border-indigo-500/30' },
+                  ]
+                  return { name, ...palette[i % palette.length] }
+                }).map((comm) => (
+                  <div
+                    key={comm.name}
+                    onClick={() => setLaberCommunityFilter((prev) => (prev === comm.name ? 'all' : comm.name))}
+                    className={`bg-card-bg border ${comm.border} rounded-xl p-3.5 flex flex-col justify-between shadow-xs cursor-pointer transition-all hover:scale-[1.02] ${
+                      laberCommunityFilter === comm.name ? 'ring-2 ring-sport-orange' : ''
+                    }`}
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-muted truncate" title={comm.name}>
+                      {comm.name}
+                    </span>
+                    <p className={`text-xl font-black ${comm.color} mt-2`}>
+                      {laberStats.communityCounts[comm.name] || 0}
+                    </p>
+                    <span className="text-[9px] text-brand-muted font-medium mt-0.5">Peserta</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Filter Controls */}
+              <div className="bg-card-bg border border-card-border rounded-xl p-4 flex flex-col gap-3 shadow-xs">
+                {/* Community Tabs */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                    <Filter className="w-3.5 h-3.5 text-sport-orange" />
+                    <span>Komunitas:</span>
+                  </div>
+                  {[
+                    { id: 'all', label: 'Semua Komunitas', count: laberStats.total },
+                    ...laberStats.communities.map((name) => ({ id: name, label: name, count: laberStats.communityCounts[name] || 0 })),
+                  ].map((tab) => {
+                    const isActive = laberCommunityFilter === tab.id
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setLaberCommunityFilter(tab.id)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border cursor-pointer ${
+                          isActive
+                            ? 'bg-sport-orange text-white border-sport-orange shadow-xs'
+                            : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                            isActive ? 'bg-white/20 text-white' : 'bg-brand-dark text-brand-muted'
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Date Filter & Presets */}
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-3 border-t border-card-border/50 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-brand-muted text-[10px] font-black uppercase tracking-wider">
+                      <CalendarDays className="w-3.5 h-3.5 text-sport-orange" />
+                      <span>Tgl Daftar:</span>
+                    </div>
+                    {[
+                      { id: 'all', label: 'Semua' },
+                      { id: 'today', label: 'Hari Ini' },
+                      { id: '7d', label: '7 Hari' },
+                      { id: '30d', label: '30 Hari' },
+                      { id: 'this_month', label: 'Bulan Ini' },
+                    ].map((preset) => {
+                      const isActive = laberDatePreset === preset.id
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleLaberDatePresetChange(preset.id as never)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all border cursor-pointer ${
+                            isActive
+                              ? 'bg-sport-orange text-white border-sport-orange shadow-xs'
+                              : 'bg-brand-gray/30 border-card-border text-brand-muted hover:text-foreground hover:bg-brand-gray/50'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <DateInput
+                      value={laberStartDate}
+                      onChange={(value) => {
+                        setLaberStartDate(value)
+                        setLaberDatePreset('custom')
+                      }}
+                      className="text-xs"
+                      aria-label="Tanggal Awal Laber"
+                    />
+                    <span className="text-brand-muted text-xs">s/d</span>
+                    <DateInput
+                      value={laberEndDate}
+                      onChange={(value) => {
+                        setLaberEndDate(value)
+                        setLaberDatePreset('custom')
+                      }}
+                      className="text-xs"
+                      aria-label="Tanggal Akhir Laber"
+                    />
+                  </div>
+                </div>
+
+                {/* Filter Summary Recaps */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-card-border/50">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] text-brand-muted font-bold">Menampilkan:</span>
+                    <span className="text-xs font-bold text-foreground">
+                      {filteredLaberRows.length} peserta laber
+                    </span>
+                    {(laberStartDate || laberEndDate) && (
+                      <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                        Filter Tanggal Aktif
+                      </span>
+                    )}
+                    {laberCommunityFilter !== 'all' && (
+                      <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                        Komunitas: {laberCommunityFilter}
+                      </span>
+                    )}
+                    {query && (
+                      <span className="px-2 py-0.5 rounded bg-sport-orange/10 border border-sport-orange/30 text-[9px] font-bold text-sport-orange">
+                        Cari: &ldquo;{query}&rdquo;
+                      </span>
+                    )}
+                  </div>
+
+                  {(laberStartDate || laberEndDate || laberCommunityFilter !== 'all' || query) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLaberCommunityFilter('all')
+                        handleLaberDatePresetChange('all')
+                        setQuery('')
+                      }}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-sport-red hover:underline cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset Filter
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Data Table */}
+              <div className="bg-card-bg border border-card-border rounded-xl overflow-hidden shadow-lg">
+                {laberRows.length === 0 ? (
+                  <div className="p-8 text-center text-xs font-bold text-brand-muted">Belum ada pendaftar Laber.</div>
+                ) : filteredLaberRows.length === 0 ? (
+                  <div className="p-8 text-center text-xs font-bold text-brand-muted flex flex-col items-center gap-3">
+                    <p>Tidak ada data Laber yang sesuai dengan kriteria filter.</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setLaberCommunityFilter('all')
+                        handleLaberDatePresetChange('all')
+                        setQuery('')
+                      }}
+                    >
+                      Reset Filter
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-card-border bg-brand-dark/20">
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted w-12">No</th>
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted">Kode Laber</th>
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted">Nama Peserta</th>
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted">No. WhatsApp</th>
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted">Komunitas</th>
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted">Tgl Daftar</th>
+                          <th className="py-3 px-4 text-[10px] font-black uppercase tracking-wider text-brand-muted text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-card-border">
+                        {pagedLaber.pageRows.map((row, idx) => {
+                          const waPhone = row.phone.startsWith('0') ? '62' + row.phone.slice(1) : row.phone.replace(/[^0-9]/g, '')
+                          return (
+                            <tr key={row.id} className="hover:bg-brand-gray/20 transition-colors">
+                              <td className="py-3.5 px-4 text-xs text-brand-muted font-mono font-medium">
+                                {(pagedLaber.page - 1) * pagedLaber.size + idx + 1}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="font-mono font-black text-sport-purple text-[11px] px-2 py-0.5 rounded bg-sport-purple/10 border border-sport-purple/20">
+                                  {row.laber_code}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="text-xs font-bold text-foreground block">
+                                  {row.name}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <a
+                                  href={`https://wa.me/${waPhone}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs text-brand-muted hover:text-emerald-400 font-mono transition-colors"
+                                  title="Chat WhatsApp"
+                                >
+                                  <span>{row.phone}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-sport-orange/10 border border-sport-orange/20 text-sport-orange">
+                                  {row.community}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-xs text-brand-muted">
+                                {formatDateTime(row.created_at)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setLaberDeleteTarget(row)}
+                                  className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors cursor-pointer"
+                                  title="Hapus Data Pendaftar"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <Pagination state={pagedLaber} label="peserta laber" />
+              </div>
+
+              {/* Dialog Konfirmasi Hapus Laber */}
+              {laberDeleteTarget && (
+                <Dialog
+                  isOpen={!!laberDeleteTarget}
+                  onClose={() => setLaberDeleteTarget(null)}
+                  title="HAPUS PENDAFTAR LABER"
+                >
+                  <div className="flex flex-col gap-4 text-xs">
+                    <p className="text-brand-muted leading-relaxed">
+                      Apakah Anda yakin ingin menghapus pendaftaran Laber atas nama{' '}
+                      <strong className="text-foreground">{laberDeleteTarget.name}</strong> (
+                      <span className="font-mono text-sport-purple">{laberDeleteTarget.laber_code}</span>,{' '}
+                      {laberDeleteTarget.community})?
+                    </p>
+                    <p className="text-red-400 font-semibold">Tindakan ini tidak dapat dibatalkan.</p>
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-card-border">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setLaberDeleteTarget(null)}
+                        disabled={isPending}
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={handleDeleteLaber}
+                        isLoading={isPending}
+                      >
+                        Hapus
+                      </Button>
+                    </div>
+                  </div>
+                </Dialog>
+              )}
+            </div>
+          )}
+
           {activeTab === 'packages' && currentAdmin.role === 'superadmin' && (
             <div className="flex flex-col gap-4">
 
@@ -5545,6 +6032,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                       { key: 'invitation' as PackageKey, icon: <User className="w-6 h-6 text-indigo-400" />, iconBg: 'bg-indigo-500/10 border-indigo-500/20', accent: 'from-indigo-500/20 to-indigo-500/5', border: 'border-indigo-500/30', badge: 'bg-indigo-500/20 text-indigo-400' },
                       { key: 'pacer' as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400' },
                       { key: 'umkm' as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400' },
+                      { key: 'laber' as PackageKey, icon: <Flame className="w-6 h-6 text-rose-400" />, iconBg: 'bg-rose-500/10 border-rose-500/20', accent: 'from-rose-500/20 to-rose-500/5', border: 'border-rose-500/30', badge: 'bg-rose-500/20 text-rose-400' },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       return (
@@ -5565,7 +6053,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           <div>
                             <h3 className="text-base font-black uppercase text-foreground tracking-wide">{config.label}</h3>
                             <p className="text-[11px] text-brand-muted mt-1">
-                              {config.sizeChartImage ? 'Size chart tersedia' : 'Belum ada size chart'} · klik untuk mengatur
+                              {key === 'laber' ? 'Gratis · komunitas diatur di Kelola Periode' : config.sizeChartImage ? 'Size chart tersedia' : 'Belum ada size chart'} · klik untuk mengatur
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-muted group-hover:text-foreground transition-colors">
@@ -5646,7 +6134,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                           </div>
                         </div>
 
-                        {/* Size Chart */}
+                        {/* Size Chart (Laber tanpa jersey) */}
+                        {pkg !== 'laber' && (
                         <div className="border border-card-border rounded-xl bg-card-bg overflow-hidden">
                           <div className="px-5 py-3.5 border-b border-card-border bg-brand-gray/20">
                             <p className="text-[9px] font-black uppercase text-sport-orange tracking-widest">Gambar Size Chart Jersey</p>
@@ -5687,6 +6176,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                             <p className="text-[9px] text-brand-muted">Kosongkan untuk pakai gambar default. Maks 2MB. Opsi ukuran (dropdown) diatur di &quot;Edit Form Pendaftaran&quot;.</p>
                           </div>
                         </div>
+                        )}
                       </div>
 
                       {/* Right column — quick-action modals */}
@@ -5696,6 +6186,8 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                             <p className="text-[9px] font-black uppercase text-sport-orange tracking-widest">Konfigurasi Lanjutan</p>
                           </div>
                           <div className="p-5 flex flex-col gap-3">
+                            {/* Laber: form tetap (nama, WA, komunitas) & tanpa email — hanya webhook yang relevan. */}
+                            {pkg !== 'laber' && (<>
                             <button
                               type="button"
                               onClick={() => setFormEditingPkg(pkg)}
@@ -5718,6 +6210,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                               </div>
                               <Pencil className="w-4 h-4 text-sport-orange shrink-0 group-hover:scale-110 transition-transform" />
                             </button>
+                            </>)}
                             <button
                               type="button"
                               onClick={() => setWebhookEditingPkg(pkg)}
@@ -5760,6 +6253,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                       { key: 'invitation' as PackageKey, icon: <User className="w-6 h-6 text-indigo-400" />, iconBg: 'bg-indigo-500/10 border-indigo-500/20', accent: 'from-indigo-500/20 to-indigo-500/5', border: 'border-indigo-500/30', badge: 'bg-indigo-500/20 text-indigo-400' },
                       { key: 'pacer' as PackageKey, icon: <Timer className="w-6 h-6 text-green-400" />, iconBg: 'bg-green-500/10 border-green-500/20', accent: 'from-green-500/20 to-green-500/5', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400' },
                       { key: 'umkm' as PackageKey, icon: <Store className="w-6 h-6 text-amber-400" />, iconBg: 'bg-amber-500/10 border-amber-500/20', accent: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', badge: 'bg-amber-500/20 text-amber-400' },
+                      { key: 'laber' as PackageKey, icon: <Flame className="w-6 h-6 text-rose-400" />, iconBg: 'bg-rose-500/10 border-rose-500/20', accent: 'from-rose-500/20 to-rose-500/5', border: 'border-rose-500/30', badge: 'bg-rose-500/20 text-rose-400' },
                     ]).map(({ key, icon, iconBg, accent, border, badge }) => {
                       const config = settingsForm.packages[key]
                       const periodCount = config.periods.length
@@ -7326,6 +7820,7 @@ Alasan ini dikirim ke tenant lewat email & WhatsApp.`)) {
                     { id: 'export_payments', label: 'Export Pembayaran' },
                     { id: 'pacer', label: 'Pacer' },
                     { id: 'umkm', label: 'UMKM' },
+                    { id: 'laber', label: 'Laber' },
                     { id: 'jersey', label: 'Rekap Jersey' },
                     { id: 'packages', label: 'Kelola Paket' },
                     { id: 'periods', label: 'Kelola Periode' },

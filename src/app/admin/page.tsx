@@ -17,6 +17,7 @@ import {
   listPacerParticipantsWithPacer,
   listUmkms,
   listUmkmPayments,
+  listLabers,
 } from '@/lib/db'
 import { AdminDashboardClient, type AdminCommunity, type AdminParticipant, type AdminPayment, type AdminStats, type AdminPacerRow } from './ui/AdminDashboardClient'
 import { AdminLogin } from './ui/AdminLogin'
@@ -50,6 +51,7 @@ export default async function AdminPage() {
     pacerParticipantsRaw,
     umkmsRaw,
     umkmPaymentsRaw,
+    labersRaw,
     adminSettings,
     editableEnv,
     getAdminAccountsResult,
@@ -70,6 +72,7 @@ export default async function AdminPage() {
     listPacerParticipantsWithPacer(),
     listUmkms(),
     listUmkmPayments(),
+    listLabers(),
     readAdminSettings(),
     readEditableEnvSnapshot(),
     getAdminPublicAccounts(),
@@ -91,6 +94,7 @@ export default async function AdminPage() {
       'export_payments',
       'pacer',
       'umkm',
+      'laber',
     ]
   }
 
@@ -428,6 +432,7 @@ export default async function AdminPage() {
       pacerRows={pacerRows}
       umkmRows={umkmsRaw}
       umkmPayments={umkmPaymentsRaw}
+      laberRows={labersRaw}
       adminSettings={adminSettings}
       editableEnv={editableEnv}
       currentAdmin={session}

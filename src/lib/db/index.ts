@@ -376,3 +376,14 @@ export {
   markUmkmPaymentExpired,
   listUmkmPayments,
 } from './umkm'
+
+export {
+  findLaberById,
+  findLaberByPhone,
+  listLabers,
+  createUniqueLaberCode,
+  createLaber,
+  deleteLaber,
+  ensureLaberIndexes,
+} from './labers'
+

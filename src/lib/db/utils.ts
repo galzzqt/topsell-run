@@ -4,7 +4,8 @@ import type {
   Family, FamilyParticipant, FamilyRegistration, FamilyPayment,
   Individual, IndividualParticipant, IndividualRegistration, IndividualPayment,
   Invitation, InvitationParticipant, InvitationRegistration, InvitationPayment,
-  PacerRegistration, PacerParticipant
+  PacerRegistration, PacerParticipant,
+  LaberRegistration
 } from '@/lib/types'
 
 export function nowIso() {
@@ -42,6 +43,10 @@ export function generateInvitationCode() {
 
 export function generatePacerCode() {
   return `PCR-${randomBytes(3).toString('hex').toUpperCase()}`
+}
+
+export function generateLaberCode() {
+  return `LBR-${randomBytes(3).toString('hex').toUpperCase()}`
 }
 
 export function docToCommunity(doc: Record<string, unknown>): Community {
@@ -114,6 +119,10 @@ export function docToPacer(doc: Record<string, unknown>): PacerRegistration {
 
 export function docToPacerParticipant(doc: Record<string, unknown>): PacerParticipant {
   return doc as unknown as PacerParticipant
+}
+
+export function docToLaber(doc: Record<string, unknown>): LaberRegistration {
+  return doc as unknown as LaberRegistration
 }
 
 export function stripMongoId<T extends Record<string, unknown>>(doc: T | null) {

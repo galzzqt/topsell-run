@@ -441,3 +441,30 @@ export async function sendUmkmPaymentConfirmationWebhook(payload: {
         : `Pendaftaran tenant UMKM ${payload.name} untuk TOPSELL RUN 2026 sudah LUNAS tanpa biaya (voucher). Slot tenant Anda resmi terkunci.`,
   })
 }
+
+/**
+ * Konfirmasi pendaftaran Laber (Latihan Bersama).
+ * URL diatur di admin (Kelola Paket → Laber → Edit Webhook), default di DEFAULT_WEBHOOK_SETTINGS.laber.
+ */
+export async function sendLaberRegistrationConfirmationWebhook(payload: {
+  phone: string
+  name: string
+  community: string
+  laberCode: string
+}) {
+  return postWebhook('registration', 'laber', {
+    event: 'laber_registration_confirmation',
+    package: 'laber',
+    phone: payload.phone,
+    whatsapp: phoneToWhatsAppId(payload.phone),
+    name: payload.name,
+    full_name: payload.name,
+    participant_name: payload.name,
+    community: payload.community,
+    community_name: payload.community,
+    registration_code: payload.laberCode,
+    laber_code: payload.laberCode,
+    amount: 0,
+    message: `Pendaftaran Laber ${payload.community} atas nama ${payload.name} untuk TOPSELL RUN 2026 sudah kami terima. Informasi detail dan jadwal kumpul akan dikabarkan oleh panitia.`,
+  })
+}

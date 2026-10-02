@@ -40,6 +40,7 @@ export function resolvePackageLabel(packages: PackagesSettings | null, pkg: Pack
     invitation: 'Invitation',
     pacer: 'Pacer',
     umkm: 'Tenant UMKM',
+    laber: 'Laber',
   }
   return packages?.[pkg]?.label || defaults[pkg]
 }

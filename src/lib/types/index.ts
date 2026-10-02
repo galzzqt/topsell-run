@@ -581,3 +581,19 @@ export interface UmkmPayment {
   created_at: string
   updated_at: string
 }
+
+// ==========================================
+// Laber (Lari Bersama) — pendaftaran lari bersama komunitas tanpa pembayaran
+// ==========================================
+
+// Daftar komunitas = kategori paket 'laber' (Kelola Periode di admin).
+export interface LaberRegistration {
+  id: string
+  name: string
+  phone: string
+  community: string
+  laber_code: string
+  status: 'registered'
+  created_at: string
+  updated_at: string
+}

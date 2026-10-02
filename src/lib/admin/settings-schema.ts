@@ -24,7 +24,7 @@ export type FormSelectConfig = FormInputConfig & {
   options: FormSelectOptionConfig[]
 }
 
-export type PackageKey = 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm'
+export type PackageKey = 'community' | 'family' | 'individual' | 'invitation' | 'pacer' | 'umkm' | 'laber'
 
 export type EmailTemplateConfig = {
   subject: string
@@ -410,6 +410,11 @@ export const DEFAULT_REGISTRATION_FORM_SETTINGS: RegistrationFormSettings = {
       ...DEFAULT_PARTICIPANT_GROUP,
     },
   },
+  // Laber hanya memakai nama, WhatsApp & komunitas; field lain tidak dipakai.
+  laber: {
+    registrant: { ...DEFAULT_REGISTRANT_GROUP },
+    participants: { ...DEFAULT_PARTICIPANT_GROUP },
+  },
 }
 
 const DEFAULT_RACEPACK_EMAIL: EmailTemplateConfig = {
@@ -445,6 +450,8 @@ export const DEFAULT_EMAIL_TEMPLATE_SETTINGS: EmailTemplateSettings = {
     bodyIntro: 'Pembayaran tenant UMKM {communityName} untuk TOPSELL RUN 2026 sebesar Rp 500.000 sudah kami terima dan pendaftaran Anda telah aktif.',
     bodyOutro: 'Terima kasih atas partisipasi usaha Anda! Sampai jumpa di venue event. 🏬',
   },
+  // Laber tidak mengirim email (konfirmasi via WhatsApp); hanya pengisi Record.
+  laber: { ...DEFAULT_RACEPACK_EMAIL },
 }
 
 const EMPTY_WEBHOOK_PACKAGE: WebhookPackageConfig = {
@@ -469,6 +476,10 @@ const SOLO_PAYMENT_WEBHOOK_URL =
 const UMKM_PAYMENT_WEBHOOK_URL =
   'https://services.leadconnectorhq.com/hooks/FCXCaXzwNxN3BXWaoDM6/webhook-trigger/cbb8da4d-9bc5-4bf1-8c19-ad0d76e90790'
 
+/** Webhook GHL konfirmasi pendaftaran Laber (Latihan Bersama). */
+const LABER_REGISTRATION_WEBHOOK_URL =
+  'https://services.leadconnectorhq.com/hooks/FCXCaXzwNxN3BXWaoDM6/webhook-trigger/1a21ea5d-7883-4eb4-a59a-c436342fdc57'
+
 export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
   community: { ...EMPTY_WEBHOOK_PACKAGE },
   family: { ...EMPTY_WEBHOOK_PACKAGE },
@@ -476,6 +487,7 @@ export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
   invitation: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: INVITATION_REGISTRATION_WEBHOOK_URL, token: '' }, payment: { url: SOLO_PAYMENT_WEBHOOK_URL, token: '' } },
   pacer: { ...EMPTY_WEBHOOK_PACKAGE },
   umkm: { ...EMPTY_WEBHOOK_PACKAGE, payment: { url: UMKM_PAYMENT_WEBHOOK_URL, token: '' } },
+  laber: { ...EMPTY_WEBHOOK_PACKAGE, registration: { url: LABER_REGISTRATION_WEBHOOK_URL, token: '' } },
 }
 
 export const DEFAULT_PACKAGES_SETTINGS: PackagesSettings = {
@@ -593,6 +605,26 @@ export const DEFAULT_PACKAGES_SETTINGS: PackagesSettings = {
         categories: [
           { value: 'Tenant UMKM 500.000', label: 'Tenant UMKM — Rp 500.000', price: 500000, quota: 0 },
         ],
+      },
+    ],
+  },
+  // Kategori Laber = komunitas penyelenggara (gratis; quota per komunitas).
+  laber: {
+    label: 'Laber',
+    enabled: true,
+    sizeChartImage: '',
+    periods: [
+      {
+        key: 'periode-1',
+        label: 'Periode 1',
+        registrationStart: '',
+        registrationEnd: '',
+        paymentStart: '',
+        paymentEnd: '',
+        eventDate: '',
+        categories: ['Mojopahit Runners', 'Wikarsa Runners', 'PlayOn', 'WOTR', 'Kuwung Runners', 'Aji Runners'].map(
+          (name) => ({ value: name, label: name, price: 0, quota: 0 })
+        ),
       },
     ],
   },
