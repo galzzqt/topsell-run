@@ -2,6 +2,9 @@ import { isPackageOpen } from '@/lib/admin/settings'
 import { ClosedNotice } from '@/components/landing/ClosedNotice'
 import BroAndSistForm from './BroAndSistForm'
 
+// Pengaturan admin dibaca dari DB per request — jangan diprerender saat build.
+export const dynamic = 'force-dynamic'
+
 export default async function BroAndSistPage() {
   const gate = await isPackageOpen('family')
   if (!gate.open) {

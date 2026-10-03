@@ -2,6 +2,9 @@ import { isPackageOpen, readPublicRegistrationForm } from '@/lib/admin/settings'
 import { ClosedNotice } from '@/components/landing/ClosedNotice'
 import InvitationForm from './InvitationForm'
 
+// Pengaturan admin dibaca dari DB per request — jangan diprerender saat build.
+export const dynamic = 'force-dynamic'
+
 export default async function InvitationPage() {
   const gate = await isPackageOpen('invitation')
   if (!gate.open) {
